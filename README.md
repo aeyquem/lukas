@@ -16,6 +16,10 @@ Dentro de las cosas que se quieren probar, están:
 - Objetivos
 - Planificaciones para distintos escenarios
 
+## Especificacion
+
+- [Casos de uso](docs/use-cases.md)
+
 ## Stack
 
 ### Front end
@@ -30,5 +34,3 @@ Dentro de las cosas que se quieren probar, están:
 ### CI/CD
 
 - Netlify
-
-
