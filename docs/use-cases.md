@@ -108,6 +108,29 @@ Criterios:
 
 - Los datos normalizados deben poder diferir del dato original.
 - Las categorias deben servir para reportes y presupuestos.
+- Las transacciones deben soportar categoria principal y subcategoria opcional.
+- La categoria principal debe servir para reportes generales y la subcategoria
+  para analisis mas especifico.
+- Una transaccion puede tener categoria sin subcategoria.
+- Transferencias, asignaciones, prestamos/deudas entre personas y ajustes de
+  conciliacion deben poder distinguirse de categorias normales de gasto.
+- Las transacciones deben soportar multiples etiquetas personalizadas
+  independientes de categoria y subcategoria.
+- Las etiquetas deben servir para contexto transversal como viajes, proyectos,
+  personas, revision tributaria, reembolsable o gasto laboral.
+- Las etiquetas no deben estar limitadas por el arbol de categorias.
+- Las etiquetas importadas desde una fuente deben conservarse como metadata, pero
+  las etiquetas definidas por el usuario tienen prioridad en la interfaz.
+- Las categorias, subcategorias y etiquetas editadas por el usuario deben
+  conservarse aunque la transaccion se importe nuevamente.
+- La clasificacion importada desde la fuente debe guardarse como metadata de
+  origen separada de la clasificacion del usuario.
+- Futuras sincronizaciones no deben sobrescribir clasificaciones del usuario sin
+  confirmacion explicita.
+- Si la fuente cambia su clasificacion, el sistema puede mostrarlo como
+  sugerencia o cambio de metadata.
+- Las reglas masivas definidas por el usuario pueden actualizar categorias,
+  subcategorias o etiquetas de forma intencional.
 - Los cambios del usuario tienen prioridad sobre sugerencias automaticas.
 
 ### UC-003: Importar transacciones automaticamente
@@ -130,6 +153,38 @@ Criterios:
 - Cada transaccion importada debe conservar moneda y monto original.
 - La importacion debe ser incremental cuando la fuente lo permita.
 - Los duplicados deben detectarse por fecha, monto, descripcion, cuenta y origen.
+- Una misma transaccion real puede aparecer desde banco, tarjeta, CSV, Open
+  Finance, Splitwise o registro manual.
+- El sistema debe poder vincular multiples registros de origen a una transaccion
+  logica sin perder la trazabilidad de cada fuente.
+- La vinculacion debe evitar doble conteo en reportes.
+- El identificador interno de Presupuesto debe ser estable y no depender del
+  identificador externo del proveedor.
+- Los identificadores externos deben conservarse como metadata de origen y
+  pueden cambiar, faltar o repetirse segun la fuente.
+- Si una fuente cambia un identificador externo, el sistema debe usar otras
+  senales de coincidencia antes de crear una transaccion nueva.
+- Si un identificador externo parece reutilizado o ambiguo, el movimiento debe
+  quedar en revision del usuario.
+- Si una institucion cambia una transaccion historica, el sistema debe detectar
+  la mutacion y conservar que campos cambiaron.
+- Los cambios de pendiente a final pueden actualizar la transaccion normalmente
+  mientras conserven historial de origen.
+- Si la transaccion ya fue revisada, conciliada o pertenece a un periodo cerrado,
+  el usuario debe decidir si acepta el cambio, lo ignora, conserva ambos valores
+  o crea un ajuste.
+- Los reportes deben conservar trazabilidad entre el valor importado original, la
+  mutacion recibida y la decision del usuario.
+- Si el usuario oculta, descarta o elimina un registro importado, el sistema debe
+  conservar una marca de descarte o tombstone asociada a la fuente.
+- La marca debe guardar fuente, identificador externo si existe, firma de
+  coincidencia, razon, fecha y decision del usuario.
+- Las sincronizaciones futuras deben respetar esas marcas para no recrear
+  movimientos descartados.
+- Si la fuente vuelve a enviar datos materialmente distintos, el sistema puede
+  llevar el caso nuevamente a revision.
+- Las marcas de descarte no deben borrar historial de auditoria ni vinculos con
+  transacciones existentes.
 - Debe existir un estado de revision para movimientos nuevos o ambiguos.
 
 ### UC-004: Conectar con Open Finance Chile
@@ -188,6 +243,9 @@ Criterios:
 - Un gasto compartido puede estar asociado a una transaccion real.
 - Debe poder reflejar pagos, deudas y reembolsos.
 - Debe evitar contar dos veces el mismo gasto.
+- Un gasto de Splitwise vinculado a una transaccion bancaria o manual debe
+  explicar la parte compartida, deuda o reembolso sin duplicar el movimiento real
+  de dinero.
 
 ### UC-007: Ver presupuesto y flujo mensual
 
@@ -265,6 +323,8 @@ Ejemplos:
 - Cuenta Wise USD: saldo `2.000 USD`, equivalente estimado `1.900.000 CLP`.
 - Compra internacional: monto original `100 USD`, conversion estimada mientras
   esta pendiente y conversion final cuando se factura o paga.
+- Broker chileno: balance reportado `5.000.000 CLP`, aunque los activos
+  subyacentes puedan estar valorizados en otra moneda dentro de la institucion.
 
 Criterios:
 
@@ -274,13 +334,59 @@ Criterios:
 - Toda transaccion debe conservar monto y moneda original.
 - Los reportes consolidados deben usar una moneda principal configurable,
   inicialmente CLP.
+- Las cuentas de inversion deben usar como valor principal el balance y moneda
+  reportados por la institucion.
+- El sistema no necesita modelar monedas, precios o posiciones subyacentes de
+  activos cuando el usuario puede revisar ese detalle en la institucion.
+- Una transaccion multimoneda puede conservar varios valores monetarios:
+  monto del comercio, monto autorizado, monto facturado, monto pagado,
+  comisiones, impuestos y cargo final, cuando la fuente los entregue.
 - Debe distinguir conversion estimada de conversion final.
-- Debe guardar la fuente del tipo de cambio: proveedor, institucion, manual o
-  estimacion del sistema.
+- Debe guardar la fuente del tipo de cambio: institucion, red de pago, broker,
+  billetera, proveedor, manual o estimacion del sistema.
+- Cuando existan varias conversiones para una transaccion, cada conversion debe
+  conservar su propia fuente, fecha, estado y valor.
+- El sistema debe permitir explicar al usuario por que dos operaciones similares
+  usaron tipos de cambio distintos.
+- Una misma moneda y fecha puede tener distintos tipos de cambio segun banco,
+  tarjeta, red de pago, broker, proveedor o correccion manual.
+- Los reportes deben usar la conversion guardada en la transaccion cuando
+  exista, en vez de asumir un tipo de cambio diario unico.
 - Debe permitir que el usuario corrija manualmente el tipo de cambio si la
   institucion cobra uno distinto.
+- La vista principal debe mostrar el monto original y el impacto actual o final
+  en la cuenta, dejando los valores intermedios como detalle auditable.
+- El sistema no debe inventar comisiones o impuestos separados cuando la fuente
+  solo entrega un cargo final.
 - Las proyecciones deben poder usar tipos de cambio estimados para movimientos
   futuros o pendientes.
+- Para transacciones internacionales pendientes, el sistema debe preferir el
+  valor convertido pendiente entregado por la institucion antes que una
+  estimacion propia.
+- Si una tarjeta esta configurada para estimar con tipo de cambio de red o
+  emisor, como Visa o Mastercard, el sistema puede usar esa fuente y sumar una
+  comision configurada, por ejemplo un porcentaje de la transaccion.
+- La regla de estimacion por tarjeta es opcional; si no existe, el sistema debe
+  usar la regla general de estimacion fallback.
+- Si la institucion no entrega valor convertido ni tipo de cambio pendiente, el
+  sistema puede usar una estimacion fallback marcada como estimada.
+- Cuando exista valor final facturado o pagado, los reportes deben usar ese
+  valor final y conservar el valor pendiente solo como detalle historico.
+- Los reembolsos internacionales deben registrarse como transacciones separadas
+  asociadas a la compra original, no como una reescritura del cargo original.
+- Un reembolso puede usar un tipo de cambio distinto al de la compra original;
+  los reportes deben calcular el efecto neto usando los valores finales reales
+  de ambas transacciones.
+- El sistema debe soportar reembolsos parciales sin asumir que cancelan la compra
+  completa ni que usan el mismo tipo de cambio.
+- Los reportes historicos deben usar la conversion guardada en cada transaccion
+  cuando exista.
+- La busqueda historica de tipo de cambio solo debe usarse cuando falte una
+  conversion guardada.
+- Cuando el sistema genere una conversion historica fallback, debe guardarla con
+  fuente y fecha para que los reportes futuros sean repetibles.
+- El sistema no debe recalcular transacciones historicas liquidadas solo porque
+  un proveedor actualizo datos pasados de tipo de cambio.
 - El sistema debe evitar mezclar montos de monedas distintas sin conversion
   explicita.
 
@@ -308,8 +414,18 @@ Criterios:
 - Los reportes mensuales deben usar periodos de presupuesto, no solo meses
   calendario.
 - La regla debe soportar dias fijos y reglas relativas como ultimo viernes.
+- El inicio del periodo de presupuesto debe usar la fecha configurada tal cual,
+  incluso si cae en fin de semana o feriado, salvo ajuste manual explicito.
 - Debe permitir excepciones por cuenta, tarjeta o periodo.
 - El sistema debe mostrar claramente a que periodo pertenece cada transaccion.
+- Un periodo puede estar abierto, revisado, bloqueado o reabierto.
+- Los periodos bloqueados deben mantener estables sus totales historicos.
+- Cambios que afecten un periodo bloqueado deben requerir una decision explicita:
+  reabrir, crear ajuste posterior al cierre, aplicar en un periodo abierto o
+  ignorar.
+- Los ajustes posteriores al cierre deben quedar visibles en reportes y
+  auditoria.
+- Reabrir un periodo debe ser una accion intencional y registrada.
 
 ### UC-012: Mover transacciones a otro periodo
 
@@ -333,13 +449,158 @@ Ejemplo:
 
 Criterios:
 
+- Las transacciones de tarjeta pueden conservar fechas separadas de compra,
+  autorizacion, facturacion, vencimiento y pago.
+- Los reportes de gasto deben usar la fecha de compra por defecto, mientras que
+  la deuda, facturacion y flujo de caja pueden usar fechas de facturacion,
+  vencimiento o pago segun el reporte.
+- Si la fuente solo entrega una fecha, el sistema debe conservarla como mejor
+  fecha disponible y usar reglas de la tarjeta para inferir facturacion o pago
+  cuando sea posible.
+- Las reglas de facturacion de una tarjeta pueden considerar desfases por fin de
+  semana o feriado cuando la cartola se emite el dia habil siguiente.
+- Una compra hecha en fin de semana puede pertenecer a la cartola emitida el
+  lunes siguiente si la institucion la incluye en ese cierre.
+- Estos desfases afectan la asignacion a cartola o facturacion, no cambian por
+  si solos el inicio del periodo de presupuesto.
+- Las compras en cuotas deben poder representarse como una compra original que
+  genera cargos futuros en la tarjeta.
+- La compra en cuotas debe conservar monto total, cantidad de cuotas, primer
+  periodo de facturacion y calendario de cargos cuando se conozca.
+- Si la fuente importa cada cuota como cargo separado, el sistema debe poder
+  vincularlas a la compra original sin duplicar el gasto.
+- La v1 no necesita calcular tasa de interes implicita; intereses o comisiones
+  solo se registran por separado si la fuente los entrega o el usuario los
+  ingresa.
+- Intereses, mora, mantencion, seguros, impuestos y cargos de servicio de
+  tarjeta deben registrarse como costos visibles, no como metadata oculta.
+- Si la fuente no permite distinguir el detalle del cargo, el sistema puede usar
+  una categoria por defecto de costo de mantencion o uso de tarjeta.
+- El usuario debe poder recategorizar esos costos cuando tenga mas informacion.
+- Los costos de tarjeta deben afectar reportes de gasto y flujo, pero mantenerse
+  distinguibles de compras a comercios.
+- Los pagos de tarjeta deben registrarse como pagos o transferencias contra la
+  cuenta de tarjeta, no como gastos normales.
+- Si el usuario paga menos que el saldo facturado, el sistema debe mantener la
+  diferencia como deuda pendiente de la tarjeta.
+- Los reportes deben poder mostrar saldo facturado, pagos realizados, deuda
+  restante y fecha de vencimiento cuando existan esos datos.
+- La v1 no necesita estimar intereses rotativos; si la institucion importa
+  intereses, deben registrarse como cargos visibles.
+- El flujo de caja debe usar el monto efectivamente pagado o planificado, aunque
+  sea menor que el saldo facturado.
+- Una tarjeta puede quedar con saldo a favor por sobrepago, devolucion o ajuste
+  de la institucion.
+- El saldo a favor debe tratarse como balance valido de la tarjeta, no como
+  ingreso ni como error de conciliacion.
+- Compras posteriores pueden consumir el saldo a favor antes de aumentar la deuda
+  de la tarjeta.
+- Los reportes deben distinguir sobrepago o saldo a favor de gasto, ingreso y
+  deuda pendiente.
+- Si una cartola o institucion corrige un cargo de tarjeta despues de que el
+  periodo fue revisado o cerrado, el sistema no debe reescribir silenciosamente
+  el historial.
+- El usuario debe poder aceptar la correccion, ignorarla o mantener ambos valores
+  cuando representen movimientos distintos.
+- Si el periodo esta bloqueado, una correccion aceptada debe registrarse como
+  ajuste posterior al cierre o en un periodo abierto segun la regla configurada.
+- Los reportes deben conservar trazabilidad entre el valor original visto por el
+  usuario, la correccion recibida y la decision tomada.
+- Ingresos recurrentes como sueldo, pension o pagos de clientes pueden tener una
+  regla de asignacion al periodo esperado aunque lleguen antes por fin de semana
+  o feriado.
+- La fecha real de la transaccion no debe cambiar; solo cambia el periodo de
+  presupuesto asignado.
+- Estas reglas pueden configurarse por pagador, cuenta, descripcion recurrente o
+  fuente.
+- Los reportes deben mostrar cuando un ingreso fue asignado a un periodo distinto
+  al de su fecha real.
+- Una transaccion puede pertenecer a distintos contextos de periodo al mismo
+  tiempo: calendario, presupuesto, cartola, flujo de caja o tributario.
+- La fecha real de la transaccion debe guardarse separada de sus asignaciones de
+  periodo.
+- Cada reporte debe declarar o usar claramente que contexto de periodo esta
+  mostrando.
+- Un ajuste manual de periodo debe afectar solo el contexto elegido, por ejemplo
+  presupuesto, sin reescribir cartola o fecha calendario.
 - El rollover debe cambiar el periodo presupuestario, no la fecha real de la
   transaccion.
 - Debe conservar la fecha contable/original y la fecha o periodo presupuestario.
 - Debe poder aplicarse por cuenta, tarjeta, categoria o transaccion individual.
 - Debe evitar duplicar gastos al moverlos entre periodos.
 
-### UC-013: Definir objetivos financieros
+### UC-013: Registrar transferencias entre cuentas propias
+
+Como usuario quiero registrar movimientos entre mis propias cuentas para
+mantener saldos correctos sin que esos movimientos se cuenten como ingreso o
+gasto.
+
+Flujo principal:
+
+1. El usuario registra o importa una salida desde una cuenta propia.
+2. El usuario registra, importa o vincula la entrada correspondiente en otra
+   cuenta propia.
+3. El sistema marca ambos movimientos como una transferencia interna.
+4. Los saldos de ambas cuentas se actualizan.
+5. Los reportes de presupuesto excluyen el efecto neto de la transferencia.
+
+Criterios:
+
+- Una transferencia debe tener cuenta origen y cuenta destino cuando ambas sean
+  conocidas.
+- La salida y la entrada pueden verse en los libros de cada cuenta.
+- Los reportes de presupuesto no deben contar transferencias internas como gasto
+  ni ingreso.
+- Los reportes por cuenta pueden mostrar transferencias para explicar cambios de
+  saldo.
+- El sistema debe permitir registrar una transferencia con una sola contraparte
+  temporal cuando la otra parte aun no fue importada.
+- Una transferencia entre monedas debe conservar monto y moneda de origen, monto
+  y moneda de destino, y la conversion usada o implicita.
+- Si ambas piernas de la transferencia existen, el sistema puede calcular el tipo
+  de cambio implicito desde los montos reales.
+- Si la institucion entrega comisiones, spread o impuestos por separado, deben
+  registrarse como costos explicitos asociados a la transferencia.
+- Si esos costos no vienen separados, el usuario puede ingresarlos manualmente o
+  el sistema puede mostrar una comparacion contra una estimacion de referencia.
+- El movimiento principal sigue siendo transferencia interna; solo costos
+  explicitos deben afectar reportes de gasto financiero.
+- El sistema debe sugerir coincidencias entre salidas y entradas importadas que
+  parezcan partes de la misma transferencia entre cuentas propias.
+- La coincidencia debe considerar monto, fecha, moneda, cuentas, descripcion,
+  contraparte e identificadores externos cuando existan.
+- Vincular dos piernas importadas no debe borrar los registros originales de cada
+  fuente.
+- Una transferencia puede quedar pendiente o incompleta si solo una pierna fue
+  importada.
+- El usuario debe poder confirmar, rechazar, deshacer o descartar una sugerencia
+  de transferencia.
+
+### UC-014: Manejar efectivo y retiros
+
+Como usuario quiero tratar retiros de efectivo como movimientos hacia una cuenta
+de efectivo para no contar el mismo dinero como gasto antes de usarlo.
+
+Flujo principal:
+
+1. El usuario importa o registra un retiro desde una cuenta bancaria.
+2. El sistema lo registra como transferencia hacia una cuenta de efectivo.
+3. Si no existe una cuenta de efectivo, el sistema permite crearla.
+4. Cuando el usuario gasta efectivo, registra una transaccion separada desde la
+   cuenta de efectivo.
+5. Los reportes de presupuesto cuentan el gasto en efectivo, no el retiro.
+
+Criterios:
+
+- Los retiros de efectivo siempre deben tratarse como transferencias a una cuenta
+  de efectivo.
+- Si el usuario quiere reflejar el retiro como gasto, debe crear una transaccion
+  separada desde la cuenta de efectivo.
+- El sistema debe evitar doble conteo entre retiro bancario y gasto registrado en
+  efectivo.
+- La cuenta de efectivo debe poder ser manual y conciliable.
+
+### UC-015: Definir objetivos financieros
 
 Como usuario quiero crear objetivos para seguir ahorro, pago de deudas o compras
 importantes.
@@ -350,6 +611,17 @@ Flujo principal:
 2. El sistema calcula avance y ritmo necesario.
 3. El usuario asocia cuentas, categorias o aportes al objetivo.
 4. El sistema muestra si el objetivo va adelantado o atrasado.
+5. El sistema muestra el fondo total asignado a objetivos y su distribucion
+   entre objetivos.
+
+Ejemplo de reasignacion:
+
+- Objetivo A: `30.000 / 50.000`.
+- Objetivo B: `40.000 / 70.000`.
+- Objetivo C: `25.000 / 100.000`.
+- Fondo total asignado a objetivos: `95.000`.
+- Si el usuario decide ejecutar B usando fondos de A y B, el resultado puede ser
+  A `0 / 50.000`, B `completado`, C `25.000 / 100.000`.
 
 Criterios:
 
@@ -360,9 +632,61 @@ Criterios:
 - Debe alimentar las proyecciones.
 - Debe distinguir entre dinero disponible, dinero reservado para objetivos y
   dinero reservado para emergencia.
+- Debe existir una lectura de fondo total asignado a objetivos, equivalente a la
+  suma del dinero reservado para objetivos.
 - Debe permitir asociar un objetivo a cuentas o sobres que pueden financiarlo.
+- Cada objetivo debe mostrar cuanto tiene asignado desde el fondo total y cuanto
+  falta para poder ejecutarse.
+- El usuario debe poder reasignar dinero desde un objetivo a otro sin registrar
+  un gasto ni mover dinero entre cuentas reales.
+- Antes de ejecutar un objetivo, el sistema debe mostrar que otros objetivos
+  quedarian reducidos, pausados, sin fondos o todavia financiados.
+- Cada objetivo debe tener monto objetivo y moneda objetivo.
+- Un objetivo puede financiarse desde cuentas o sobres en monedas distintas.
+- El avance debe calcularse en la moneda del objetivo usando conversiones
+  guardadas o estimadas.
+- Los reportes deben mostrar monedas originales cuando sean relevantes para
+  explicar el avance.
+- Si un objetivo depende de fondos en otra moneda, el sistema debe mostrar riesgo
+  o variacion cambiaria.
+- La moneda objetivo debe heredar la moneda global por defecto, pero puede
+  sobrescribirse por objetivo.
+- Un objetivo puede estar activo, pausado, completado, cancelado, vencido,
+  parcialmente gastado o sobregastado.
+- Pausar un objetivo debe detener nuevas contribuciones esperadas sin borrar
+  historial ni reservas existentes.
+- Cancelar un objetivo debe permitir liberar o reasignar el dinero reservado.
+- Si vence la fecha objetivo sin cumplirse, el sistema debe marcarlo como vencido
+  o permitir reprogramarlo.
+- Gastar parte o mas del monto reservado debe quedar reflejado como consumo
+  parcial o sobregasto del objetivo.
+- Los cambios de estado deben quedar registrados para auditoria y comparacion de
+  escenarios.
+- Una compra planificada u objetivo de gasto debe poder vincularse con una o mas
+  transacciones reales cuando ocurran.
+- Vincular transacciones reales debe consumir o reducir el monto reservado del
+  objetivo.
+- Un objetivo puede completarse con una sola transaccion, como comprar un auto, o
+  con varias transacciones relacionadas, como un viaje.
+- El usuario debe poder marcar el objetivo como completado cuando las
+  transacciones asociadas representan el cierre del objetivo.
+- Si el monto real acumulado difiere del planificado, el sistema debe mostrar la
+  variacion.
+- Si sobra reserva, el usuario puede mantenerla, liberarla o reasignarla.
+- Si falta reserva, el objetivo debe quedar sobregastado o requerir
+  financiamiento adicional.
+- Los reportes deben evitar contar al mismo tiempo el gasto planificado y las
+  transacciones reales como gastos distintos.
+- Mover dinero a ahorro, objetivos, emergencia o sobres debe tratarse como
+  asignacion interna, no como gasto.
+- Las asignaciones pueden afectar dinero disponible, avance de objetivos y
+  reservas, pero no deben distorsionar reportes de consumo.
+- Los reportes de presupuesto pueden mostrar ahorro y asignaciones separadas de
+  ingresos y gastos.
+- El gasto ocurre cuando existe una transaccion real hacia una contraparte
+  externa; esa transaccion puede consumir una asignacion previa.
 
-### UC-014: Planificar escenarios
+### UC-016: Planificar escenarios
 
 Como usuario quiero comparar distintos planes sobre una misma proyeccion para
 tomar decisiones financieras antes de ejecutarlas.
@@ -405,6 +729,16 @@ Reglas de reserva:
   exclusivo para emergencia o disponible para uso general.
 - El sistema debe evitar contar el mismo peso dos veces cuando una cuenta sirve
   como respaldo para mas de una lectura.
+- Una cuenta puede financiar multiples objetivos o sobres solo mediante montos o
+  reglas de asignacion explicitas.
+- El sistema no debe contar el mismo dinero como completamente disponible para
+  mas de un objetivo, sobre o reserva al mismo tiempo.
+- Los reportes deben distinguir saldo real, saldo asignado y saldo disponible sin
+  asignar.
+- Si las asignaciones superan el saldo disponible, el sistema debe mostrar una
+  alerta de sobreasignacion.
+- Las reglas de fallback de emergencia pueden contar dinero asignado a objetivos
+  como respaldo solo si el usuario lo habilita explicitamente.
 
 Criterios:
 
@@ -417,7 +751,7 @@ Criterios:
   sobres financian objetivos y emergencia.
 - Debe explicar las reglas de prioridad y fallback usadas en el calculo.
 
-### UC-015: Proyectar escenario negativo o de supervivencia
+### UC-017: Proyectar escenario negativo o de supervivencia
 
 Como usuario quiero simular una perdida de ingresos u otro evento negativo para
 saber cuanto tiempo puedo cubrir gastos basicos y que cuentas se agotarian
@@ -427,11 +761,13 @@ Flujo principal:
 
 1. El usuario crea un escenario negativo desde una proyeccion base.
 2. El usuario reduce o elimina ingresos esperados, por ejemplo por despido.
-3. El usuario define gasto minimo mensual o selecciona categorias esenciales,
+3. Si corresponde, el usuario agrega una compensacion estimada por termino
+   laboral o finiquito.
+4. El usuario define gasto minimo mensual o selecciona categorias esenciales,
    como arriendo, comida, servicios basicos, salud y transporte.
-4. El usuario define el orden de uso de cuentas o sobres.
-5. El sistema calcula cuanto dura cada cuenta y cuando se agota.
-6. El sistema muestra la duracion total del plan de supervivencia.
+5. El usuario define el orden de uso de cuentas o sobres.
+6. El sistema calcula cuanto dura cada cuenta y cuando se agota.
+7. El sistema muestra la duracion total del plan de supervivencia.
 
 Ejemplo de lectura:
 
@@ -455,13 +791,82 @@ Criterios:
 - Debe mostrar hitos de agotamiento por cuenta y fecha/mes esperado.
 - Debe convertir saldos multimoneda usando tipos de cambio estimados y mostrar
   el riesgo de variacion cambiaria cuando corresponda.
+- El escenario puede definir demora de liquidez por cuenta o producto, por
+  ejemplo inmediata, dias habiles o plazo fijo.
+- El escenario puede incluir supuestos de penalizaciones, comisiones o impuestos
+  por liquidar fondos.
+- Estos supuestos deben afectar el calculo de supervivencia, pero no crear
+  transacciones reales mientras no ocurran.
+- Si la liquidacion, comision o impuesto ocurre realmente, debe registrarse luego
+  como transaccion o ajuste real.
+- El escenario debe mostrar saldo bruto, monto disponible neto y supuestos usados
+  para cada cuenta o producto.
+- Para cuentas de inversion, el escenario debe preferir el ultimo balance
+  reportado por la institucion.
+- Si no existe balance actualizado, el sistema puede usar el ultimo balance
+  conocido y marcarlo como desactualizado.
+- El usuario puede aplicar un ajuste manual de valor de mercado dentro del
+  escenario para probar estres o caidas.
+- Las variaciones de mercado deben tratarse como cambios de valorizacion, no como
+  ingresos ni gastos normales.
+- La conciliacion de una cuenta de inversion puede actualizar su balance sin
+  crear transacciones de gasto normales.
+- Las cuentas deben poder clasificarse por liquidez: liquida, con demora,
+  restringida o no retirable.
+- Cuentas tipo AFP deben excluirse por defecto del calculo de supervivencia si no
+  son retirables.
+- Productos voluntarios o potencialmente retirables, como APV u otros, pueden
+  incluirse solo con supuestos explicitos de demora, impuestos o penalizaciones.
+- Las cuentas no retirables pueden aparecer en patrimonio, pero no deben contar
+  como runway disponible por defecto.
+- El escenario debe mostrar saldos excluidos y la razon de exclusion.
+- El usuario debe poder definir que categorias son esenciales dentro del
+  escenario.
+- El usuario debe poder ajustar manualmente montos mensuales por categoria
+  esencial.
+- El usuario debe poder reducir, eliminar o limitar categorias discrecionales en
+  el escenario.
+- Los ajustes del escenario no deben modificar transacciones reales ni reglas del
+  presupuesto normal.
+- El escenario debe mostrar que supuestos cambiaron respecto de la proyeccion
+  base.
+- Un escenario de despido debe poder estimar compensacion por termino laboral,
+  finiquito u otros pagos de salida como ingreso proyectado.
+- El calculo debe basarse en datos configurables como sueldo, antiguedad,
+  contrato, vacaciones pendientes, aviso previo, topes, descuentos y reglas por
+  pais cuando correspondan.
+- La compensacion estimada debe mostrarse como supuesto del escenario, no como
+  ingreso real ni asesoría legal.
+- Cuando el pago ocurra realmente, debe registrarse como transaccion real y puede
+  vincularse con la estimacion del escenario.
 - Debe mover automaticamente dinero reservado para objetivos hacia gastos
   esenciales si el escenario lo permite.
 - Debe respetar reservas que el usuario marque como intocables.
+- Las reservas u objetivos que pueden usarse como respaldo de emergencia deben
+  estar habilitados explicitamente por el usuario.
+- Las reglas de fallback deben tener prioridad u orden de uso.
+- El escenario debe mostrar que reserva se usa primero, cuanto se consume y que
+  objetivo queda afectado.
+- Usar una reserva como fallback en un escenario no debe crear movimientos reales
+  hasta que el usuario los ejecute.
+- Si dos reservas tienen la misma prioridad y no existe regla de desempate, el
+  sistema debe mostrar la ambiguedad.
+- Los pagos minimos obligatorios de deudas deben continuar en el escenario de
+  supervivencia por defecto.
+- El usuario puede elegir por deuda si quiere modelar pago minimo, pago total u
+  otra estrategia definida dentro del escenario.
+- La estrategia elegida debe afectar el runway proyectado.
+- El escenario debe separar gastos esenciales de pagos obligatorios de deuda.
+- El usuario puede crear supuestos para reducir, pausar, refinanciar o incumplir
+  pagos de deuda dentro del escenario.
+- Esos supuestos deben quedar claramente marcados y no modificar los registros
+  reales de deuda.
+- Pagos omitidos o atrasados pueden modelarse como consecuencias del escenario,
+  pero no deben crear transacciones reales mientras no ocurran.
 - Debe distinguir gastos esenciales de gastos discrecionales.
 - Debe permitir ajustar el gasto mensual minimo manualmente.
 
-### UC-016: Revisar y resolver transacciones duplicadas
+### UC-018: Revisar y resolver transacciones duplicadas
 
 Como usuario quiero revisar duplicados probables para evitar que una misma
 compra, transferencia o gasto compartido se cuente dos veces.
@@ -478,13 +883,26 @@ Flujo principal:
 Criterios:
 
 - La deteccion automatica no debe borrar transacciones sin confirmacion.
+- Las sugerencias de duplicados deben tener nivel de confianza, como alta, media
+  o baja.
+- La confianza debe considerar monto, fecha, moneda, cuenta, origen, descripcion,
+  contraparte, identificadores externos y registros vinculados.
+- El sistema no debe eliminar duplicados automaticamente aunque la confianza sea
+  alta.
+- El usuario debe poder marcar una sugerencia como "no volver a sugerir".
+- Una sugerencia descartada no debe reaparecer salvo que cambien datos relevantes
+  de los movimientos involucrados.
 - Debe distinguir duplicados reales de pagos repetidos validos.
+- Debe distinguir entre duplicados del mismo movimiento real y registros
+  complementarios, como Splitwise, que explican reparto, deuda o reembolso.
 - Debe soportar duplicados entre transacciones manuales, importadas, Splitwise y
   archivos.
 - Debe registrar que fuentes externas quedaron asociadas a la transaccion final.
+- La revision de duplicados debe permitir resolver casos donde faltan, cambiaron
+  o se reutilizaron identificadores externos.
 - Debe permitir deshacer una fusion cuando sea necesario.
 
-### UC-017: Conciliar cuentas
+### UC-019: Conciliar cuentas
 
 Como usuario quiero conciliar una cuenta cuando el saldo calculado por el sistema
 no coincide con el saldo real del banco, efectivo, billetera o plataforma.
@@ -514,11 +932,27 @@ Criterios:
   sin explicacion.
 - Debe permitir asociar la diferencia a una categoria si el usuario sabe que
   corresponde a un gasto real.
+- En cuentas de efectivo, una diferencia de conciliacion puede clasificarse como
+  perdida desconocida, gasto olvidado, regalo, redondeo, correccion u otra razon.
+- El usuario debe poder agregar un comentario a la diferencia de efectivo.
+- Si la diferencia corresponde a un gasto real conocido, el usuario puede
+  asociarla a una categoria de gasto.
+- Si la causa no es clara, el ajuste debe quedar visible como ajuste de
+  conciliacion y no como gasto normal.
+- Las cuentas manuales pueden quedar con saldo negativo.
+- Una cuenta manual puede configurarse para permitir saldo negativo cuando
+  representa linea de credito, deuda informal u otro caso valido.
+- Si una cuenta que no permite saldo negativo queda bajo cero, el sistema debe
+  advertirlo sin bloquear el registro.
+- La advertencia debe ayudar a revisar transferencias faltantes, ingresos
+  omitidos, gastos duplicados o diferencias de conciliacion.
+- Los reportes deben tratar saldos negativos segun el tipo de cuenta: como deuda
+  cuando corresponda o como alerta de revision en cuentas de activo.
 - Debe funcionar para cuentas manuales, bancarias, efectivo y multimoneda.
 - Debe ayudar a encontrar transacciones faltantes o duplicadas antes de crear un
   ajuste.
 
-### UC-018: Preparar informacion para declaracion anual en Chile
+### UC-020: Preparar informacion para declaracion anual en Chile
 
 Como usuario quiero consolidar informacion de ingresos, inversiones y otros
 datos tributarios para preparar reportes que ayuden con la declaracion anual en
@@ -542,7 +976,7 @@ Criterios:
 - Debe exportar informacion en formatos revisables por el usuario.
 - No debe prometer declaracion automatica ni reemplazar revision tributaria.
 
-### UC-019: Exponer API publica o MCP
+### UC-021: Exponer API publica o MCP
 
 Como usuario avanzado o herramienta externa quiero interactuar con Presupuesto
 mediante una API o MCP para consultar datos, automatizar flujos y construir
@@ -573,19 +1007,35 @@ Criterios:
 Los reportes deben responder preguntas concretas y usar la moneda global del
 usuario o workspace para vistas consolidadas. Cuando incluyan cuentas o
 transacciones multimoneda, deben mostrar la moneda original y la conversion usada.
+Los reportes deben distinguir valores reales, pendientes, proyectados, ajustados
+y conciliados. Cuando un total combine estados distintos, debe mostrar la
+composicion o advertir que incluye valores no finales.
+Los reportes deben permitir filtrar y agrupar por categoria, subcategoria y
+etiquetas. Como las etiquetas pueden superponerse, los reportes por etiqueta
+deben advertir cuando los totales no son mutuamente excluyentes.
 
 ### Reportes prioritarios para el PoC
 
 - Salud financiera: muestra si el usuario esta ahorrando suficiente, si la deuda
   esta controlada, si hay fondo de emergencia y si los gastos son sostenibles.
   Debe partir con reglas predefinidas y permitir reglas configurables mas
-  adelante.
+  adelante. No debe depender de un puntaje exacto unico; debe mostrar estados por
+  regla, confianza de los datos y supuestos usados.
 - Periodo en curso contra proyeccion: compara gasto, ingreso, ahorro y reservas
-  esperadas contra lo real mientras el periodo sigue abierto.
+  esperadas contra lo real mientras el periodo sigue abierto. Debe separar
+  valores reales, pendientes y proyectados.
 - Cierre de periodo contra proyeccion: muestra como termino el periodo contra lo
   proyectado, que categorias explican la diferencia y que supuestos fallaron.
+  Debe distinguir valores conciliados, ajustes posteriores y valores estimados.
 - Desglose de gasto: muestra en que se esta gastando dinero por categoria,
-  cuenta, comercio, etiqueta, periodo y tipo de gasto.
+  subcategoria, cuenta, comercio, etiqueta, periodo y tipo de gasto. Debe
+  permitir ver gasto bruto, reembolsos/devoluciones y gasto neto, sin asumir que
+  todo ingreso es devolucion.
+- Gastos compartidos: muestra gasto bruto pagado, parte del usuario, reembolsos
+  pendientes, deudas con otras personas y gasto neto final. Mientras el
+  reembolso no este pagado, el monto desembolsado debe considerarse salida del
+  usuario y la parte por cobrar o pagar debe reflejarse como prestamo, deuda o
+  saldo pendiente.
 - Flujo de caja: resume ingresos, gastos fijos, gastos variables, ahorro, pagos
   de deuda y resultado neto por periodo.
 - Objetivos y reservas: muestra avance de metas, fondo de emergencia, dinero
@@ -605,7 +1055,10 @@ transacciones multimoneda, deben mostrar la moneda original y la conversion usad
   proposito, por ejemplo cuenta corriente, ahorro, USD, inversiones, emergencia
   y objetivos.
 - Patrimonio neto: muestra activos menos deudas en el tiempo, incluyendo
-  inversiones y saldos multimoneda.
+  inversiones y saldos multimoneda. Para v1 puede usar los balances disponibles
+  reportados por instituciones o ingresados manualmente, pero debe permitir
+  etiquetar activos como liquidos, con demora, restringidos, no retirables o
+  volatiles para reportes futuros.
 - Anomalias: identifica gastos inusuales, cargos inesperados, duplicados
   probables o cambios relevantes frente a la historia.
 - Gastos compartidos: muestra gastos de Splitwise u otros grupos, dinero por
@@ -628,12 +1081,20 @@ transacciones multimoneda, deben mostrar la moneda original y la conversion usad
 - Conversion: monto convertido, moneda destino, tipo de cambio, fuente y estado.
 - Fuente financiera: origen externo o manual de datos.
 - Categoria: clasificacion principal para reportes.
+- Subcategoria: clasificacion dependiente de una categoria para analisis mas
+  detallado.
 - Etiqueta: clasificacion flexible adicional.
 - Gasto compartido: gasto, deuda o reembolso asociado a otra persona o grupo.
+- Prestamo o deuda entre personas: saldo pendiente asociado a un gasto compartido
+  o movimiento personal hasta que se pague o cobre.
 - Estimado: movimiento futuro esperado que aun no es transaccion real.
 - Objetivo: meta financiera con monto, plazo y avance.
+- Fondo total asignado a objetivos: lectura consolidada del dinero reservado para
+  objetivos y su distribucion entre metas.
 - Plan: politica de asignacion de dinero sobre una proyeccion.
 - Escenario: combinacion de una proyeccion, sus estimados y uno o mas planes.
+- Evento de termino laboral: supuesto de escenario que elimina o reduce ingresos
+  y puede agregar compensaciones estimadas como finiquito.
 - Sobre: reserva logica de dinero que puede estar asociada a una o mas cuentas.
 - Reserva: monto separado para un objetivo, emergencia u otro proposito.
 - Regla de fallback: permiso para que una reserva cuente como respaldo de otra
