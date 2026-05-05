@@ -11,8 +11,8 @@ question is answered, move the accepted decision into the relevant
 - Define exact boundaries between domain, application services, storage,
   importers and host adapters.
 - Decide whether a CLI helper is useful later for import, debug or admin tasks.
-- Define the initial schema details for accounts, transactions, source records,
-  conversions, goals, reserves, periods, reports and review items.
+- Define the remaining initial schema details for source records, conversions,
+  goals, reserves, periods, reports and review items.
 - Decide whether source snapshots live in SQLite initially or local encrypted
   files.
 - Define local profile and unlock behavior.
@@ -30,9 +30,8 @@ question is answered, move the accepted decision into the relevant
 
 ## Money, dates and reports
 
-- Choose decimal representation for money and exchange rates.
 - Choose currency library and ISO currency handling.
-- Define timezone policy for users, institutions and reports.
+- Define timezone policy for institutions and source-specific reporting rules.
 - Define period-rule schemas for fixed days, relative dates, source-specific
   rules and manual overrides.
 - Define period locking, reopening and post-close adjustment behavior.
@@ -66,4 +65,3 @@ question is answered, move the accepted decision into the relevant
   tooling.
 - Define SaaS auth, workspace membership, recovery and billing only when hosted
   deployment becomes real.
-

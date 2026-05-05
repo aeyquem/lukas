@@ -44,6 +44,8 @@ compile with these setting without any warnings.
 
 C# uses nullable-enabled SDK-style projects with warnings treated as errors via `backend/Directory.Build.props`. Use four-space indentation, `PascalCase` for types and methods, and project namespaces such as `Lukas.Domain.Tests`. Vue and TypeScript use ESLint flat config plus Prettier; keep Vue components in `PascalCase.vue`, tests as `*.spec.ts`, and generated API files under `frontend/app/src/api/generated` untouched except through generation commands.
 
+Vue uses scoped styles when a CODE implementation is not enough. the css should mimic the html structure.
+
 ## Testing Guidelines
 
 Backend tests use xUnit with Shouldly and live beside their target layer in `backend/tests`. Prefer focused test names that describe behavior, for example `SuccessResultExposesValue`. Frontend unit tests use Vitest and Vue Test Utils next to components, for example `BaseButton.spec.ts`. E2E coverage uses Playwright specs in `tests/e2e/specs`. Run `pnpm test` before opening a PR; run `pnpm test:e2e` when changing routing, app startup, or user-facing flows.

@@ -26,6 +26,19 @@ Manual transactions should also create lightweight manual source records. This
 keeps provenance consistent across manual entry, file import and future API
 imports.
 
+## First implementation slice
+
+The first coding slice is manual accounts, manual transactions, ledger entries
+and a monthly cashflow read model. CSV and Excel import should build on that
+ledger behavior after the manual slice is working.
+
+Accounts are required before transactions. The initial account model should
+include a workspace boundary, display name, account type and currency.
+
+Opening balances should be represented as explicit adjustment ledger
+transactions instead of mutable account fields. This keeps balances explainable
+through the same ledger path as later activity.
+
 ## Import identity
 
 File imports must be idempotent across repeated and overlapping files. Imported
@@ -64,4 +77,3 @@ purchase is still an expense even though it increases a liability account.
 
 Tables should include a `workspace_id` or equivalent boundary from the
 beginning, even while the app is personal-first.
-
