@@ -18,10 +18,12 @@ Dentro de las cosas que se quieren probar, están:
 
 ## Especificacion
 
-- [Casos de uso](docs/use-cases.md)
-- [Requisitos tecnicos por discutir](docs/phase-2/technical_requirements.md)
-- [Detalles tecnicos por discutir](docs/phase-2/technical-details.md)
-- [Detalles de implementacion por discutir](docs/phase-2/implementation-details.md)
+- [Indice de documentacion](docs/README.md)
+- [Resumen de producto](docs/product/overview.md)
+- [Casos de uso](docs/product/use-cases.md)
+- [Arquitectura](docs/architecture/overview.md)
+- [Workflow de desarrollo](docs/engineering/dev-workflow.md)
+- [Preguntas abiertas](docs/planning/open-questions.md)
 
 ## Stack
 
@@ -42,4 +44,5 @@ Dentro de las cosas que se quieren probar, están:
 
 ### CI/CD
 
-- TBD
+- Planeado. Ver [workflow de desarrollo](docs/engineering/dev-workflow.md) y
+  [preguntas abiertas](docs/planning/open-questions.md).
