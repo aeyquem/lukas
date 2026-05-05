@@ -446,7 +446,8 @@ pnpm dev
   Runs frontend/app + backend API for browser development.
 
 pnpm dev:desktop
-  Runs frontend/app + backend API + Tauri desktop shell.
+  Runs backend API + Tauri desktop shell. Tauri starts frontend/app through its
+  development configuration.
 
 pnpm check
   Runs formatting checks, frontend linting, frontend type checking and backend
@@ -781,6 +782,7 @@ pnpm --dir apps/desktop tauri build
 Decision:
 
 - Commit `pnpm-lock.yaml`.
+- Commit `Cargo.lock` for the Tauri desktop application.
 - Commit EF Core migration files.
 - Commit generated OpenAPI TypeScript files under
   `frontend/app/src/api/generated/`.
@@ -810,11 +812,11 @@ Decision:
 Decision:
 
 - Pin the .NET SDK with `global.json`.
-- Pin pnpm through the root `package.json` `packageManager` field and Corepack.
-- Developers should be able to run `corepack enable` and then use the repo's
-  pinned pnpm version.
-- Use `.nvmrc` for the Node major/version expected by the frontend tooling.
-- Use the current Node LTS line when implementation starts.
+- Pin Node and pnpm through `mise.toml` initially.
+- Developers should be able to activate the repo tooling through mise and use
+  the configured Node/pnpm versions.
+- Do not use Corepack initially.
+- Review whether to also add a root `package.json` `packageManager` field later.
 - Use a root `.editorconfig` for shared formatting rules.
 - Vue/frontend formatting and linting must respect `.editorconfig`.
 - Let language-specific tools own their detailed formatting rules:
@@ -833,7 +835,7 @@ Expected root files:
   global.json
   package.json
   pnpm-workspace.yaml
-  .nvmrc
+  mise.toml
   .editorconfig
 ```
 
@@ -866,4 +868,36 @@ docs/
     frontend.md
     backend.md
     cross-cutting.md
+```
+
+### Initial scaffold order
+
+Decision:
+
+- Create root tooling first: `.editorconfig`, `.gitignore`, `global.json`,
+  `mise.toml`, `package.json` and `pnpm-workspace.yaml`.
+- Create the backend solution next with `backend/Lukas.slnx`, source projects
+  and test projects.
+- Add `Lukas.SharedKernel` primitives early so backend code can use explicit
+  `Result`, `Maybe`, `Unit` and `Error` types from the start.
+- Create the frontend app with Vite, Vue 3, TypeScript, router, Pinia, Pinia
+  Colada, ESLint, Prettier, `vue-tsc` and Histoire.
+- Add API contract generation commands and generated-code folders before real
+  endpoint work begins.
+- Add the EF Core SQLite persistence baseline after the API and shared-kernel
+  skeletons exist.
+- Add the Tauri desktop shell after browser development mode is usable.
+- Add CI/check scripts once the first buildable vertical slice exists.
+
+Initial implementation sequence:
+
+```text
+1. Root tooling
+2. Backend solution and projects
+3. Shared backend primitives
+4. Frontend app
+5. API contract generation
+6. Persistence baseline
+7. Tauri shell
+8. CI/check scripts
 ```
