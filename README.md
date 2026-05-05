@@ -19,7 +19,6 @@ Dentro de las cosas que se quieren probar, están:
 ## Especificacion
 
 - [Casos de uso](docs/use-cases.md)
-- [Backlog de discusion](docs/phase-2/discussion-backlog.md)
 - [Requisitos tecnicos por discutir](docs/phase-2/technical_requirements.md)
 - [Detalles tecnicos por discutir](docs/phase-2/technical-details.md)
 - [Detalles de implementacion por discutir](docs/phase-2/implementation-details.md)
