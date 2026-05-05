@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-Never break any of the following rules on your own. if you need to add or modify something that breaks them ask for permission first.
+Never break any of the following rules on your own. if you need to add or modify something that breaks them ask for permission first and explain why you need to break them.
 
 ## Project Structure & Module Organization
 
