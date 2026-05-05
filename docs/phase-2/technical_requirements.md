@@ -79,7 +79,7 @@ behavior.
 
 **5 Chile tax / annual summary addon**
 
-- [ ] S5.I1 Decide whether the Chile annual summary belongs inside Presupuesto or
+- [ ] S5.I1 Decide whether the Chile annual summary belongs inside Lukas or
   should be a separate project that reads from it.
   Why it matters: tax reporting may have different scope, UX and risk than
   personal budgeting. The boundary affects architecture and maintenance.

@@ -1,7 +1,7 @@
 # Especificacion de casos de uso
 
 Este documento baja las ideas iniciales del README a casos de uso mas concretos
-para el PoC de Presupuesto. El foco inicial es ayudar con finanzas personales en
+para el PoC de Lukas. El foco inicial es ayudar con finanzas personales en
 Chile, partiendo con flujos manuales y dejando preparada una capa de integracion
 para Open Finance y APIs publicas de instituciones financieras.
 
@@ -62,7 +62,7 @@ metadatos, de modo que se puedan conectar fuentes actuales y futuras:
 
 - Registrar una fuente financiera con tipo, institucion, estado y permisos.
 - Sincronizar cuentas y transacciones desde una fuente.
-- Normalizar datos externos al modelo interno de Presupuesto.
+- Normalizar datos externos al modelo interno de Lukas.
 - Conservar moneda, monto original, monto convertido y tipo de cambio cuando la
   fuente entregue datos multimoneda.
 - Detectar duplicados entre fuentes y transacciones manuales.
@@ -158,7 +158,7 @@ Criterios:
 - El sistema debe poder vincular multiples registros de origen a una transaccion
   logica sin perder la trazabilidad de cada fuente.
 - La vinculacion debe evitar doble conteo en reportes.
-- El identificador interno de Presupuesto debe ser estable y no depender del
+- El identificador interno de Lukas debe ser estable y no depender del
   identificador externo del proveedor.
 - Los identificadores externos deben conservarse como metadata de origen y
   pueden cambiar, faltar o repetirse segun la fuente.
@@ -969,7 +969,7 @@ Flujo principal:
 Criterios:
 
 - Este modulo puede vivir dentro del producto o como proyecto separado que lea
-  datos desde Presupuesto.
+  datos desde Lukas.
 - Debe conservar fuente, documento, fecha, moneda y monto original.
 - Debe soportar datos de inversiones, dividendos, ventas, intereses u otros
   conceptos a definir.
@@ -978,7 +978,7 @@ Criterios:
 
 ### UC-021: Exponer API publica o MCP
 
-Como usuario avanzado o herramienta externa quiero interactuar con Presupuesto
+Como usuario avanzado o herramienta externa quiero interactuar con Lukas
 mediante una API o MCP para consultar datos, automatizar flujos y construir
 integraciones.
 
@@ -1113,4 +1113,4 @@ deben advertir cuando los totales no son mutuamente excluyentes.
 - Reporte: vista calculada que resume estado financiero, periodo, proyeccion o
   historial.
 - Acceso externo: permiso entregado a una API, MCP, script o herramienta para
-  interactuar con datos de Presupuesto.
+  interactuar con datos de Lukas.

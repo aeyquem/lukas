@@ -155,7 +155,7 @@ PoC:
 
 - `raw_snapshot`: the original file row, sheet name, headers, provider payload or
   manual-entry input as faithfully as practical.
-- `normalized_snapshot`: Presupuesto's parsed interpretation of that source
+- `normalized_snapshot`: Lukas's parsed interpretation of that source
   record before it becomes a ledger transaction.
 
 Keeping both makes import debugging and review decisions easier. One can be
@@ -388,7 +388,7 @@ To keep the migration path open, the PoC should:
 
 Decision for now:
 
-- Presupuesto starts as a local-first desktop application.
+- Lukas starts as a local-first desktop application.
 - The first architecture is a broad modular monolith, not serverless-first or
   service-oriented.
 - The core financial domain should stay independent from Tauri, Vue, SQLite and
