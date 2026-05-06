@@ -13,4 +13,25 @@ describe("BaseButton", () => {
 
     expect(wrapper.text()).toContain("Guardar");
   });
+
+  it("uses submit type when requested", () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        type: "submit",
+      },
+    });
+
+    expect(wrapper.get("button").attributes("type")).toBe("submit");
+  });
+
+  it("disables the button while loading", () => {
+    const wrapper = mount(BaseButton, {
+      props: {
+        loading: true,
+      },
+    });
+
+    expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+    expect(wrapper.get("button").attributes("aria-busy")).toBe("true");
+  });
 });

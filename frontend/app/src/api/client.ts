@@ -22,3 +22,41 @@ export async function getJson<T>(path: string): Promise<Result<T, ApiError>> {
 
   return { ok: true, value: (await response.json()) as T };
 }
+
+export async function postJson<TResponse, TRequest>(
+  path: string,
+  body: TRequest,
+): Promise<Result<TResponse, ApiError>> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const problem = await readProblem(response);
+    return {
+      ok: false,
+      error: {
+        status: response.status,
+        title: problem?.title ?? response.statusText,
+        detail: problem?.detail,
+      },
+    };
+  }
+
+  return { ok: true, value: (await response.json()) as TResponse };
+}
+
+async function readProblem(
+  response: Response,
+): Promise<{ title?: string; detail?: string } | null> {
+  const contentType = response.headers.get("Content-Type");
+  if (!contentType?.includes("application/problem+json")) {
+    return null;
+  }
+
+  return (await response.json()) as { title?: string; detail?: string };
+}

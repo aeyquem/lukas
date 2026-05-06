@@ -11,11 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Lukas.Application\Lukas.Application.csproj" />
-    <ProjectReference Include="..\Lukas.Contracts\Lukas.Contracts.csproj" />
-    <ProjectReference Include="..\Lukas.Infrastructure\Lukas.Infrastructure.csproj" />
-    <ProjectReference Include="..\Lukas.Importers\Lukas.Importers.csproj" />
-    <ProjectReference Include="..\Lukas.SharedKernel\Lukas.SharedKernel.csproj" />
+    <ProjectReference Include="..\Lukas.Application\Lukas.Application.csproj" GlobalPropertiesToRemove="WebPublishProfileFile" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\Lukas.Contracts\Lukas.Contracts.csproj" GlobalPropertiesToRemove="WebPublishProfileFile" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\Lukas.Infrastructure\Lukas.Infrastructure.csproj" GlobalPropertiesToRemove="WebPublishProfileFile" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
 </Project>

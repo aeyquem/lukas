@@ -2,6 +2,8 @@
 
 Never break any of the following rules on your own. if you need to add or modify something that breaks them ask for permission first and explain why you need to break them.
 
+Remember to refer to the docs folder for more guidelines on how and what to develop.
+
 ## Project Structure & Module Organization
 
 This is a PNPM workspace for Lukas, a personal finance PoC. The Vue 3 frontend lives in `frontend/app`, with source under `frontend/app/src`, base components in `src/components/base`, router setup in `src/router`, and styles in `src/styles`. The ASP.NET backend is in `backend`, with production projects under `backend/src/Lukas.*` and xUnit tests under `backend/tests/Lukas.*.Tests`. The Tauri desktop shell is in `apps/desktop`, and Playwright end-to-end tests are in `tests/e2e/specs`. Planning and requirements documents live in `docs`.
