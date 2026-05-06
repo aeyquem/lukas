@@ -13,7 +13,9 @@ const emit = defineEmits<{
 
 const sections: Array<{ key: WorkspaceSection; marker: string; label: string }> = [
   { key: "accounts", marker: "C", label: "Cuentas" },
+  { key: "movements", marker: "M", label: "Movimientos" },
   { key: "budget", marker: "P", label: "Presupuesto" },
+  { key: "goals", marker: "G", label: "Metas" },
   { key: "reports", marker: "R", label: "Reportes" },
   { key: "projections", marker: "Y", label: "Proyecciones" },
 ];
@@ -26,7 +28,12 @@ function selectSection(section: WorkspaceSection) {
 <template>
   <aside class="app-sidebar" aria-label="Navegacion principal">
     <div class="sidebar-brand">
-      <span class="sidebar-brand__logo" aria-hidden="true">L</span>
+      <img
+        alt=""
+        aria-hidden="true"
+        class="sidebar-brand__logo"
+        src="/assets/lukas-icon.png"
+      />
       <div>
         <strong>Lukas</strong>
         <span>Finanzas personales</span>
@@ -83,15 +90,11 @@ function selectSection(section: WorkspaceSection) {
 }
 
 .sidebar-brand__logo {
-  display: inline-grid;
-  place-items: center;
   inline-size: 2.4rem;
   block-size: 2.4rem;
   border-radius: var(--radius-lg);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
-  font-family: var(--font-display);
-  font-size: 1.35rem;
+  box-shadow: var(--shadow-sm);
+  object-fit: cover;
 }
 
 .sidebar-brand strong,

@@ -2,12 +2,11 @@
 import { computed, ref } from "vue";
 
 import AccountsPanel from "../components/ledger/AccountsPanel.vue";
-import MonthlySummary from "../components/ledger/MonthlySummary.vue";
-import TransactionPanel from "../components/ledger/TransactionPanel.vue";
-import TransactionsPanel from "../components/ledger/TransactionsPanel.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import AppSidebar from "../components/layout/AppSidebar.vue";
 import BudgetWorkspace from "../components/workspace/BudgetWorkspace.vue";
+import GoalsWorkspace from "../components/workspace/GoalsWorkspace.vue";
+import MovementsWorkspace from "../components/workspace/MovementsWorkspace.vue";
 import ProjectionsWorkspace from "../components/workspace/ProjectionsWorkspace.vue";
 import ReportsWorkspace from "../components/workspace/ReportsWorkspace.vue";
 import { useLedgerWorkspace } from "../composables/useLedgerWorkspace";
@@ -26,14 +25,9 @@ const sectionEyebrow = computed(() =>
 const {
   selectedPeriod,
   accountsQuery,
-  transactionsQuery,
   accountMutation,
-  transactionMutation,
   accounts,
-  transactions,
-  cashflow,
   submitAccount,
-  submitTransaction,
 } = useLedgerWorkspace();
 
 function selectSection(section: WorkspaceSection) {
@@ -57,31 +51,17 @@ function selectSection(section: WorkspaceSection) {
       />
 
       <main class="app-main">
-        <template v-if="activeSection === 'accounts'">
-          <MonthlySummary :cashflow="cashflow" />
+        <AccountsPanel
+          v-if="activeSection === 'accounts'"
+          :accounts="accounts"
+          :has-load-error="Boolean(accountsQuery.error.value)"
+          :is-creating="accountMutation.isLoading.value"
+          @submit-account="submitAccount"
+        />
 
-          <section class="workspace-grid">
-            <AccountsPanel
-              :accounts="accounts"
-              :has-load-error="Boolean(accountsQuery.error.value)"
-              :is-creating="accountMutation.isLoading.value"
-              @submit-account="submitAccount"
-            />
-
-            <TransactionPanel
-              :accounts="accounts"
-              :is-creating="transactionMutation.isLoading.value"
-              @submit-transaction="submitTransaction"
-            />
-
-            <TransactionsPanel
-              :has-load-error="Boolean(transactionsQuery.error.value)"
-              :transactions="transactions"
-            />
-          </section>
-        </template>
-
+        <MovementsWorkspace v-else-if="activeSection === 'movements'" />
         <BudgetWorkspace v-else-if="activeSection === 'budget'" />
+        <GoalsWorkspace v-else-if="activeSection === 'goals'" />
         <ReportsWorkspace v-else-if="activeSection === 'reports'" />
         <ProjectionsWorkspace v-else />
       </main>
@@ -110,12 +90,6 @@ function selectSection(section: WorkspaceSection) {
   padding: var(--space-6);
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(16rem, 0.9fr) minmax(18rem, 1fr);
-  gap: var(--space-4);
-}
-
 @media (max-width: 900px) {
   .app-layout {
     grid-template-columns: 1fr;
@@ -125,10 +99,6 @@ function selectSection(section: WorkspaceSection) {
 @media (max-width: 680px) {
   .app-main {
     padding: var(--space-4);
-  }
-
-  .workspace-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>
