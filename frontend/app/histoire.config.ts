@@ -3,4 +3,5 @@ import { defineConfig } from "histoire";
 
 export default defineConfig({
   plugins: [HstVue()],
+  setupFile: "./histoire.setup.ts",
 });

@@ -38,7 +38,6 @@ function selectSection(section: WorkspaceSection) {
 <template>
   <div class="app-layout">
     <AppSidebar
-      :accounts="accounts"
       :active-section="activeSection"
       @select-section="selectSection"
     />

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import type { AccountDto } from "../../api/ledger";
 import type { WorkspaceSection } from "../../workspace/sections";
 
 const props = defineProps<{
-  accounts: AccountDto[];
   activeSection: WorkspaceSection;
 }>();
 
@@ -11,7 +9,11 @@ const emit = defineEmits<{
   "select-section": [section: WorkspaceSection];
 }>();
 
-const sections: Array<{ key: WorkspaceSection; marker: string; label: string }> = [
+const sections: Array<{
+  key: WorkspaceSection;
+  marker: string;
+  label: string;
+}> = [
   { key: "accounts", marker: "C", label: "Cuentas" },
   { key: "movements", marker: "M", label: "Movimientos" },
   { key: "budget", marker: "P", label: "Presupuesto" },
@@ -53,20 +55,6 @@ function selectSection(section: WorkspaceSection) {
         <strong>{{ section.label }}</strong>
       </button>
     </nav>
-
-    <section
-      v-if="props.accounts.length > 0"
-      class="sidebar-accounts"
-      aria-labelledby="sidebar-accounts-heading"
-    >
-      <h2 id="sidebar-accounts-heading">Cuentas</h2>
-      <ul>
-        <li v-for="account in props.accounts" :key="account.id">
-          <span>{{ account.displayName }}</span>
-          <small>{{ account.currency }}</small>
-        </li>
-      </ul>
-    </section>
   </aside>
 </template>
 
@@ -169,53 +157,6 @@ function selectSection(section: WorkspaceSection) {
   color: var(--color-primary-foreground);
 }
 
-.sidebar-accounts {
-  display: grid;
-  gap: var(--space-3);
-  margin-block-start: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-card);
-  padding: var(--space-4);
-  box-shadow: var(--shadow-sm);
-}
-
-.sidebar-accounts h2 {
-  margin: 0;
-  color: var(--color-primary-strong);
-  font-size: 1rem;
-}
-
-.sidebar-accounts ul {
-  display: grid;
-  gap: var(--space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.sidebar-accounts li {
-  display: grid;
-  gap: var(--space-1);
-  border-block-start: 1px solid var(--color-border);
-  padding-block-start: var(--space-2);
-}
-
-.sidebar-accounts span {
-  overflow: hidden;
-  color: var(--color-foreground);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-accounts small {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
-  font-weight: 800;
-}
-
 @media (max-width: 900px) {
   .app-sidebar {
     position: static;
@@ -226,10 +167,6 @@ function selectSection(section: WorkspaceSection) {
 
   .sidebar-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .sidebar-accounts {
-    margin-block-start: 0;
   }
 }
 

@@ -50,9 +50,8 @@ function updatePeriod(value: string) {
   gap: var(--space-4);
   min-block-size: 4.75rem;
   border-block-end: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  background: color-mix(in srgb, var(--color-background) 96%, var(--color-card));
   padding: var(--space-3) var(--space-6);
-  backdrop-filter: blur(16px);
 }
 
 .header-title {
