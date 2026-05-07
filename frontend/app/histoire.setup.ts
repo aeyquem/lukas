@@ -1,7 +1,7 @@
 import type { App } from "vue";
 
-import { installPrimeVue } from "./src/primevue";
-import "./src/styles/main.css";
+import { installPrimeVue } from "@/primevue";
+import "@/styles/main.css";
 
 export function setupVue3({ app }: { app: App<Element> }) {
   installPrimeVue(app);

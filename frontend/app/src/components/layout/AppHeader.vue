@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import BaseBadge from "../base/BaseBadge.vue";
-import BaseField from "../base/BaseField.vue";
-import BaseTextInput from "../base/BaseTextInput.vue";
+import BaseBadge from "@/components/base/BaseBadge.vue";
+import BaseField from "@/components/base/BaseField.vue";
+import BaseTextInput from "@/components/base/BaseTextInput.vue";
 
 const props = defineProps<{
   period: string;

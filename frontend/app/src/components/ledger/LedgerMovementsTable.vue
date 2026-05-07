@@ -5,12 +5,12 @@ import DataTable from "primevue/datatable";
 import MultiSelect from "primevue/multiselect";
 import Select from "primevue/select";
 
-import { formatDate, formatMoney } from "../../formatters";
+import { formatDate, formatMoney } from "@/formatters";
 import {
   directionLabel,
   type LedgerMovement,
   type MovementDirection,
-} from "../../ledger/movements";
+} from "@/ledger/movements";
 
 type DisplayMovement = LedgerMovement & {
   displayAmount: string;

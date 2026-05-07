@@ -1,20 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import AccountsPanel from "../components/ledger/AccountsPanel.vue";
-import AppHeader from "../components/layout/AppHeader.vue";
-import AppSidebar from "../components/layout/AppSidebar.vue";
-import BudgetWorkspace from "../components/workspace/BudgetWorkspace.vue";
-import GoalsWorkspace from "../components/workspace/GoalsWorkspace.vue";
-import MovementsWorkspace from "../components/workspace/MovementsWorkspace.vue";
-import ProjectionsWorkspace from "../components/workspace/ProjectionsWorkspace.vue";
-import ReportsWorkspace from "../components/workspace/ReportsWorkspace.vue";
-import { useLedgerWorkspace } from "../composables/useLedgerWorkspace";
+import AccountsPanel from "@/components/ledger/AccountsPanel.vue";
+import AppHeader from "@/components/layout/AppHeader.vue";
+import AppSidebar from "@/components/layout/AppSidebar.vue";
+import BudgetWorkspace from "@/components/workspace/BudgetWorkspace.vue";
+import GoalsWorkspace from "@/components/workspace/GoalsWorkspace.vue";
+import MovementsWorkspace from "@/components/workspace/MovementsWorkspace.vue";
+import ProjectionsWorkspace from "@/components/workspace/ProjectionsWorkspace.vue";
+import ReportsWorkspace from "@/components/workspace/ReportsWorkspace.vue";
+import { useLedgerWorkspace } from "@/composables/useLedgerWorkspace";
 import {
   workspaceSectionEyebrow,
   workspaceSectionTitle,
   type WorkspaceSection,
-} from "../workspace/sections";
+} from "@/workspace/sections";
 
 const activeSection = ref<WorkspaceSection>("accounts");
 const sectionTitle = computed(() => workspaceSectionTitle(activeSection.value));

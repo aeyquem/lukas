@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WorkspaceSection } from "../../workspace/sections";
+import type { WorkspaceSection } from "@/workspace/sections";
 
 const props = defineProps<{
   activeSection: WorkspaceSection;

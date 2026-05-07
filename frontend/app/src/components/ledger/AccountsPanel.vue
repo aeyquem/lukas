@@ -5,16 +5,16 @@ import type {
   AccountDto,
   AccountType,
   CreateAccountRequest,
-} from "../../api/ledger";
-import { formatMoney } from "../../formatters";
-import { accountTypeLabel } from "../../ledger/labels";
-import BaseAlert from "../base/BaseAlert.vue";
-import BaseBadge from "../base/BaseBadge.vue";
-import BaseButton from "../base/BaseButton.vue";
-import BaseCard from "../base/BaseCard.vue";
-import BaseField from "../base/BaseField.vue";
-import BaseSelect from "../base/BaseSelect.vue";
-import BaseTextInput from "../base/BaseTextInput.vue";
+} from "@/api/ledger";
+import { formatMoney } from "@/formatters";
+import BaseAlert from "@/components/base/BaseAlert.vue";
+import BaseBadge from "@/components/base/BaseBadge.vue";
+import BaseButton from "@/components/base/BaseButton.vue";
+import BaseCard from "@/components/base/BaseCard.vue";
+import BaseField from "@/components/base/BaseField.vue";
+import BaseSelect from "@/components/base/BaseSelect.vue";
+import BaseTextInput from "@/components/base/BaseTextInput.vue";
+import { accountTypeLabel } from "@/ledger/labels";
 
 type DrawerMode = "closed" | "add" | "edit";
 

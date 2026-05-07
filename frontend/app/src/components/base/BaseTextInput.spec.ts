@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
-import BaseTextInput from "./BaseTextInput.vue";
+import BaseTextInput from "@/components/base/BaseTextInput.vue";
 
 describe("BaseTextInput", () => {
   it("emits value updates", async () => {

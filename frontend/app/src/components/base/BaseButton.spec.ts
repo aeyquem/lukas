@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
-import BaseButton from "./BaseButton.vue";
+import BaseButton from "@/components/base/BaseButton.vue";
 
 describe("BaseButton", () => {
   it("renders its default slot", () => {

@@ -5,8 +5,8 @@ import {
   createAccount,
   getAccounts,
   type CreateAccountRequest,
-} from "../api/ledger";
-import { currentPeriod } from "../formatters";
+} from "@/api/ledger";
+import { currentPeriod } from "@/formatters";
 
 export function useLedgerWorkspace() {
   const queryCache = useQueryCache();

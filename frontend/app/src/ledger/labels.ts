@@ -1,4 +1,4 @@
-import type { AccountType, TransactionKind } from "../api/ledger";
+import type { AccountType, TransactionKind } from "@/api/ledger";
 
 const accountTypeLabels: Record<AccountType, string> = {
   cash: "Efectivo",

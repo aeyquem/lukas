@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createAccount, getMonthlyCashflow, getMovements } from "./ledger";
+import { createAccount, getMonthlyCashflow, getMovements } from "@/api/ledger";
 
 describe("ledger api", () => {
   afterEach(() => {

@@ -1,5 +1,5 @@
-import { getJson, postJson } from "./client";
-import type { LedgerMovement, MovementDirection } from "../ledger/movements";
+import { getJson, postJson } from "@/api/client";
+import type { LedgerMovement, MovementDirection } from "@/ledger/movements";
 
 export type AccountType = "cash" | "bank" | "credit_card";
 export type TransactionKind = "income" | "expense" | "adjustment";

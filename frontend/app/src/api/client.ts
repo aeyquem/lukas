@@ -1,5 +1,5 @@
-import type { ApiError } from "./errors";
-import type { Result } from "./result";
+import type { ApiError } from "@/api/errors";
+import type { Result } from "@/api/result";
 
 const defaultBaseUrl = "http://127.0.0.1:5000";
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import type { LedgerMovement } from "../../ledger/movements";
-import LedgerMovementsTable from "./LedgerMovementsTable.vue";
+import LedgerMovementsTable from "@/components/ledger/LedgerMovementsTable.vue";
+import type { LedgerMovement } from "@/ledger/movements";
 
 const showOriginalCurrency = ref(false);
 

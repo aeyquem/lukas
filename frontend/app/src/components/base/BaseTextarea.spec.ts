@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
-import BaseTextarea from "./BaseTextarea.vue";
+import BaseTextarea from "@/components/base/BaseTextarea.vue";
 
 describe("BaseTextarea", () => {
   it("emits value updates", async () => {

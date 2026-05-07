@@ -2,12 +2,12 @@
 import { useQuery } from "@pinia/colada";
 import { computed, ref } from "vue";
 
-import { getMovements } from "../../api/ledger";
-import LedgerMovementsTable from "../ledger/LedgerMovementsTable.vue";
-import BaseAlert from "../base/BaseAlert.vue";
-import BaseBadge from "../base/BaseBadge.vue";
-import BaseCard from "../base/BaseCard.vue";
-import BaseCheckbox from "../base/BaseCheckbox.vue";
+import { getMovements } from "@/api/ledger";
+import BaseAlert from "@/components/base/BaseAlert.vue";
+import BaseBadge from "@/components/base/BaseBadge.vue";
+import BaseCard from "@/components/base/BaseCard.vue";
+import BaseCheckbox from "@/components/base/BaseCheckbox.vue";
+import LedgerMovementsTable from "@/components/ledger/LedgerMovementsTable.vue";
 
 const showOriginalCurrency = ref(false);
 const baseCurrency = "CLP";
