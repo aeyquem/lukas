@@ -166,6 +166,7 @@ function groupHeading(data: DisplayMovement): string {
             :max-selected-labels="accountOptions.length - 1"
             option-label="label"
             option-value="value"
+            filter
             :options="accountOptions"
             placeholder="Seleccionar"
             selected-items-label="Todas las cuentas"

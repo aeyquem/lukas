@@ -50,6 +50,11 @@ public sealed class LedgerServiceTests
             throw new InvalidOperationException("Repository should not be called.");
         }
 
+        public Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
         public Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(
             string period,
             CancellationToken cancellationToken)

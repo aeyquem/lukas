@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n api,web \"dotnet run --project backend/src/Lukas.Api\" \"pnpm --dir frontend/app dev\"",
+    "dev": "concurrently -n api,web,his \"dotnet run --project backend/src/Lukas.Api\" \"pnpm --dir frontend/app dev\" \"pnpm --dir frontend/app histoire:dev\"",
+    "historie:dev": "pnpm --dir frontend/app histoire:dev",
     "dev:desktop": "concurrently -n api,desktop \"dotnet run --project backend/src/Lukas.Api\" \"pnpm --dir apps/desktop tauri dev\"",
     "check": "dotnet build backend/Lukas.slnx -m:1 && pnpm --dir frontend/app lint && pnpm --dir frontend/app typecheck",
     "test": "dotnet test backend/Lukas.slnx -m:1 && pnpm --dir frontend/app test",

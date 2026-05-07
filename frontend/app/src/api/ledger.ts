@@ -1,4 +1,5 @@
 import { getJson, postJson } from "./client";
+import type { LedgerMovement, MovementDirection } from "../ledger/movements";
 
 export type AccountType = "cash" | "bank" | "credit_card";
 export type TransactionKind = "income" | "expense" | "adjustment";
@@ -29,6 +30,20 @@ export interface TransactionDto {
   accountEffect: AccountEffect;
   description: string;
   notes?: string | null;
+}
+
+export interface MovementDto {
+  id: string;
+  transactionId: string;
+  transactionDate: string;
+  accountId: string;
+  accountName: string;
+  direction: MovementDirection;
+  originalAmount: string;
+  originalCurrency: string;
+  baseAmount: string;
+  baseCurrency: string;
+  description: string;
 }
 
 export interface CreateManualTransactionRequest {
@@ -99,6 +114,27 @@ export async function createManualTransaction(
   }
 
   return result.value;
+}
+
+export async function getMovements(): Promise<LedgerMovement[]> {
+  const result = await getJson<MovementDto[]>("/api/movements");
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value.map((movement) => ({
+    id: movement.id,
+    transactionId: movement.transactionId,
+    date: movement.transactionDate,
+    accountId: movement.accountId,
+    accountName: movement.accountName,
+    description: movement.description,
+    direction: movement.direction,
+    originalAmount: movement.originalAmount,
+    originalCurrency: movement.originalCurrency,
+    baseAmount: movement.baseAmount,
+    baseCurrency: movement.baseCurrency,
+  }));
 }
 
 export async function getMonthlyCashflow(

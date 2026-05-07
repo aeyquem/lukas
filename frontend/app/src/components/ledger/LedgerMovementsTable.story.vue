@@ -1,10 +1,65 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import { sampleLedgerMovements } from "../../ledger/movements";
+import type { LedgerMovement } from "../../ledger/movements";
 import LedgerMovementsTable from "./LedgerMovementsTable.vue";
 
 const showOriginalCurrency = ref(false);
+
+const sampleLedgerMovements: LedgerMovement[] = [
+  {
+    id: "movement-001",
+    transactionId: "transaction-001",
+    date: "2026-05-02",
+    accountId: "account-001",
+    accountName: "Cuenta Corriente",
+    description: "Sueldo mensual",
+    direction: "in",
+    originalAmount: "1850000",
+    originalCurrency: "CLP",
+    baseAmount: "1850000",
+    baseCurrency: "CLP",
+  },
+  {
+    id: "movement-002",
+    transactionId: "transaction-002",
+    date: "2026-05-03",
+    accountId: "account-002",
+    accountName: "Tarjeta Visa",
+    description: "Suscripcion software",
+    direction: "out",
+    originalAmount: "24.99",
+    originalCurrency: "USD",
+    baseAmount: "24.99",
+    baseCurrency: "USD",
+  },
+  {
+    id: "movement-003",
+    transactionId: "transaction-003",
+    date: "2026-05-04",
+    accountId: "account-003",
+    accountName: "Efectivo",
+    description: "Almuerzo",
+    direction: "out",
+    originalAmount: "8500",
+    originalCurrency: "CLP",
+    baseAmount: "8500",
+    baseCurrency: "CLP",
+  },
+  {
+    id: "movement-004",
+    transactionId: "transaction-004",
+    date: "2026-05-05",
+    accountId: "account-004",
+    accountName: "Cuenta USD",
+    description: "Reembolso proveedor",
+    direction: "in",
+    originalAmount: "110.5",
+    originalCurrency: "USD",
+    baseAmount: "110.5",
+    baseCurrency: "USD",
+  },
+];
 </script>
 
 <template>

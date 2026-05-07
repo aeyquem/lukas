@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createAccount, getMonthlyCashflow } from "./ledger";
+import { createAccount, getMonthlyCashflow, getMovements } from "./ledger";
 
 describe("ledger api", () => {
   afterEach(() => {
@@ -63,6 +63,37 @@ describe("ledger api", () => {
     expect(cashflow.netCashflow).toBe("400000");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/cashflow/monthly?period=2026-05",
+    );
+  });
+
+  it("requests stored movements", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: "movement-id",
+            transactionId: "transaction-id",
+            transactionDate: "2026-05-02",
+            accountId: "account-id",
+            accountName: "Banco",
+            direction: "out",
+            originalAmount: "125000",
+            originalCurrency: "CLP",
+            baseAmount: "125000",
+            baseCurrency: "CLP",
+            description: "Arriendo",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const movements = await getMovements();
+
+    expect(movements[0]?.accountName).toBe("Banco");
+    expect(movements[0]?.date).toBe("2026-05-02");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/movements",
     );
   });
 });

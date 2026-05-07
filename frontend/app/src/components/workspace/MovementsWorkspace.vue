@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { useQuery } from "@pinia/colada";
 import { computed, ref } from "vue";
 
+import { getMovements } from "../../api/ledger";
 import LedgerMovementsTable from "../ledger/LedgerMovementsTable.vue";
-import { sampleLedgerMovements } from "../../ledger/movements";
+import BaseAlert from "../base/BaseAlert.vue";
 import BaseBadge from "../base/BaseBadge.vue";
 import BaseCard from "../base/BaseCard.vue";
 import BaseCheckbox from "../base/BaseCheckbox.vue";
@@ -10,7 +12,13 @@ import BaseCheckbox from "../base/BaseCheckbox.vue";
 const showOriginalCurrency = ref(false);
 const baseCurrency = "CLP";
 
-const movementCount = computed(() => sampleLedgerMovements.length);
+const movementsQuery = useQuery({
+  key: ["movements"],
+  query: getMovements,
+});
+
+const movements = computed(() => movementsQuery.data.value ?? []);
+const movementCount = computed(() => movements.value.length);
 </script>
 
 <template>
@@ -40,8 +48,16 @@ const movementCount = computed(() => sampleLedgerMovements.length);
         }}</strong>
       </p>
 
+      <BaseAlert
+        v-if="movementsQuery.error.value"
+        class="movements-alert"
+        tone="danger"
+      >
+        No se pudieron cargar los movimientos.
+      </BaseAlert>
+
       <LedgerMovementsTable
-        :movements="sampleLedgerMovements"
+        :movements="movements"
         :show-original-currency="showOriginalCurrency"
       />
     </section>
@@ -83,6 +99,10 @@ const movementCount = computed(() => sampleLedgerMovements.length);
 
 .currency-note strong {
   color: var(--color-primary-strong);
+}
+
+.movements-alert {
+  margin-block-end: var(--space-4);
 }
 
 @media (max-width: 680px) {

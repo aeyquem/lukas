@@ -107,6 +107,51 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return ToTransactionReadModel(transaction);
     }
 
+    public async Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+
+        var entries = await dbContext.LedgerEntries
+            .AsNoTracking()
+            .Where(entry => entry.WorkspaceId == workspace.Id)
+            .OrderByDescending(entry => entry.LedgerTransaction!.TransactionDate)
+            .ThenByDescending(entry => entry.LedgerTransactionId)
+            .ThenByDescending(entry => entry.Id)
+            .Select(entry => new
+            {
+                entry.Id,
+                TransactionId = entry.LedgerTransactionId,
+                entry.LedgerTransaction!.TransactionDate,
+                entry.AccountId,
+                AccountName = entry.Account!.DisplayName,
+                entry.AccountEffect,
+                entry.AmountValue,
+                entry.Currency,
+                entry.LedgerTransaction.Description,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return entries
+            .Select(entry =>
+            {
+                var amount = decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture);
+                return new MovementReadModel(
+                    entry.Id,
+                    entry.TransactionId,
+                    entry.TransactionDate,
+                    entry.AccountId,
+                    entry.AccountName,
+                    entry.AccountEffect == "decrease" ? "out" : "in",
+                    amount,
+                    entry.Currency,
+                    amount,
+                    entry.Currency,
+                    entry.Description);
+            })
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(
         string period,
         CancellationToken cancellationToken)

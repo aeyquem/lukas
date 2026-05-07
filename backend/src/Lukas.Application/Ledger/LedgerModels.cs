@@ -34,6 +34,19 @@ public sealed record TransactionReadModel(
     string Description,
     string? Notes);
 
+public sealed record MovementReadModel(
+    Guid Id,
+    Guid TransactionId,
+    DateOnly TransactionDate,
+    Guid AccountId,
+    string AccountName,
+    string Direction,
+    decimal OriginalAmount,
+    string OriginalCurrency,
+    decimal BaseAmount,
+    string BaseCurrency,
+    string Description);
+
 public sealed record MonthlyCashflowReadModel(
     string Period,
     string Currency,

@@ -53,6 +53,30 @@ public sealed class EfLedgerRepositoryTests
         cashflow.Accounts.Single().CurrentBalance.ShouldBe(475000m);
     }
 
+    [Fact]
+    public async Task GetMovementsIncludesAccountAndDirection()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null),
+            TestContext.Current.CancellationToken);
+
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var movement = movements.Single();
+
+        movement.AccountId.ShouldBe(account.Id);
+        movement.AccountName.ShouldBe("Banco");
+        movement.Direction.ShouldBe("out");
+        movement.OriginalAmount.ShouldBe(125000m);
+        movement.OriginalCurrency.ShouldBe("CLP");
+        movement.Description.ShouldBe("Arriendo");
+    }
+
     private static async Task<TestDatabase> CreateDatabaseAsync()
     {
         var connection = new SqliteConnection("Data Source=:memory:");

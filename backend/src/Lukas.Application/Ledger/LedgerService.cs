@@ -68,6 +68,11 @@ public sealed class LedgerService(ILedgerRepository repository)
         return Success(repository.CreateManualTransactionAsync(command, cancellationToken));
     }
 
+    public Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
+    {
+        return repository.GetMovementsAsync(cancellationToken);
+    }
+
     public Task<Result<IReadOnlyList<TransactionReadModel>>> GetTransactionsAsync(
         string period,
         CancellationToken cancellationToken)

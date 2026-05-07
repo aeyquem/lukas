@@ -10,6 +10,8 @@ public interface ILedgerRepository
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(string period, CancellationToken cancellationToken);
 
     Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(string period, CancellationToken cancellationToken);
