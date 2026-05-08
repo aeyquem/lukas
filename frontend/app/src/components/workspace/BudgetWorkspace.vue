@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, type VNode } from "vue";
 import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import Column from "primevue/column";
-import type { TreeTableExpandedKeys } from "primevue/treetable";
+import type {
+  TreeTableExpandedKeys,
+  TreeTablePassThroughMethodOptions,
+  TreeTablePassThroughOptions,
+} from "primevue/treetable";
 import TreeTable from "primevue/treetable";
 import type { TreeNode } from "primevue/treenode";
 
@@ -53,11 +57,28 @@ type SubcategoryDropInstruction = {
   edge: "before" | "after";
 };
 
+type CategoryDropInstruction = {
+  targetCategoryId: string;
+  edge: "before" | "after";
+};
+
+type BudgetTreeNode = TreeNode & {
+  key: string;
+  data: BudgetNodeData;
+};
+
+type BudgetRowPassThroughOptions = TreeTablePassThroughMethodOptions & {
+  instance?: {
+    node?: BudgetTreeNode;
+  };
+};
+
 type DragElement = HTMLElement & {
   budgetDraggableCleanup?: () => void;
   budgetDraggableKey?: string;
   budgetDropTargetCleanup?: () => void;
   budgetDropTargetKey?: string;
+  budgetRowRegistrationKey?: string;
 };
 
 const currency = "CLP";
@@ -154,73 +175,29 @@ const nodes = computed<TreeNode[]>(() =>
   }),
 );
 
-const vDraggableEnvelope = {
-  mounted(element: DragElement, binding: { value: string }) {
-    registerDraggableEnvelope(element, binding.value);
-  },
-  updated(element: DragElement, binding: { value: string }) {
-    if (element.budgetDraggableKey !== binding.value) {
-      registerDraggableEnvelope(element, binding.value);
-    }
-  },
-  unmounted(element: DragElement) {
-    cleanupDraggableRegistration(element);
-  },
-};
+const treeTablePassThrough: TreeTablePassThroughOptions = {
+  row(options) {
+    const node = (options as BudgetRowPassThroughOptions).instance?.node;
 
-const vDraggableSubcategory = {
-  mounted(element: DragElement, binding: { value: string }) {
-    registerDraggableSubcategory(element, binding.value);
-  },
-  updated(element: DragElement, binding: { value: string }) {
-    if (element.budgetDraggableKey !== binding.value) {
-      registerDraggableSubcategory(element, binding.value);
+    if (!node) {
+      return undefined;
     }
-  },
-  unmounted(element: DragElement) {
-    cleanupDraggableRegistration(element);
-  },
-};
 
-const vSubcategoryDropTarget = {
-  mounted(element: DragElement, binding: { value: string }) {
-    registerSubcategoryDropTarget(element, binding.value);
-  },
-  updated(element: DragElement, binding: { value: string }) {
-    if (element.budgetDropTargetKey !== binding.value) {
-      registerSubcategoryDropTarget(element, binding.value);
-    }
-  },
-  unmounted(element: DragElement) {
-    cleanupDropTargetRegistration(element);
-  },
-};
-
-const vEnvelopeDropTarget = {
-  mounted(element: DragElement, binding: { value: string }) {
-    registerEnvelopeDropTarget(element, binding.value);
-  },
-  updated(element: DragElement, binding: { value: string }) {
-    if (element.budgetDropTargetKey !== binding.value) {
-      registerEnvelopeDropTarget(element, binding.value);
-    }
-  },
-  unmounted(element: DragElement) {
-    cleanupDropTargetRegistration(element);
-  },
-};
-
-const vCategoryDropTarget = {
-  mounted(element: DragElement, binding: { value: string }) {
-    registerCategoryDropTarget(element, binding.value);
-  },
-  updated(element: DragElement, binding: { value: string }) {
-    if (element.budgetDropTargetKey !== binding.value) {
-      registerCategoryDropTarget(element, binding.value);
-    }
-  },
-  unmounted(element: DragElement) {
-    cleanupDropTargetRegistration(element);
+    return {
+      class: ["budget-row", `budget-row--${node.data.nodeType}`],
+      draggable: "true",
+      "data-budget-node-id": node.key,
+      "data-budget-node-type": node.data.nodeType,
+      onVnodeMounted(vnode: VNode) {
+        registerBudgetRow(getVnodeElement(vnode), node);
+      },
+      onVnodeUpdated(vnode: VNode) {
+        registerBudgetRow(getVnodeElement(vnode), node);
+      },
+      onVnodeBeforeUnmount(vnode: VNode) {
+        cleanupRowRegistration(getVnodeElement(vnode));
+      },
+    };
   },
 };
 
@@ -272,15 +249,77 @@ function buildParentNodeData(
   };
 }
 
+function getVnodeElement(vnode: VNode): DragElement | undefined {
+  return vnode.el instanceof HTMLElement ? vnode.el : undefined;
+}
+
+function registerBudgetRow(
+  element: DragElement | undefined,
+  node: BudgetTreeNode,
+) {
+  if (!element) {
+    return;
+  }
+
+  const registrationKey = `${node.data.nodeType}:${node.key}`;
+  if (element.budgetRowRegistrationKey === registrationKey) {
+    return;
+  }
+
+  cleanupRowRegistration(element);
+  element.budgetRowRegistrationKey = registrationKey;
+
+  if (node.data.nodeType === "category") {
+    registerDraggableCategory(element, node.key);
+    registerCategoryDropTarget(element, node.key);
+    return;
+  }
+
+  if (node.data.nodeType === "subcategory") {
+    registerDraggableSubcategory(element, node.key);
+    registerSubcategoryDropTarget(element, node.key);
+    return;
+  }
+
+  registerDraggableEnvelope(element, node.key);
+  registerEnvelopeDropTarget(element, node.key);
+}
+
 function registerDraggableEnvelope(element: DragElement, envelopeId: string) {
   cleanupDraggableRegistration(element);
   element.budgetDraggableKey = envelopeId;
   element.budgetDraggableCleanup = draggable({
     element,
+    canDrag({ input }) {
+      return canStartRowDrag(input.clientX, input.clientY);
+    },
     getInitialData() {
       return {
         type: "budget-envelope",
         envelopeId,
+      };
+    },
+    onDragStart() {
+      element.dataset.dragging = "true";
+    },
+    onDrop() {
+      delete element.dataset.dragging;
+    },
+  });
+}
+
+function registerDraggableCategory(element: DragElement, categoryId: string) {
+  cleanupDraggableRegistration(element);
+  element.budgetDraggableKey = categoryId;
+  element.budgetDraggableCleanup = draggable({
+    element,
+    canDrag({ input }) {
+      return canStartRowDrag(input.clientX, input.clientY);
+    },
+    getInitialData() {
+      return {
+        type: "budget-category",
+        categoryId,
       };
     },
     onDragStart() {
@@ -300,6 +339,9 @@ function registerDraggableSubcategory(
   element.budgetDraggableKey = subcategoryId;
   element.budgetDraggableCleanup = draggable({
     element,
+    canDrag({ input }) {
+      return canStartRowDrag(input.clientX, input.clientY);
+    },
     getInitialData() {
       return {
         type: "budget-subcategory",
@@ -313,6 +355,11 @@ function registerDraggableSubcategory(
       delete element.dataset.dragging;
     },
   });
+}
+
+function canStartRowDrag(clientX: number, clientY: number): boolean {
+  const target = document.elementFromPoint(clientX, clientY);
+  return !target?.closest("button, input, textarea, select, a, [contenteditable]");
 }
 
 function registerEnvelopeDropTarget(element: DragElement, envelopeId: string) {
@@ -413,24 +460,43 @@ function registerCategoryDropTarget(element: DragElement, categoryId: string) {
   element.budgetDropTargetCleanup = dropTargetForElements({
     element,
     canDrop({ source }) {
-      return source.data.type === "budget-subcategory";
+      return (
+        source.data.type === "budget-subcategory" ||
+        (source.data.type === "budget-category" &&
+          source.data.categoryId !== categoryId)
+      );
     },
-    getData() {
+    getData({ input }) {
       return {
         type: "budget-category",
         categoryId,
+        targetCategoryId: categoryId,
+        edge: dropEdge(element, input.clientY),
       };
     },
-    onDragEnter() {
-      element.dataset.dragOver = "true";
+    onDrag({ source, self }) {
+      updateCategoryDropState(element, source.data.type, self.data.edge);
+    },
+    onDragEnter({ source, self }) {
+      updateCategoryDropState(element, source.data.type, self.data.edge);
     },
     onDragLeave() {
-      delete element.dataset.dragOver;
+      clearDropState(element);
     },
-    onDrop({ source }) {
-      delete element.dataset.dragOver;
+    onDrop({ source, self }) {
+      clearDropState(element);
       if (typeof source.data.subcategoryId === "string") {
         moveSubcategory(source.data.subcategoryId, categoryId);
+        return;
+      }
+
+      if (typeof source.data.categoryId !== "string") {
+        return;
+      }
+
+      const instruction = parseCategoryDropInstruction(self.data);
+      if (instruction) {
+        moveCategoryNear(source.data.categoryId, instruction);
       }
     },
   });
@@ -451,9 +517,37 @@ function updateSubcategoryDropState(
   element.dataset.dragEdge = edge === "before" ? "before" : "after";
 }
 
+function updateCategoryDropState(
+  element: HTMLElement,
+  sourceType: unknown,
+  edge: unknown,
+) {
+  if (sourceType === "budget-subcategory") {
+    delete element.dataset.dragEdge;
+    element.dataset.dragOver = "true";
+    return;
+  }
+
+  delete element.dataset.dragOver;
+  element.dataset.dragEdge = edge === "before" ? "before" : "after";
+}
+
 function clearDropState(element: HTMLElement) {
   delete element.dataset.dragOver;
   delete element.dataset.dragEdge;
+}
+
+function cleanupRowRegistration(element: DragElement | undefined) {
+  if (!element) {
+    return;
+  }
+
+  cleanupDraggableRegistration(element);
+  cleanupDropTargetRegistration(element);
+  delete element.dataset.dragEdge;
+  delete element.dataset.dragOver;
+  delete element.dataset.dragging;
+  delete element.budgetRowRegistrationKey;
 }
 
 function cleanupDraggableRegistration(element: DragElement) {
@@ -579,6 +673,34 @@ function moveSubcategoryNear(
   expandSubcategoryParent(targetSubcategory.categoryId, draggedSubcategory.id);
 }
 
+function moveCategoryNear(
+  categoryId: string,
+  instruction: CategoryDropInstruction,
+) {
+  const draggedCategory = categories.value.find(
+    (category) => category.id === categoryId,
+  );
+  const withoutDraggedCategory = categories.value.filter(
+    (category) => category.id !== categoryId,
+  );
+  const targetIndex = withoutDraggedCategory.findIndex(
+    (category) => category.id === instruction.targetCategoryId,
+  );
+
+  if (!draggedCategory || targetIndex < 0) {
+    return;
+  }
+
+  const insertionIndex =
+    instruction.edge === "before" ? targetIndex : targetIndex + 1;
+  categories.value = [
+    ...withoutDraggedCategory.slice(0, insertionIndex),
+    draggedCategory,
+    ...withoutDraggedCategory.slice(insertionIndex),
+  ];
+  expandCategory(draggedCategory.id);
+}
+
 function updateEnvelopeAssignedAmount(envelopeId: string, assignedAmount: string) {
   envelopes.value = envelopes.value.map((envelope) =>
     envelope.id === envelopeId ? { ...envelope, assignedAmount } : envelope,
@@ -619,6 +741,13 @@ function expandSubcategoryParent(categoryId: string, subcategoryId: string) {
   };
 }
 
+function expandCategory(categoryId: string) {
+  expandedKeys.value = {
+    ...expandedKeys.value,
+    [categoryId]: true,
+  };
+}
+
 function parseEnvelopeDropInstruction(
   data: Record<string | symbol, unknown>,
 ): EnvelopeDropInstruction | undefined {
@@ -647,6 +776,22 @@ function parseSubcategoryDropInstruction(
 
   return {
     targetSubcategoryId: data.targetSubcategoryId,
+    edge: data.edge,
+  };
+}
+
+function parseCategoryDropInstruction(
+  data: Record<string | symbol, unknown>,
+): CategoryDropInstruction | undefined {
+  if (
+    typeof data.targetCategoryId !== "string" ||
+    (data.edge !== "before" && data.edge !== "after")
+  ) {
+    return undefined;
+  }
+
+  return {
+    targetCategoryId: data.targetCategoryId,
     edge: data.edge,
   };
 }
@@ -712,6 +857,7 @@ function formatDecimal(amount: number): string {
       <TreeTable
         v-model:expanded-keys="expandedKeys"
         class="budget-tree-table"
+        :pt="treeTablePassThrough"
         :value="nodes"
       >
         <Column
@@ -724,31 +870,22 @@ function formatDecimal(amount: number): string {
           <template #body="{ node }">
             <span
               v-if="node.data.nodeType === 'envelope'"
-              v-draggable-envelope="node.key"
-              v-envelope-drop-target="node.key"
               class="envelope-label"
               :data-envelope-id="node.key"
-              draggable="true"
             >
-              <span class="drag-handle" aria-hidden="true">::</span>
               <strong>{{ node.data.name }}</strong>
             </span>
             <span
               v-else-if="node.data.nodeType === 'subcategory'"
-              v-draggable-subcategory="node.key"
-              v-subcategory-drop-target="node.key"
-              class="group-label drop-target"
+              class="group-label"
               data-level="subcategory"
               :data-subcategory-id="node.key"
-              draggable="true"
             >
-              <span class="drag-handle" aria-hidden="true">::</span>
               <strong>{{ node.data.name }}</strong>
             </span>
             <span
               v-else
-              v-category-drop-target="node.key"
-              class="group-label drop-target"
+              class="group-label"
               data-level="category"
               :data-category-id="node.key"
             >
@@ -851,51 +988,6 @@ function formatDecimal(amount: number): string {
   color: var(--color-muted-foreground);
 }
 
-.drop-target {
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-}
-
-.drop-target[data-drag-over="true"] {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  color: var(--color-primary-strong);
-  box-shadow: inset 0 0 0 1px var(--color-border-strong);
-}
-
-.drop-target[data-drag-edge="before"] {
-  box-shadow: inset 0 2px 0 var(--color-primary);
-}
-
-.drop-target[data-drag-edge="after"] {
-  box-shadow: inset 0 -2px 0 var(--color-primary);
-}
-
-.envelope-label {
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-}
-
-.group-label[data-dragging="true"],
-.envelope-label[data-dragging="true"] {
-  opacity: 0.55;
-}
-
-.envelope-label[data-drag-edge="before"] {
-  box-shadow: inset 0 2px 0 var(--color-primary);
-}
-
-.envelope-label[data-drag-edge="after"] {
-  box-shadow: inset 0 -2px 0 var(--color-primary);
-}
-
-.drag-handle {
-  color: var(--color-muted-foreground);
-  cursor: grab;
-  font-family: var(--font-mono);
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
 .numeric {
   color: var(--color-primary-strong);
   font-family: var(--font-mono);
@@ -942,6 +1034,33 @@ function formatDecimal(amount: number): string {
 
 :deep(.p-treetable-thead > tr > th) {
   white-space: nowrap;
+}
+
+:deep(.budget-row) {
+  cursor: grab;
+}
+
+:deep(.budget-row[data-dragging="true"] > td) {
+  opacity: 0.55;
+}
+
+:deep(.budget-row[data-drag-over="true"] > td) {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+
+:deep(.budget-row[data-drag-edge="before"] > td) {
+  box-shadow: inset 0 2px 0 var(--color-primary);
+}
+
+:deep(.budget-row[data-drag-edge="after"] > td) {
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+}
+
+:deep(.budget-row button),
+:deep(.budget-row input) {
+  cursor: auto;
 }
 
 @media (max-width: 680px) {
