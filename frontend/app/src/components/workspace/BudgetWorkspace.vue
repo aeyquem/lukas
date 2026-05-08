@@ -11,6 +11,7 @@ import type { TreeNode } from "primevue/treenode";
 
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
+import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import { formatMoney } from "@/formatters";
 
 type BudgetNodeType = "category" | "subcategory" | "envelope";
@@ -60,6 +61,7 @@ type DragElement = HTMLElement & {
 };
 
 const currency = "CLP";
+const editingAssignedEnvelopeId = ref("");
 const expandedKeys = ref<TreeTableExpandedKeys>({
   "cat-living": true,
   "cat-planning": true,
@@ -115,39 +117,39 @@ const nodes = computed<TreeNode[]>(() =>
     const categorySubcategories = subcategories.value.filter(
       (subcategory) => subcategory.categoryId === category.id,
     );
-    const categoryEnvelopes = envelopes.value.filter((envelope) =>
-      categorySubcategories.some(
-        (subcategory) => subcategory.id === envelope.subcategoryId,
-      ),
-    );
+    const categoryChildren = categorySubcategories.map((subcategory) => {
+      const subcategoryEnvelopes = envelopes.value.filter(
+        (envelope) => envelope.subcategoryId === subcategory.id,
+      );
+
+      return {
+        key: subcategory.id,
+        data: buildNodeData(
+          "subcategory",
+          subcategory.name,
+          subcategoryEnvelopes,
+        ),
+        children: subcategoryEnvelopes.map((envelope) => ({
+          key: envelope.id,
+          data: {
+            name: envelope.name,
+            nodeType: "envelope",
+            assignedAmount: envelope.assignedAmount,
+            spentAmount: envelope.spentAmount,
+            remainingAmount: remainingAmount(envelope),
+          } satisfies BudgetNodeData,
+        })),
+      };
+    });
 
     return {
       key: category.id,
-      data: buildNodeData("category", category.name, categoryEnvelopes),
-      children: categorySubcategories.map((subcategory) => {
-        const subcategoryEnvelopes = envelopes.value.filter(
-          (envelope) => envelope.subcategoryId === subcategory.id,
-        );
-
-        return {
-          key: subcategory.id,
-          data: buildNodeData(
-            "subcategory",
-            subcategory.name,
-            subcategoryEnvelopes,
-          ),
-          children: subcategoryEnvelopes.map((envelope) => ({
-            key: envelope.id,
-            data: {
-              name: envelope.name,
-              nodeType: "envelope",
-              assignedAmount: envelope.assignedAmount,
-              spentAmount: envelope.spentAmount,
-              remainingAmount: remainingAmount(envelope),
-            } satisfies BudgetNodeData,
-          })),
-        };
-      }),
+      data: buildParentNodeData(
+        "category",
+        category.name,
+        categoryChildren.map((subcategory) => subcategory.data),
+      ),
+      children: categoryChildren,
     };
   }),
 );
@@ -222,6 +224,16 @@ const vCategoryDropTarget = {
   },
 };
 
+const vAssignedInputFocus = {
+  mounted(element: HTMLElement) {
+    element.focus();
+
+    if (element instanceof HTMLInputElement) {
+      element.select();
+    }
+  },
+};
+
 function buildNodeData(
   nodeType: BudgetNodeType,
   name: string,
@@ -229,6 +241,25 @@ function buildNodeData(
 ): BudgetNodeData {
   const assignedAmount = sumEnvelopeField(source, "assignedAmount");
   const spentAmount = sumEnvelopeField(source, "spentAmount");
+
+  return {
+    name,
+    nodeType,
+    assignedAmount,
+    spentAmount,
+    remainingAmount: formatDecimal(
+      parseAmount(assignedAmount) - parseAmount(spentAmount),
+    ),
+  };
+}
+
+function buildParentNodeData(
+  nodeType: "category" | "subcategory",
+  name: string,
+  source: BudgetNodeData[],
+): BudgetNodeData {
+  const assignedAmount = sumNodeField(source, "assignedAmount");
+  const spentAmount = sumNodeField(source, "spentAmount");
 
   return {
     name,
@@ -548,6 +579,22 @@ function moveSubcategoryNear(
   expandSubcategoryParent(targetSubcategory.categoryId, draggedSubcategory.id);
 }
 
+function updateEnvelopeAssignedAmount(envelopeId: string, assignedAmount: string) {
+  envelopes.value = envelopes.value.map((envelope) =>
+    envelope.id === envelopeId ? { ...envelope, assignedAmount } : envelope,
+  );
+}
+
+function editAssignedAmount(envelopeId: string) {
+  editingAssignedEnvelopeId.value = envelopeId;
+}
+
+function stopEditingAssignedAmount(envelopeId: string) {
+  if (editingAssignedEnvelopeId.value === envelopeId) {
+    editingAssignedEnvelopeId.value = "";
+  }
+}
+
 function expandEnvelopeParent(subcategoryId: string) {
   const subcategory = subcategories.value.find(
     (candidate) => candidate.id === subcategoryId,
@@ -621,6 +668,14 @@ function sumEnvelopeField(
     (sum, envelope) => sum + parseAmount(envelope[field]),
     0,
   );
+  return formatDecimal(total);
+}
+
+function sumNodeField(
+  source: BudgetNodeData[],
+  field: "assignedAmount" | "spentAmount",
+): string {
+  const total = source.reduce((sum, node) => sum + parseAmount(node[field]), 0);
   return formatDecimal(total);
 }
 
@@ -704,7 +759,32 @@ function formatDecimal(amount: number): string {
 
         <Column field="assignedAmount" header="Asignado" style="width: 12rem">
           <template #body="{ node }">
-            <span class="numeric">
+            <BaseTextInput
+              v-if="
+                node.data.nodeType === 'envelope' &&
+                editingAssignedEnvelopeId === node.key
+              "
+              v-assigned-input-focus
+              :aria-label="`Asignado para ${node.data.name}`"
+              class="assigned-input"
+              inputmode="decimal"
+              :model-value="node.data.assignedAmount"
+              type="text"
+              @update:model-value="
+                (value) => updateEnvelopeAssignedAmount(node.key, value)
+              "
+              @blur="stopEditingAssignedAmount(node.key)"
+            />
+            <button
+              v-else-if="node.data.nodeType === 'envelope'"
+              class="assigned-display numeric"
+              type="button"
+              :aria-label="`Editar asignado para ${node.data.name}`"
+              @click="editAssignedAmount(node.key)"
+            >
+              {{ formatMoney(node.data.assignedAmount, currency) }}
+            </button>
+            <span v-else class="numeric">
               {{ formatMoney(node.data.assignedAmount, currency) }}
             </span>
           </template>
@@ -825,6 +905,31 @@ function formatDecimal(amount: number): string {
 
 .numeric[data-tone="negative"] {
   color: var(--color-danger-strong);
+}
+
+.assigned-display {
+  border: 0;
+  background: transparent;
+  cursor: text;
+  padding: 0;
+  text-align: end;
+}
+
+.assigned-display:hover,
+.assigned-display:focus-visible {
+  color: var(--color-primary);
+  outline: 0;
+}
+
+.assigned-display:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.assigned-input {
+  max-inline-size: 10rem;
+  min-block-size: 2.25rem;
+  text-align: end;
 }
 
 :deep(.p-treetable-table) {
