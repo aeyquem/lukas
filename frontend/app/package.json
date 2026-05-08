@@ -16,6 +16,7 @@
     "histoire:build": "histoire build"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@pinia/colada": "^0.17.0",
     "@primeuix/themes": "^2.0.3",
     "@primevue/core": "^4.5.5",
