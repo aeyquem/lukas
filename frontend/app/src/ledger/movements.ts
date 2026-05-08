@@ -6,6 +6,7 @@ export type LedgerMovement = {
   date: string;
   accountId: string;
   accountName: string;
+  categoryName?: string;
   description: string;
   notes?: string;
   direction: MovementDirection;

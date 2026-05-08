@@ -18,6 +18,8 @@ import {
 type DisplayMovement = LedgerMovement & {
   displayAmount: string;
   displayCurrency: string;
+  categoryDisplay: string;
+  isUncategorized: boolean;
   signedDisplayAmount: string;
   directionLabel: string;
 };
@@ -116,6 +118,8 @@ const displayMovements = computed<DisplayMovement[]>(() =>
         directionLabel: directionLabel(movement.direction),
         displayAmount,
         displayCurrency,
+        categoryDisplay: movement.categoryName ?? "Sin categoría",
+        isUncategorized: !movement.categoryName,
         signedDisplayAmount: signedAmount(
           movement.direction,
           displayAmount,
@@ -144,6 +148,10 @@ function groupHeading(data: DisplayMovement): string {
 
   return String(data[activeGroupBy.value]);
 }
+
+function movementRowClass(data: DisplayMovement): string {
+  return data.isUncategorized ? "movement-row--uncategorized" : "";
+}
 </script>
 
 <template>
@@ -158,6 +166,7 @@ function groupHeading(data: DisplayMovement): string {
     reorderable-columns
     resizable-columns
     filter-display="menu"
+    :row-class="movementRowClass"
     :row-group-mode="activeGroupBy ? 'subheader' : undefined"
     :rows="rowsPerPage"
     :rows-per-page-options="rowsPerPageOptions"
@@ -228,6 +237,23 @@ function groupHeading(data: DisplayMovement): string {
       sortable
       style="min-width: 16rem"
     />
+
+    <Column
+      field="categoryDisplay"
+      header="Categoría"
+      sortable
+      style="min-width: 12rem"
+    >
+      <template #body="{ data }">
+        <span
+          class="category-state"
+          :data-state="data.isUncategorized ? 'missing' : 'set'"
+        >
+          <span v-if="data.isUncategorized" aria-hidden="true">!</span>
+          {{ data.categoryDisplay }}
+        </span>
+      </template>
+    </Column>
 
     <Column
       field="notes"
@@ -355,6 +381,30 @@ function groupHeading(data: DisplayMovement): string {
   overflow-wrap: anywhere;
 }
 
+.category-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 1.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-round);
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.category-state[data-state="missing"] {
+  border-color: color-mix(in srgb, var(--color-warning) 36%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning);
+}
+
+.category-state[data-state="set"] {
+  border-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary-strong);
+}
+
 .notes-filter {
   inline-size: 100%;
 }
@@ -383,6 +433,10 @@ function groupHeading(data: DisplayMovement): string {
 
 :deep(.p-datatable-thead > tr > th) {
   white-space: nowrap;
+}
+
+:deep(.movement-row--uncategorized > td) {
+  background: color-mix(in srgb, var(--color-warning) 7%, transparent);
 }
 
 @media (max-width: 680px) {

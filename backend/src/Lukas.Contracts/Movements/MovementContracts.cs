@@ -12,4 +12,5 @@ public sealed record MovementDto(
     string BaseAmount,
     string BaseCurrency,
     string Description,
+    string? CategoryName,
     string? Notes);

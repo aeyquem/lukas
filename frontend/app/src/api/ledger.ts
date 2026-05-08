@@ -44,6 +44,7 @@ export interface MovementDto {
   baseAmount: string;
   baseCurrency: string;
   description: string;
+  categoryName?: string | null;
   notes?: string | null;
 }
 
@@ -135,6 +136,7 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     originalCurrency: movement.originalCurrency,
     baseAmount: movement.baseAmount,
     baseCurrency: movement.baseCurrency,
+    ...(movement.categoryName ? { categoryName: movement.categoryName } : {}),
     ...(movement.notes ? { notes: movement.notes } : {}),
   }));
 }

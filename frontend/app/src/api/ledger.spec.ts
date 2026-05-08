@@ -132,6 +132,7 @@ describe("ledger api", () => {
             baseAmount: "125000",
             baseCurrency: "CLP",
             description: "Arriendo",
+            categoryName: null,
             notes: "Contrato anual",
           },
         ]),
@@ -143,6 +144,7 @@ describe("ledger api", () => {
 
     expect(movements[0]?.accountName).toBe("Banco");
     expect(movements[0]?.date).toBe("2026-05-02");
+    expect(movements[0]?.categoryName).toBeUndefined();
     expect(movements[0]?.notes).toBe("Contrato anual");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/movements",

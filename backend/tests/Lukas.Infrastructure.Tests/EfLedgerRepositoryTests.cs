@@ -75,6 +75,7 @@ public sealed class EfLedgerRepositoryTests
         movement.OriginalAmount.ShouldBe(125000m);
         movement.OriginalCurrency.ShouldBe("CLP");
         movement.Description.ShouldBe("Arriendo");
+        movement.CategoryName.ShouldBeNull();
         movement.Notes.ShouldBe("Contrato anual");
     }
 

@@ -149,6 +149,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     amount,
                     entry.Currency,
                     entry.Description,
+                    null,
                     entry.Notes);
             })
             .ToList();
