@@ -28,7 +28,8 @@ public sealed class MovementsController(LedgerService ledgerService) : Controlle
             movement.OriginalCurrency,
             FormatAmount(movement.BaseAmount),
             movement.BaseCurrency,
-            movement.Description);
+            movement.Description,
+            movement.Notes);
     }
 
     private static string FormatAmount(decimal amount)

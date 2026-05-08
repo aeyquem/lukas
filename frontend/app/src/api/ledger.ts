@@ -44,6 +44,7 @@ export interface MovementDto {
   baseAmount: string;
   baseCurrency: string;
   description: string;
+  notes?: string | null;
 }
 
 export interface CreateManualTransactionRequest {
@@ -134,6 +135,7 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     originalCurrency: movement.originalCurrency,
     baseAmount: movement.baseAmount,
     baseCurrency: movement.baseCurrency,
+    ...(movement.notes ? { notes: movement.notes } : {}),
   }));
 }
 

@@ -218,6 +218,12 @@ function groupHeading(data: DisplayMovement): string {
       style="min-width: 16rem"
     />
 
+    <Column field="notes" header="Notas" style="min-width: 14rem">
+      <template #body="{ data }">
+        <span class="notes">{{ data.notes || "Sin notas" }}</span>
+      </template>
+    </Column>
+
     <Column field="directionLabel" header="Tipo" sortable style="width: 10rem">
       <template #body="{ data }">
         <span class="direction" :data-direction="data.direction">
@@ -314,6 +320,11 @@ function groupHeading(data: DisplayMovement): string {
   font-family: var(--font-mono);
   font-weight: 700;
   white-space: nowrap;
+}
+
+.notes {
+  color: var(--color-muted-foreground);
+  overflow-wrap: anywhere;
 }
 
 .numeric[data-direction="in"] {

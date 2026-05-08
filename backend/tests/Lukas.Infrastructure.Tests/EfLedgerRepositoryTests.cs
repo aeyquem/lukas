@@ -42,7 +42,7 @@ public sealed class EfLedgerRepositoryTests
             new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null),
             TestContext.Current.CancellationToken);
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -75,6 +75,7 @@ public sealed class EfLedgerRepositoryTests
         movement.OriginalAmount.ShouldBe(125000m);
         movement.OriginalCurrency.ShouldBe("CLP");
         movement.Description.ShouldBe("Arriendo");
+        movement.Notes.ShouldBe("Contrato anual");
     }
 
     private static async Task<TestDatabase> CreateDatabaseAsync()

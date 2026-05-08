@@ -45,7 +45,8 @@ public sealed record MovementReadModel(
     string OriginalCurrency,
     decimal BaseAmount,
     string BaseCurrency,
-    string Description);
+    string Description,
+    string? Notes);
 
 public sealed record MonthlyCashflowReadModel(
     string Period,

@@ -11,4 +11,5 @@ public sealed record MovementDto(
     string OriginalCurrency,
     string BaseAmount,
     string BaseCurrency,
-    string Description);
+    string Description,
+    string? Notes);

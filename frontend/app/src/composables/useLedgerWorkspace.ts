@@ -3,8 +3,10 @@ import { computed, ref } from "vue";
 
 import {
   createAccount,
+  createManualTransaction,
   getAccounts,
   type CreateAccountRequest,
+  type CreateManualTransactionRequest,
 } from "@/api/ledger";
 import { currentPeriod } from "@/formatters";
 
@@ -24,21 +26,39 @@ export function useLedgerWorkspace() {
     },
   });
 
+  const transactionMutation = useMutation({
+    mutation: createManualTransaction,
+    async onSettled() {
+      await invalidateAccounts();
+      await invalidateMovements();
+    },
+  });
+
   const accounts = computed(() => accountsQuery.data.value ?? []);
 
   async function invalidateAccounts() {
     await queryCache.invalidateQueries({ key: ["accounts"] });
   }
 
+  async function invalidateMovements() {
+    await queryCache.invalidateQueries({ key: ["movements"] });
+  }
+
   function submitAccount(request: CreateAccountRequest) {
     accountMutation.mutate(request);
+  }
+
+  async function submitTransaction(request: CreateManualTransactionRequest) {
+    await transactionMutation.mutateAsync(request);
   }
 
   return {
     selectedPeriod,
     accountsQuery,
     accountMutation,
+    transactionMutation,
     accounts,
     submitAccount,
+    submitTransaction,
   };
 }

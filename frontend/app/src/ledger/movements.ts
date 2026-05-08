@@ -7,6 +7,7 @@ export type LedgerMovement = {
   accountId: string;
   accountName: string;
   description: string;
+  notes?: string;
   direction: MovementDirection;
   originalAmount: string;
   originalCurrency: string;

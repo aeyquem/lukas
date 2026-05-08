@@ -128,6 +128,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 entry.AmountValue,
                 entry.Currency,
                 entry.LedgerTransaction.Description,
+                entry.LedgerTransaction.Notes,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -147,7 +148,8 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     entry.Currency,
                     amount,
                     entry.Currency,
-                    entry.Description);
+                    entry.Description,
+                    entry.Notes);
             })
             .ToList();
     }

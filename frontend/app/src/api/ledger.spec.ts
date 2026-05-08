@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createAccount, getMonthlyCashflow, getMovements } from "@/api/ledger";
+import {
+  createAccount,
+  createManualTransaction,
+  getMonthlyCashflow,
+  getMovements,
+} from "@/api/ledger";
 
 describe("ledger api", () => {
   afterEach(() => {
@@ -38,6 +43,51 @@ describe("ledger api", () => {
           type: "bank",
           currency: "CLP",
           openingBalance: "1000",
+        }),
+      }),
+    );
+  });
+
+  it("creates manual transactions with the expected endpoint and body", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "transaction-id",
+          kind: "expense",
+          accountId: "account-id",
+          transactionDate: "2026-05-02",
+          amount: "125000",
+          currency: "CLP",
+          accountEffect: "decrease",
+          description: "Arriendo",
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const transaction = await createManualTransaction({
+      kind: "expense",
+      accountId: "account-id",
+      transactionDate: "2026-05-02",
+      amount: "125000",
+      currency: "CLP",
+      accountEffect: "decrease",
+      description: "Arriendo",
+    });
+
+    expect(transaction.description).toBe("Arriendo");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/transactions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          kind: "expense",
+          accountId: "account-id",
+          transactionDate: "2026-05-02",
+          amount: "125000",
+          currency: "CLP",
+          accountEffect: "decrease",
+          description: "Arriendo",
         }),
       }),
     );
@@ -82,6 +132,7 @@ describe("ledger api", () => {
             baseAmount: "125000",
             baseCurrency: "CLP",
             description: "Arriendo",
+            notes: "Contrato anual",
           },
         ]),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -92,6 +143,7 @@ describe("ledger api", () => {
 
     expect(movements[0]?.accountName).toBe("Banco");
     expect(movements[0]?.date).toBe("2026-05-02");
+    expect(movements[0]?.notes).toBe("Contrato anual");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/movements",
     );
