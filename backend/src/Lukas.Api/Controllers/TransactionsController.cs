@@ -38,6 +38,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     request.Currency,
                     request.AccountEffect,
                     request.Description,
+                    request.EnvelopeId,
                     request.CategoryName,
                     request.Notes),
                 cancellationToken)
@@ -69,6 +70,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     request.Currency,
                     request.AccountEffect,
                     request.Description,
+                    request.EnvelopeId,
                     request.CategoryName,
                     request.Notes),
                 cancellationToken)
@@ -93,6 +95,8 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
             transaction.Currency,
             transaction.AccountEffect,
             transaction.Description,
+            transaction.EnvelopeId,
+            transaction.EnvelopeName,
             transaction.CategoryName,
             transaction.Notes);
     }

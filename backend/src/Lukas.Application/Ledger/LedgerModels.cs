@@ -21,6 +21,7 @@ public sealed record CreateManualTransactionCommand(
     string Currency,
     string AccountEffect,
     string Description,
+    Guid? EnvelopeId,
     string? CategoryName,
     string? Notes);
 
@@ -33,6 +34,7 @@ public sealed record UpdateManualTransactionCommand(
     string Currency,
     string AccountEffect,
     string Description,
+    Guid? EnvelopeId,
     string? CategoryName,
     string? Notes);
 
@@ -45,6 +47,8 @@ public sealed record TransactionReadModel(
     string Currency,
     string AccountEffect,
     string Description,
+    Guid? EnvelopeId,
+    string? EnvelopeName,
     string? CategoryName,
     string? Notes);
 
@@ -62,6 +66,8 @@ public sealed record MovementReadModel(
     decimal BaseAmount,
     string BaseCurrency,
     string Description,
+    Guid? EnvelopeId,
+    string? EnvelopeName,
     string? CategoryName,
     string? Notes);
 
@@ -72,3 +78,49 @@ public sealed record MonthlyCashflowReadModel(
     decimal ExpenseTotal,
     decimal NetCashflow,
     IReadOnlyList<AccountReadModel> Accounts);
+
+public sealed record BudgetTreeReadModel(
+    IReadOnlyList<BudgetCategoryReadModel> Categories,
+    IReadOnlyList<BudgetSubcategoryReadModel> Subcategories,
+    IReadOnlyList<BudgetEnvelopeReadModel> Envelopes);
+
+public sealed record BudgetCategoryReadModel(
+    Guid Id,
+    string Name,
+    int SortOrder);
+
+public sealed record BudgetSubcategoryReadModel(
+    Guid Id,
+    Guid CategoryId,
+    string Name,
+    int SortOrder);
+
+public sealed record BudgetEnvelopeReadModel(
+    Guid Id,
+    Guid SubcategoryId,
+    string Name,
+    decimal AssignedAmount,
+    int SortOrder);
+
+public sealed record SaveBudgetTreeCommand(
+    IReadOnlyList<SaveBudgetCategoryCommand> Categories,
+    IReadOnlyList<SaveBudgetSubcategoryCommand> Subcategories,
+    IReadOnlyList<SaveBudgetEnvelopeCommand> Envelopes);
+
+public sealed record SaveBudgetCategoryCommand(
+    Guid Id,
+    string Name,
+    int SortOrder);
+
+public sealed record SaveBudgetSubcategoryCommand(
+    Guid Id,
+    Guid CategoryId,
+    string Name,
+    int SortOrder);
+
+public sealed record SaveBudgetEnvelopeCommand(
+    Guid Id,
+    Guid SubcategoryId,
+    string Name,
+    string AssignedAmount,
+    int SortOrder);

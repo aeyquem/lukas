@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, type VNode } from "vue";
+import { useQuery } from "@pinia/colada";
+import { computed, ref, watch, type VNode } from "vue";
 import {
   draggable,
   dropTargetForElements,
@@ -13,6 +14,13 @@ import type {
 import TreeTable from "primevue/treetable";
 import type { TreeNode } from "primevue/treenode";
 
+import { getBudgetTree, getMovements, saveBudgetTree } from "@/api/ledger";
+import {
+  applyBudgetTree,
+  toBudgetTreeDto,
+  useBudgetTree,
+  type BudgetEnvelope,
+} from "@/budget/budgetTree";
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseButton from "@/components/base/BaseButton.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
@@ -29,23 +37,13 @@ type BudgetNodeData = {
   remainingAmount: string;
 };
 
-type BudgetCategory = {
-  id: string;
-  name: string;
-};
+type BudgetSignedDirection = "in" | "out" | "none";
 
-type BudgetSubcategory = {
-  id: string;
-  categoryId: string;
-  name: string;
-};
-
-type BudgetEnvelope = {
-  id: string;
-  subcategoryId: string;
-  name: string;
-  assignedAmount: string;
-  spentAmount: string;
+type BudgetSignedAmountParts = {
+  direction: BudgetSignedDirection;
+  number: string;
+  prefix: string;
+  text: string;
 };
 
 type EnvelopeDropInstruction = {
@@ -89,6 +87,7 @@ const isTreeEditing = ref(false);
 const nextCategoryNumber = ref(3);
 const nextSubcategoryNumber = ref(4);
 const nextEnvelopeNumber = ref(5);
+const { categories, subcategories, envelopes } = useBudgetTree();
 const expandedKeys = ref<TreeTableExpandedKeys>({
   "cat-living": true,
   "cat-planning": true,
@@ -97,47 +96,62 @@ const expandedKeys = ref<TreeTableExpandedKeys>({
   "sub-reserve": true,
 });
 
-const categories = ref<BudgetCategory[]>([
-  { id: "cat-living", name: "Vida diaria" },
-  { id: "cat-planning", name: "Planificación" },
-]);
+const movementsQuery = useQuery({
+  key: ["movements"],
+  query: getMovements,
+});
+const budgetTreeQuery = useQuery({
+  key: ["budget-tree"],
+  query: getBudgetTree,
+});
 
-const subcategories = ref<BudgetSubcategory[]>([
-  { id: "sub-home", categoryId: "cat-living", name: "Casa" },
-  { id: "sub-food", categoryId: "cat-living", name: "Comida" },
-  { id: "sub-reserve", categoryId: "cat-planning", name: "Reservas" },
-]);
+const movements = computed(() => movementsQuery.data.value ?? []);
 
-const envelopes = ref<BudgetEnvelope[]>([
-  {
-    id: "env-rent",
-    subcategoryId: "sub-home",
-    name: "Arriendo",
-    assignedAmount: "450000",
-    spentAmount: "0",
+watch(
+  () => budgetTreeQuery.data.value,
+  (tree) => {
+    if (tree) {
+      applyBudgetTree(tree);
+      expandExistingBudgetTree();
+    }
   },
-  {
-    id: "env-market",
-    subcategoryId: "sub-food",
-    name: "Supermercado",
-    assignedAmount: "180000",
-    spentAmount: "64250",
-  },
-  {
-    id: "env-emergency",
-    subcategoryId: "sub-reserve",
-    name: "Emergencias",
-    assignedAmount: "100000",
-    spentAmount: "0",
-  },
-  {
-    id: "env-vacation",
-    subcategoryId: "sub-reserve",
-    name: "Vacaciones",
-    assignedAmount: "80000",
-    spentAmount: "0",
-  },
-]);
+  { immediate: true },
+);
+
+const spentByEnvelopeId = computed<Record<string, string>>(() => {
+  const totals: Record<string, number> = {};
+
+  movements.value.forEach((movement) => {
+    if (!movement.envelopeId) {
+      return;
+    }
+
+    totals[movement.envelopeId] =
+      (totals[movement.envelopeId] ?? 0) + budgetMovementAmount(movement);
+  });
+
+  return Object.fromEntries(
+    Object.entries(totals).map(([envelopeId, amount]) => [
+      envelopeId,
+      formatDecimal(amount),
+    ]),
+  );
+});
+
+function budgetMovementAmount(movement: {
+  baseAmount: string;
+  direction: "in" | "out";
+}): number {
+  const amount = parseAmount(movement.baseAmount);
+  return movement.direction === "out" ? amount : -amount;
+}
+
+const budgetEnvelopes = computed<BudgetEnvelope[]>(() =>
+  envelopes.value.map((envelope) => ({
+    ...envelope,
+    spentAmount: spentByEnvelopeId.value[envelope.id] ?? "0",
+  })),
+);
 
 const nodes = computed<TreeNode[]>(() =>
   categories.value.map((category) => {
@@ -145,7 +159,7 @@ const nodes = computed<TreeNode[]>(() =>
       (subcategory) => subcategory.categoryId === category.id,
     );
     const categoryChildren = categorySubcategories.map((subcategory) => {
-      const subcategoryEnvelopes = envelopes.value.filter(
+      const subcategoryEnvelopes = budgetEnvelopes.value.filter(
         (envelope) => envelope.subcategoryId === subcategory.id,
       );
 
@@ -235,13 +249,30 @@ function toggleTreeEditing() {
   }
 }
 
+async function persistBudgetTree() {
+  const savedTree = await saveBudgetTree(toBudgetTreeDto());
+  applyBudgetTree(savedTree);
+}
+
+function expandExistingBudgetTree() {
+  expandedKeys.value = {
+    ...expandedKeys.value,
+    ...Object.fromEntries(
+      categories.value.map((category) => [category.id, true]),
+    ),
+    ...Object.fromEntries(
+      subcategories.value.map((subcategory) => [subcategory.id, true]),
+    ),
+  };
+}
+
 function addCategory() {
   if (!isTreeEditing.value) {
     return;
   }
 
   const categoryNumber = nextCategoryNumber.value;
-  const categoryId = `cat-new-${categoryNumber}`;
+  const categoryId = crypto.randomUUID();
   nextCategoryNumber.value = categoryNumber + 1;
   categories.value = [
     ...categories.value,
@@ -252,6 +283,7 @@ function addCategory() {
     [categoryId]: true,
   };
   editingNameNodeId.value = categoryId;
+  void persistBudgetTree();
 }
 
 function addSubcategory(categoryId: string) {
@@ -260,7 +292,7 @@ function addSubcategory(categoryId: string) {
   }
 
   const subcategoryNumber = nextSubcategoryNumber.value;
-  const subcategoryId = `sub-new-${subcategoryNumber}`;
+  const subcategoryId = crypto.randomUUID();
   nextSubcategoryNumber.value = subcategoryNumber + 1;
   subcategories.value = [
     ...subcategories.value,
@@ -272,6 +304,7 @@ function addSubcategory(categoryId: string) {
   ];
   expandSubcategoryParent(categoryId, subcategoryId);
   editingNameNodeId.value = subcategoryId;
+  void persistBudgetTree();
 }
 
 function addEnvelope(subcategoryId: string) {
@@ -280,7 +313,7 @@ function addEnvelope(subcategoryId: string) {
   }
 
   const envelopeNumber = nextEnvelopeNumber.value;
-  const envelopeId = `env-new-${envelopeNumber}`;
+  const envelopeId = crypto.randomUUID();
   nextEnvelopeNumber.value = envelopeNumber + 1;
   envelopes.value = [
     ...envelopes.value,
@@ -294,6 +327,7 @@ function addEnvelope(subcategoryId: string) {
   ];
   expandEnvelopeParent(subcategoryId);
   editingNameNodeId.value = envelopeId;
+  void persistBudgetTree();
 }
 
 function deleteCategory(categoryId: string) {
@@ -323,6 +357,7 @@ function deleteCategory(categoryId: string) {
     ...removedSubcategoryIds,
     ...removedEnvelopeIds,
   ]);
+  void persistBudgetTree();
 }
 
 function deleteSubcategory(subcategoryId: string) {
@@ -340,6 +375,7 @@ function deleteSubcategory(subcategoryId: string) {
     (envelope) => envelope.subcategoryId !== subcategoryId,
   );
   clearRemovedNodeEditing([subcategoryId, ...removedEnvelopeIds]);
+  void persistBudgetTree();
 }
 
 function deleteEnvelope(envelopeId: string) {
@@ -351,6 +387,7 @@ function deleteEnvelope(envelopeId: string) {
     (envelope) => envelope.id !== envelopeId,
   );
   clearRemovedNodeEditing([envelopeId]);
+  void persistBudgetTree();
 }
 
 function editNodeName(nodeId: string) {
@@ -403,6 +440,8 @@ function completeEditingNodeName(nodeType: BudgetNodeType, nodeId: string) {
   if (editingNameNodeId.value === nodeId) {
     editingNameNodeId.value = "";
   }
+
+  void persistBudgetTree();
 }
 
 function nodeNameById(nodeType: BudgetNodeType, nodeId: string): string {
@@ -802,6 +841,7 @@ function moveEnvelope(envelopeId: string, targetSubcategoryId: string) {
       : envelope,
   );
   expandEnvelopeParent(targetSubcategory.id);
+  void persistBudgetTree();
 }
 
 function moveEnvelopeNear(
@@ -838,6 +878,7 @@ function moveEnvelopeNear(
     ...withoutDraggedEnvelope.slice(insertionIndex),
   ];
   expandEnvelopeParent(targetEnvelope.subcategoryId);
+  void persistBudgetTree();
 }
 
 function moveSubcategory(subcategoryId: string, targetCategoryId: string) {
@@ -860,6 +901,7 @@ function moveSubcategory(subcategoryId: string, targetCategoryId: string) {
     { ...draggedSubcategory, categoryId: targetCategory.id },
   ];
   expandSubcategoryParent(targetCategory.id, draggedSubcategory.id);
+  void persistBudgetTree();
 }
 
 function moveSubcategoryNear(
@@ -896,6 +938,7 @@ function moveSubcategoryNear(
     ...withoutDraggedSubcategory.slice(insertionIndex),
   ];
   expandSubcategoryParent(targetSubcategory.categoryId, draggedSubcategory.id);
+  void persistBudgetTree();
 }
 
 function moveCategoryNear(
@@ -924,6 +967,7 @@ function moveCategoryNear(
     ...withoutDraggedCategory.slice(insertionIndex),
   ];
   expandCategory(draggedCategory.id);
+  void persistBudgetTree();
 }
 
 function updateEnvelopeAssignedAmount(
@@ -943,6 +987,8 @@ function stopEditingAssignedAmount(envelopeId: string) {
   if (editingAssignedEnvelopeId.value === envelopeId) {
     editingAssignedEnvelopeId.value = "";
   }
+
+  void persistBudgetTree();
 }
 
 function expandEnvelopeParent(subcategoryId: string) {
@@ -1031,6 +1077,60 @@ function dropEdge(element: HTMLElement, clientY: number): "before" | "after" {
 
 function amountTone(amount: string): "positive" | "negative" {
   return Number.parseFloat(amount) >= 0 ? "positive" : "negative";
+}
+
+function signedSpentAmountParts(spentAmount: string): BudgetSignedAmountParts {
+  const spentValue = parseAmount(spentAmount);
+  const direction = spentDirection(spentValue);
+  const sign = spentSign(direction);
+  const formattedAmount = formatMoney(
+    formatDecimal(Math.abs(spentValue)),
+    currency,
+  );
+  const amountMatch = /^(\D*)(.*)$/.exec(formattedAmount);
+
+  if (!amountMatch) {
+    const text = `${sign}${formattedAmount}`;
+    return {
+      direction,
+      number: formattedAmount,
+      prefix: sign,
+      text,
+    };
+  }
+
+  const prefix = `${sign}${amountMatch[1]}`;
+  const number = amountMatch[2];
+  return {
+    direction,
+    number,
+    prefix,
+    text: `${prefix}${number}`,
+  };
+}
+
+function spentDirection(spentValue: number): BudgetSignedDirection {
+  if (spentValue > 0) {
+    return "out";
+  }
+
+  if (spentValue < 0) {
+    return "in";
+  }
+
+  return "none";
+}
+
+function spentSign(direction: BudgetSignedDirection): string {
+  if (direction === "out") {
+    return "-";
+  }
+
+  if (direction === "in") {
+    return "+";
+  }
+
+  return "";
 }
 
 function sumEnvelopeField(
@@ -1258,8 +1358,19 @@ function formatDecimal(amount: number): string {
 
         <Column field="spentAmount" header="Gastado" style="width: 12rem">
           <template #body="{ node }">
-            <span class="numeric">
-              {{ formatMoney(node.data.spentAmount, currency) }}
+            <span
+              class="numeric"
+              :aria-label="signedSpentAmountParts(node.data.spentAmount).text"
+              :data-direction="
+                signedSpentAmountParts(node.data.spentAmount).direction
+              "
+            >
+              <span class="numeric__prefix">
+                {{ signedSpentAmountParts(node.data.spentAmount).prefix }}
+              </span>
+              <span class="numeric__amount">
+                {{ signedSpentAmountParts(node.data.spentAmount).number }}
+              </span>
             </span>
           </template>
         </Column>
@@ -1422,6 +1533,14 @@ function formatDecimal(amount: number): string {
   color: var(--color-danger-strong);
 }
 
+.numeric[data-direction="in"] {
+  color: var(--color-primary-strong);
+}
+
+.numeric[data-direction="out"] {
+  color: var(--color-danger-strong);
+}
+
 .assigned-display {
   border: 0;
   background: transparent;
@@ -1461,6 +1580,14 @@ function formatDecimal(amount: number): string {
 
 :deep(.budget-row) {
   cursor: grab;
+}
+
+:deep(.budget-row--category > td) {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+
+:deep(.budget-row--subcategory > td) {
+  background: color-mix(in srgb, var(--color-secondary) 78%, transparent);
 }
 
 :deep(.budget-row[data-dragging="true"] > td) {

@@ -31,6 +31,8 @@ public sealed class MovementsController(LedgerService ledgerService) : Controlle
             FormatAmount(movement.BaseAmount),
             movement.BaseCurrency,
             movement.Description,
+            movement.EnvelopeId,
+            movement.EnvelopeName,
             movement.CategoryName,
             movement.Notes);
     }

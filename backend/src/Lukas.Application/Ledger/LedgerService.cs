@@ -77,6 +77,24 @@ public sealed class LedgerService(ILedgerRepository repository)
         return repository.GetMovementsAsync(cancellationToken);
     }
 
+    public Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken)
+    {
+        return repository.GetBudgetTreeAsync(cancellationToken);
+    }
+
+    public Task<Result<BudgetTreeReadModel>> SaveBudgetTreeAsync(
+        SaveBudgetTreeCommand command,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidateBudgetTree(command);
+        if (error is not null)
+        {
+            return Failure<BudgetTreeReadModel>(error.Code, error.Message);
+        }
+
+        return Success(repository.SaveBudgetTreeAsync(command, cancellationToken));
+    }
+
     public Task<Result<IReadOnlyList<TransactionReadModel>>> GetTransactionsAsync(
         string period,
         CancellationToken cancellationToken)
@@ -161,6 +179,54 @@ public sealed class LedgerService(ILedgerRepository repository)
         }
 
         return null;
+    }
+
+    private static LedgerError? ValidateBudgetTree(SaveBudgetTreeCommand command)
+    {
+        if (command.Categories.Count == 0)
+        {
+            return new LedgerError("budget.category_required", "At least one budget category is required.");
+        }
+
+        if (command.Subcategories.Count == 0)
+        {
+            return new LedgerError("budget.subcategory_required", "At least one budget subcategory is required.");
+        }
+
+        if (HasBlankName(command.Categories.Select(category => category.Name))
+            || HasBlankName(command.Subcategories.Select(subcategory => subcategory.Name))
+            || HasBlankName(command.Envelopes.Select(envelope => envelope.Name)))
+        {
+            return new LedgerError("budget.name_required", "Budget names are required.");
+        }
+
+        if (command.Envelopes.Any(envelope => !TryParseAmount(envelope.AssignedAmount, out _)))
+        {
+            return new LedgerError("money.invalid_amount", "Envelope assigned amounts must be decimal numbers.");
+        }
+
+        var categoryIds = command.Categories.Select(category => category.Id).ToHashSet();
+        var subcategoryIds = command.Subcategories.Select(subcategory => subcategory.Id).ToHashSet();
+
+        if (categoryIds.Count != command.Categories.Count
+            || subcategoryIds.Count != command.Subcategories.Count
+            || command.Envelopes.Select(envelope => envelope.Id).ToHashSet().Count != command.Envelopes.Count)
+        {
+            return new LedgerError("budget.duplicate_id", "Budget node ids must be unique.");
+        }
+
+        if (command.Subcategories.Any(subcategory => !categoryIds.Contains(subcategory.CategoryId))
+            || command.Envelopes.Any(envelope => !subcategoryIds.Contains(envelope.SubcategoryId)))
+        {
+            return new LedgerError("budget.invalid_parent", "Budget nodes must reference an existing parent.");
+        }
+
+        return null;
+    }
+
+    private static bool HasBlankName(IEnumerable<string> names)
+    {
+        return names.Any(string.IsNullOrWhiteSpace);
     }
 
     private static bool IsAccountEffect(string value)

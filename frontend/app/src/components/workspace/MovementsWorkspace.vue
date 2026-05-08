@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { useQuery } from "@pinia/colada";
+import { useQuery, useQueryCache } from "@pinia/colada";
 import { computed, reactive, ref, watch } from "vue";
 
 import {
+  getBudgetTree,
   getMovements,
   type AccountDto,
   type AccountEffect,
@@ -10,6 +11,7 @@ import {
   type TransactionKind,
   type UpdateManualTransactionRequest,
 } from "@/api/ledger";
+import { applyBudgetTree, useBudgetTree } from "@/budget/budgetTree";
 import BaseAlert from "@/components/base/BaseAlert.vue";
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseButton from "@/components/base/BaseButton.vue";
@@ -39,7 +41,8 @@ const showOriginalCurrency = ref(false);
 const baseCurrency = "CLP";
 const drawerMode = ref<DrawerMode>("closed");
 const editingTransactionId = ref("");
-const categoryOptions = ["Ingresos", "Casa", "Comida", "Reservas"];
+const queryCache = useQueryCache();
+const { movementCategoryOptions } = useBudgetTree();
 const transactionForm = reactive({
   kind: "expense" as TransactionKind,
   accountId: "",
@@ -47,13 +50,17 @@ const transactionForm = reactive({
   amount: "",
   currency: "CLP",
   description: "",
-  categoryName: "",
+  envelopeId: "",
   notes: "",
 });
 
 const movementsQuery = useQuery({
   key: ["movements"],
   query: getMovements,
+});
+const budgetTreeQuery = useQuery({
+  key: ["budget-tree"],
+  query: getBudgetTree,
 });
 
 const movements = computed(() => movementsQuery.data.value ?? []);
@@ -71,6 +78,17 @@ const isSaving = computed(() =>
 );
 const submitLabel = computed(() =>
   drawerMode.value === "edit" ? "Guardar cambios" : "Crear movimiento",
+);
+
+watch(
+  () => budgetTreeQuery.data.value,
+  (tree) => {
+    if (tree) {
+      applyBudgetTree(tree);
+      void queryCache.invalidateQueries({ key: ["movements"] });
+    }
+  },
+  { immediate: true },
 );
 
 watch(
@@ -108,7 +126,7 @@ function openEditPanel(movement: LedgerMovement) {
   transactionForm.amount = movement.originalAmount;
   transactionForm.currency = movement.originalCurrency;
   transactionForm.description = movement.description;
-  transactionForm.categoryName = movement.categoryName ?? "";
+  transactionForm.envelopeId = movement.envelopeId ?? "";
   transactionForm.notes = movement.notes ?? "";
   editingTransactionId.value = movement.transactionId;
   drawerMode.value = "edit";
@@ -142,7 +160,7 @@ async function submitTransaction() {
 function buildTransactionRequest(
   notes: string,
 ): CreateManualTransactionRequest {
-  const categoryName = transactionForm.categoryName.trim();
+  const envelopeId = transactionForm.envelopeId.trim();
   const request: CreateManualTransactionRequest = {
     kind: transactionForm.kind,
     accountId: transactionForm.accountId,
@@ -153,8 +171,8 @@ function buildTransactionRequest(
     description: transactionForm.description.trim(),
   };
 
-  if (categoryName !== "") {
-    request.categoryName = categoryName;
+  if (envelopeId !== "") {
+    request.envelopeId = envelopeId;
   }
 
   if (notes !== "") {
@@ -174,7 +192,7 @@ function resetForm() {
   transactionForm.amount = "";
   transactionForm.currency = firstAccount ? firstAccount.currency : "CLP";
   transactionForm.description = "";
-  transactionForm.categoryName = "";
+  transactionForm.envelopeId = "";
   transactionForm.notes = "";
 }
 
@@ -334,15 +352,15 @@ function defaultAccountEffect(kind: TransactionKind): AccountEffect {
           <BaseField input-id="movement-category" label="Categoría">
             <BaseSelect
               id="movement-category"
-              v-model="transactionForm.categoryName"
+              v-model="transactionForm.envelopeId"
             >
               <option value="">Sin categoría</option>
               <option
-                v-for="categoryName in categoryOptions"
-                :key="categoryName"
-                :value="categoryName"
+                v-for="envelope in movementCategoryOptions"
+                :key="envelope.id"
+                :value="envelope.id"
               >
-                {{ categoryName }}
+                {{ envelope.name }}
               </option>
             </BaseSelect>
           </BaseField>

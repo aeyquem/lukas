@@ -16,6 +16,12 @@ public interface ILedgerRepository
 
     Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken);
 
+    Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken);
+
+    Task<BudgetTreeReadModel> SaveBudgetTreeAsync(
+        SaveBudgetTreeCommand command,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(string period, CancellationToken cancellationToken);
 
     Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(string period, CancellationToken cancellationToken);

@@ -39,10 +39,10 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", "Ingresos", null),
+            new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, "Ingresos", null),
             TestContext.Current.CancellationToken);
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Casa", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Casa", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -91,11 +91,11 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         var transaction = await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, null),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, null, null),
             TestContext.Current.CancellationToken);
 
         await repository.UpdateManualTransactionAsync(
-            new UpdateManualTransactionCommand(transaction.Id, "income", account.Id, new DateOnly(2026, 5, 3), "150000", "CLP", "increase", "Reembolso", "Ingresos", "Corregido"),
+            new UpdateManualTransactionCommand(transaction.Id, "income", account.Id, new DateOnly(2026, 5, 3), "150000", "CLP", "increase", "Reembolso", null, "Ingresos", "Corregido"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -112,6 +112,27 @@ public sealed class EfLedgerRepositoryTests
         movement.CategoryName.ShouldBe("Ingresos");
         movement.Notes.ShouldBe("Corregido");
         accounts.Single().CurrentBalance.ShouldBe(150000m);
+    }
+
+    [Fact]
+    public async Task BudgetTreePromotesExistingMovementCategoriesToEnvelopes()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
+            TestContext.Current.CancellationToken);
+
+        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Arriendo");
+
+        movements.Single().EnvelopeId.ShouldBe(envelope.Id);
+        movements.Single().EnvelopeName.ShouldBe("Arriendo");
     }
 
     private static async Task<TestDatabase> CreateDatabaseAsync()

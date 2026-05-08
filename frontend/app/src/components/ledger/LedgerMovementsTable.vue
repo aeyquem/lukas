@@ -120,8 +120,9 @@ const displayMovements = computed<DisplayMovement[]>(() =>
         ...movement,
         displayAmount,
         displayCurrency,
-        categoryDisplay: movement.categoryName ?? "Sin categoría",
-        isUncategorized: !movement.categoryName,
+        categoryDisplay:
+          movement.envelopeName ?? movement.categoryName ?? "Sin categoría",
+        isUncategorized: !movement.envelopeName && !movement.categoryName,
         signedDisplayAmount: `${amountParts.prefix}${amountParts.number}`,
         displayAmountNumber: amountParts.number,
         displayAmountPrefix: amountParts.prefix,
@@ -216,7 +217,6 @@ function editMovement(movement: DisplayMovement) {
             :options="groupOptions"
           />
         </div>
-
       </div>
     </template>
 
@@ -450,6 +450,5 @@ function editMovement(movement: DisplayMovement) {
   .table-toolbar {
     grid-template-columns: 1fr;
   }
-
 }
 </style>

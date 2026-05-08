@@ -10,6 +10,7 @@ public sealed record CreateManualTransactionRequest(
     [Required, RegularExpression("^[A-Z]{3}$")] string Currency,
     [Required, RegularExpression("^(increase|decrease)$")] string AccountEffect,
     [Required, MinLength(1), MaxLength(240)] string Description,
+    Guid? EnvelopeId,
     [MaxLength(120)] string? CategoryName,
     [MaxLength(1000)] string? Notes);
 
@@ -21,6 +22,7 @@ public sealed record UpdateManualTransactionRequest(
     [Required, RegularExpression("^[A-Z]{3}$")] string Currency,
     [Required, RegularExpression("^(increase|decrease)$")] string AccountEffect,
     [Required, MinLength(1), MaxLength(240)] string Description,
+    Guid? EnvelopeId,
     [MaxLength(120)] string? CategoryName,
     [MaxLength(1000)] string? Notes);
 
@@ -33,5 +35,7 @@ public sealed record TransactionDto(
     string Currency,
     string AccountEffect,
     string Description,
+    Guid? EnvelopeId,
+    string? EnvelopeName,
     string? CategoryName,
     string? Notes);

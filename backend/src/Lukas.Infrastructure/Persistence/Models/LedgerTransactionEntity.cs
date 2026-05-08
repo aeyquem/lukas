@@ -12,6 +12,8 @@ public sealed class LedgerTransactionEntity
 
     public string Description { get; set; } = string.Empty;
 
+    public Guid? EnvelopeId { get; set; }
+
     public string? CategoryName { get; set; }
 
     public string? Notes { get; set; }
@@ -19,6 +21,8 @@ public sealed class LedgerTransactionEntity
     public DateTimeOffset CreatedAt { get; set; }
 
     public WorkspaceEntity? Workspace { get; set; }
+
+    public BudgetEnvelopeEntity? Envelope { get; set; }
 
     public ICollection<LedgerEntryEntity> Entries { get; } = new List<LedgerEntryEntity>();
 }

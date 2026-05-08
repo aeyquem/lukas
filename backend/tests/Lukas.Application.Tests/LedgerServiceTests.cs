@@ -45,6 +45,7 @@ public sealed class LedgerServiceTests
                 "decrease",
                 "Arriendo",
                 null,
+                null,
                 null),
             TestContext.Current.CancellationToken);
 
@@ -81,6 +82,18 @@ public sealed class LedgerServiceTests
         }
 
         public Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<BudgetTreeReadModel> SaveBudgetTreeAsync(
+            SaveBudgetTreeCommand command,
+            CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");
         }

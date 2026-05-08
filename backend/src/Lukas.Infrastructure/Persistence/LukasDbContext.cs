@@ -13,6 +13,12 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
 
     public DbSet<LedgerEntryEntity> LedgerEntries => Set<LedgerEntryEntity>();
 
+    public DbSet<BudgetCategoryEntity> BudgetCategories => Set<BudgetCategoryEntity>();
+
+    public DbSet<BudgetSubcategoryEntity> BudgetSubcategories => Set<BudgetSubcategoryEntity>();
+
+    public DbSet<BudgetEnvelopeEntity> BudgetEnvelopes => Set<BudgetEnvelopeEntity>();
+
     public DbSet<SourceRecordEntity> SourceRecords => Set<SourceRecordEntity>();
 
     public DbSet<TransactionSourceLinkEntity> TransactionSourceLinks => Set<TransactionSourceLinkEntity>();
@@ -55,10 +61,12 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
             entity.Property(transaction => transaction.Kind).HasColumnName("kind").HasMaxLength(40).IsRequired();
             entity.Property(transaction => transaction.TransactionDate).HasColumnName("transaction_date").IsRequired();
             entity.Property(transaction => transaction.Description).HasColumnName("description").HasMaxLength(240).IsRequired();
+            entity.Property(transaction => transaction.EnvelopeId).HasColumnName("envelope_id");
             entity.Property(transaction => transaction.CategoryName).HasColumnName("category_name").HasMaxLength(120);
             entity.Property(transaction => transaction.Notes).HasColumnName("notes").HasMaxLength(1000);
             entity.Property(transaction => transaction.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.HasOne(transaction => transaction.Workspace).WithMany().HasForeignKey(transaction => transaction.WorkspaceId);
+            entity.HasOne(transaction => transaction.Envelope).WithMany().HasForeignKey(transaction => transaction.EnvelopeId);
         });
 
         modelBuilder.Entity<LedgerEntryEntity>(entity =>
@@ -74,6 +82,48 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
             entity.Property(entry => entry.AccountEffect).HasColumnName("account_effect").HasMaxLength(20).IsRequired();
             entity.HasOne(entry => entry.LedgerTransaction).WithMany(transaction => transaction.Entries).HasForeignKey(entry => entry.LedgerTransactionId);
             entity.HasOne(entry => entry.Account).WithMany().HasForeignKey(entry => entry.AccountId);
+        });
+
+        modelBuilder.Entity<BudgetCategoryEntity>(entity =>
+        {
+            entity.ToTable("budget_categories");
+            entity.HasKey(category => category.Id);
+            entity.Property(category => category.Id).HasColumnName("id");
+            entity.Property(category => category.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(category => category.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
+            entity.Property(category => category.SortOrder).HasColumnName("sort_order").IsRequired();
+            entity.HasOne(category => category.Workspace).WithMany().HasForeignKey(category => category.WorkspaceId);
+            entity.HasIndex(category => new { category.WorkspaceId, category.SortOrder });
+        });
+
+        modelBuilder.Entity<BudgetSubcategoryEntity>(entity =>
+        {
+            entity.ToTable("budget_subcategories");
+            entity.HasKey(subcategory => subcategory.Id);
+            entity.Property(subcategory => subcategory.Id).HasColumnName("id");
+            entity.Property(subcategory => subcategory.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(subcategory => subcategory.CategoryId).HasColumnName("category_id");
+            entity.Property(subcategory => subcategory.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
+            entity.Property(subcategory => subcategory.SortOrder).HasColumnName("sort_order").IsRequired();
+            entity.HasOne(subcategory => subcategory.Workspace).WithMany().HasForeignKey(subcategory => subcategory.WorkspaceId);
+            entity.HasOne(subcategory => subcategory.Category).WithMany(category => category.Subcategories).HasForeignKey(subcategory => subcategory.CategoryId);
+            entity.HasIndex(subcategory => new { subcategory.WorkspaceId, subcategory.CategoryId, subcategory.SortOrder });
+        });
+
+        modelBuilder.Entity<BudgetEnvelopeEntity>(entity =>
+        {
+            entity.ToTable("budget_envelopes");
+            entity.HasKey(envelope => envelope.Id);
+            entity.Property(envelope => envelope.Id).HasColumnName("id");
+            entity.Property(envelope => envelope.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(envelope => envelope.SubcategoryId).HasColumnName("subcategory_id");
+            entity.Property(envelope => envelope.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
+            entity.Property(envelope => envelope.AssignedAmount).HasColumnName("assigned_amount").HasMaxLength(80).IsRequired();
+            entity.Property(envelope => envelope.SortOrder).HasColumnName("sort_order").IsRequired();
+            entity.HasOne(envelope => envelope.Workspace).WithMany().HasForeignKey(envelope => envelope.WorkspaceId);
+            entity.HasOne(envelope => envelope.Subcategory).WithMany(subcategory => subcategory.Envelopes).HasForeignKey(envelope => envelope.SubcategoryId);
+            entity.HasIndex(envelope => new { envelope.WorkspaceId, envelope.SubcategoryId, envelope.SortOrder });
+            entity.HasIndex(envelope => new { envelope.WorkspaceId, envelope.Name });
         });
 
         modelBuilder.Entity<SourceRecordEntity>(entity =>

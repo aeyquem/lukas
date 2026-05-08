@@ -29,6 +29,8 @@ export interface TransactionDto {
   currency: string;
   accountEffect: AccountEffect;
   description: string;
+  envelopeId?: string | null;
+  envelopeName?: string | null;
   categoryName?: string | null;
   notes?: string | null;
 }
@@ -47,6 +49,8 @@ export interface MovementDto {
   baseAmount: string;
   baseCurrency: string;
   description: string;
+  envelopeId?: string | null;
+  envelopeName?: string | null;
   categoryName?: string | null;
   notes?: string | null;
 }
@@ -59,6 +63,7 @@ export interface CreateManualTransactionRequest {
   currency: string;
   accountEffect: AccountEffect;
   description: string;
+  envelopeId?: string | null;
   categoryName?: string | null;
   notes?: string | null;
 }
@@ -72,6 +77,7 @@ export interface UpdateManualTransactionRequest {
   currency: string;
   accountEffect: AccountEffect;
   description: string;
+  envelopeId?: string | null;
   categoryName?: string | null;
   notes?: string | null;
 }
@@ -83,6 +89,33 @@ export interface MonthlyCashflowDto {
   expenseTotal: string;
   netCashflow: string;
   accounts: AccountDto[];
+}
+
+export interface BudgetTreeDto {
+  categories: BudgetCategoryDto[];
+  subcategories: BudgetSubcategoryDto[];
+  envelopes: BudgetEnvelopeDto[];
+}
+
+export interface BudgetCategoryDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface BudgetSubcategoryDto {
+  id: string;
+  categoryId: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface BudgetEnvelopeDto {
+  id: string;
+  subcategoryId: string;
+  name: string;
+  assignedAmount: string;
+  sortOrder: number;
 }
 
 export async function getAccounts(): Promise<AccountDto[]> {
@@ -170,9 +203,34 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     originalCurrency: movement.originalCurrency,
     baseAmount: movement.baseAmount,
     baseCurrency: movement.baseCurrency,
+    ...(movement.envelopeId ? { envelopeId: movement.envelopeId } : {}),
+    ...(movement.envelopeName ? { envelopeName: movement.envelopeName } : {}),
     ...(movement.categoryName ? { categoryName: movement.categoryName } : {}),
     ...(movement.notes ? { notes: movement.notes } : {}),
   }));
+}
+
+export async function getBudgetTree(): Promise<BudgetTreeDto> {
+  const result = await getJson<BudgetTreeDto>("/api/budget");
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function saveBudgetTree(
+  request: BudgetTreeDto,
+): Promise<BudgetTreeDto> {
+  const result = await putJson<BudgetTreeDto, BudgetTreeDto>(
+    "/api/budget",
+    request,
+  );
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
 }
 
 export async function getMonthlyCashflow(
