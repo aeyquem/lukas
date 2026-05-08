@@ -5,8 +5,10 @@ import {
   createAccount,
   createManualTransaction,
   getAccounts,
+  updateManualTransaction,
   type CreateAccountRequest,
   type CreateManualTransactionRequest,
+  type UpdateManualTransactionRequest,
 } from "@/api/ledger";
 import { currentPeriod } from "@/formatters";
 
@@ -34,6 +36,14 @@ export function useLedgerWorkspace() {
     },
   });
 
+  const updateTransactionMutation = useMutation({
+    mutation: updateManualTransaction,
+    async onSettled() {
+      await invalidateAccounts();
+      await invalidateMovements();
+    },
+  });
+
   const accounts = computed(() => accountsQuery.data.value ?? []);
 
   async function invalidateAccounts() {
@@ -52,13 +62,19 @@ export function useLedgerWorkspace() {
     await transactionMutation.mutateAsync(request);
   }
 
+  async function updateTransaction(request: UpdateManualTransactionRequest) {
+    await updateTransactionMutation.mutateAsync(request);
+  }
+
   return {
     selectedPeriod,
     accountsQuery,
     accountMutation,
     transactionMutation,
+    updateTransactionMutation,
     accounts,
     submitAccount,
     submitTransaction,
+    updateTransaction,
   };
 }

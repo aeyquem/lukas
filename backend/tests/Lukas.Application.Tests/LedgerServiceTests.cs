@@ -29,6 +29,29 @@ public sealed class LedgerServiceTests
         result.Error.Code.ShouldBe("period.invalid");
     }
 
+    [Fact]
+    public async Task UpdateTransactionRejectsInvalidAmount()
+    {
+        var service = new LedgerService(new ThrowingLedgerRepository());
+
+        var result = await service.UpdateManualTransactionAsync(
+            new UpdateManualTransactionCommand(
+                Guid.CreateVersion7(),
+                "expense",
+                Guid.CreateVersion7(),
+                new DateOnly(2026, 5, 2),
+                "0",
+                "CLP",
+                "decrease",
+                "Arriendo",
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("money.invalid_amount");
+    }
+
     private sealed class ThrowingLedgerRepository : ILedgerRepository
     {
         public Task<AccountReadModel> CreateAccountAsync(
@@ -45,6 +68,13 @@ public sealed class LedgerServiceTests
 
         public Task<TransactionReadModel> CreateManualTransactionAsync(
             CreateManualTransactionCommand command,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<TransactionReadModel> UpdateManualTransactionAsync(
+            UpdateManualTransactionCommand command,
             CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");

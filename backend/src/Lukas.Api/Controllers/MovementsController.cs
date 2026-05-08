@@ -23,6 +23,8 @@ public sealed class MovementsController(LedgerService ledgerService) : Controlle
             movement.TransactionDate,
             movement.AccountId,
             movement.AccountName,
+            movement.Kind,
+            movement.AccountEffect,
             movement.Direction,
             FormatAmount(movement.OriginalAmount),
             movement.OriginalCurrency,

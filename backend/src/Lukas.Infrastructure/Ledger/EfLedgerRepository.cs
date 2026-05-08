@@ -43,6 +43,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 openingBalance > 0 ? "increase" : "decrease",
                 "Saldo inicial",
                 null,
+                null,
                 now);
         }
 
@@ -100,8 +101,58 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             command.Currency,
             command.AccountEffect,
             command.Description.Trim(),
+            string.IsNullOrWhiteSpace(command.CategoryName) ? null : command.CategoryName.Trim(),
             string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim(),
             DateTimeOffset.UtcNow);
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return ToTransactionReadModel(transaction);
+    }
+
+    public async Task<TransactionReadModel> UpdateManualTransactionAsync(
+        UpdateManualTransactionCommand command,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = await dbContext.LedgerTransactions
+            .Include(candidate => candidate.Entries)
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == command.Id,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (transaction is null)
+        {
+            throw new LedgerRuleException("transaction.not_found", "Transaction was not found.");
+        }
+
+        var account = await dbContext.Accounts
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == command.AccountId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (account is null)
+        {
+            throw new LedgerRuleException("account.not_found", "Account was not found.");
+        }
+
+        if (account.Currency != command.Currency)
+        {
+            throw new LedgerRuleException("transaction.currency_mismatch", "Transaction currency must match the account currency.");
+        }
+
+        _ = TryParseAmount(command.Amount, out var amount);
+        var entry = transaction.Entries.Single();
+        transaction.Kind = command.Kind;
+        transaction.TransactionDate = command.TransactionDate;
+        transaction.Description = command.Description.Trim();
+        transaction.CategoryName = string.IsNullOrWhiteSpace(command.CategoryName) ? null : command.CategoryName.Trim();
+        transaction.Notes = string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim();
+        entry.AccountId = account.Id;
+        entry.AmountValue = FormatAmount(amount);
+        entry.Currency = command.Currency;
+        entry.AccountEffect = command.AccountEffect;
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return ToTransactionReadModel(transaction);
@@ -124,10 +175,12 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 entry.LedgerTransaction!.TransactionDate,
                 entry.AccountId,
                 AccountName = entry.Account!.DisplayName,
+                entry.LedgerTransaction.Kind,
                 entry.AccountEffect,
                 entry.AmountValue,
                 entry.Currency,
                 entry.LedgerTransaction.Description,
+                entry.LedgerTransaction.CategoryName,
                 entry.LedgerTransaction.Notes,
             })
             .ToListAsync(cancellationToken)
@@ -143,13 +196,15 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     entry.TransactionDate,
                     entry.AccountId,
                     entry.AccountName,
+                    entry.Kind,
+                    entry.AccountEffect,
                     entry.AccountEffect == "decrease" ? "out" : "in",
                     amount,
                     entry.Currency,
                     amount,
                     entry.Currency,
                     entry.Description,
-                    null,
+                    entry.CategoryName,
                     entry.Notes);
             })
             .ToList();
@@ -241,6 +296,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         string currency,
         string accountEffect,
         string description,
+        string? categoryName,
         string? notes,
         DateTimeOffset now)
     {
@@ -251,6 +307,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             Kind = kind,
             TransactionDate = transactionDate,
             Description = description,
+            CategoryName = categoryName,
             Notes = notes,
             CreatedAt = now,
         };
@@ -275,6 +332,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             currency,
             accountEffect,
             description,
+            categoryName,
             notes,
         });
 
@@ -331,6 +389,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             entry.Currency,
             entry.AccountEffect,
             transaction.Description,
+            transaction.CategoryName,
             transaction.Notes);
     }
 

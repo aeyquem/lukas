@@ -38,6 +38,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     request.Currency,
                     request.AccountEffect,
                     request.Description,
+                    request.CategoryName,
                     request.Notes),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -51,6 +52,36 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
         return CreatedAtAction(nameof(GetTransactions), new { period = dto.TransactionDate.ToString("yyyy-MM") }, dto);
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<TransactionDto>> UpdateTransaction(
+        Guid id,
+        UpdateManualTransactionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await ledgerService
+            .UpdateManualTransactionAsync(
+                new UpdateManualTransactionCommand(
+                    id,
+                    request.Kind,
+                    request.AccountId,
+                    request.TransactionDate,
+                    request.Amount,
+                    request.Currency,
+                    request.AccountEffect,
+                    request.Description,
+                    request.CategoryName,
+                    request.Notes),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (result.IsFailure)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error.Message, type: result.Error.Code);
+        }
+
+        return Ok(ToDto(result.Value));
+    }
+
     private static TransactionDto ToDto(TransactionReadModel transaction)
     {
         return new TransactionDto(
@@ -62,6 +93,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
             transaction.Currency,
             transaction.AccountEffect,
             transaction.Description,
+            transaction.CategoryName,
             transaction.Notes);
     }
 

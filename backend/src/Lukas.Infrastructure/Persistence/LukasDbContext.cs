@@ -55,6 +55,7 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
             entity.Property(transaction => transaction.Kind).HasColumnName("kind").HasMaxLength(40).IsRequired();
             entity.Property(transaction => transaction.TransactionDate).HasColumnName("transaction_date").IsRequired();
             entity.Property(transaction => transaction.Description).HasColumnName("description").HasMaxLength(240).IsRequired();
+            entity.Property(transaction => transaction.CategoryName).HasColumnName("category_name").HasMaxLength(120);
             entity.Property(transaction => transaction.Notes).HasColumnName("notes").HasMaxLength(1000);
             entity.Property(transaction => transaction.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.HasOne(transaction => transaction.Workspace).WithMany().HasForeignKey(transaction => transaction.WorkspaceId);

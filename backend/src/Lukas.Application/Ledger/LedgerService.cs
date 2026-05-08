@@ -40,32 +40,36 @@ public sealed class LedgerService(ILedgerRepository repository)
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken)
     {
-        if (!IsTransactionKind(command.Kind))
+        var error = ValidateTransaction(
+            command.Kind,
+            command.Amount,
+            command.Currency,
+            command.AccountEffect,
+            command.Description);
+        if (error is not null)
         {
-            return Failure<TransactionReadModel>("transaction.invalid_kind", "Transaction kind is invalid.");
-        }
-
-        if (!TryParseAmount(command.Amount, out var amount) || amount <= 0)
-        {
-            return Failure<TransactionReadModel>("money.invalid_amount", "Transaction amount must be greater than zero.");
-        }
-
-        if (!IsValidCurrency(command.Currency))
-        {
-            return Failure<TransactionReadModel>("money.invalid_currency", "Currency must be an uppercase ISO 4217 code.");
-        }
-
-        if (!IsAccountEffect(command.AccountEffect))
-        {
-            return Failure<TransactionReadModel>("transaction.invalid_account_effect", "Account effect is invalid.");
-        }
-
-        if (string.IsNullOrWhiteSpace(command.Description))
-        {
-            return Failure<TransactionReadModel>("transaction.description_required", "Transaction description is required.");
+            return Failure<TransactionReadModel>(error.Code, error.Message);
         }
 
         return Success(repository.CreateManualTransactionAsync(command, cancellationToken));
+    }
+
+    public Task<Result<TransactionReadModel>> UpdateManualTransactionAsync(
+        UpdateManualTransactionCommand command,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidateTransaction(
+            command.Kind,
+            command.Amount,
+            command.Currency,
+            command.AccountEffect,
+            command.Description);
+        if (error is not null)
+        {
+            return Failure<TransactionReadModel>(error.Code, error.Message);
+        }
+
+        return Success(repository.UpdateManualTransactionAsync(command, cancellationToken));
     }
 
     public Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
@@ -122,6 +126,41 @@ public sealed class LedgerService(ILedgerRepository repository)
     private static bool IsTransactionKind(string value)
     {
         return value is "income" or "expense" or "adjustment";
+    }
+
+    private static LedgerError? ValidateTransaction(
+        string kind,
+        string amountValue,
+        string currency,
+        string accountEffect,
+        string description)
+    {
+        if (!IsTransactionKind(kind))
+        {
+            return new LedgerError("transaction.invalid_kind", "Transaction kind is invalid.");
+        }
+
+        if (!TryParseAmount(amountValue, out var amount) || amount <= 0)
+        {
+            return new LedgerError("money.invalid_amount", "Transaction amount must be greater than zero.");
+        }
+
+        if (!IsValidCurrency(currency))
+        {
+            return new LedgerError("money.invalid_currency", "Currency must be an uppercase ISO 4217 code.");
+        }
+
+        if (!IsAccountEffect(accountEffect))
+        {
+            return new LedgerError("transaction.invalid_account_effect", "Account effect is invalid.");
+        }
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return new LedgerError("transaction.description_required", "Transaction description is required.");
+        }
+
+        return null;
     }
 
     private static bool IsAccountEffect(string value)

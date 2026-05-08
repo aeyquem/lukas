@@ -27,9 +27,11 @@ const {
   accountsQuery,
   accountMutation,
   transactionMutation,
+  updateTransactionMutation,
   accounts,
   submitAccount,
   submitTransaction,
+  updateTransaction,
 } = useLedgerWorkspace();
 
 function selectSection(section: WorkspaceSection) {
@@ -67,6 +69,9 @@ function selectSection(section: WorkspaceSection) {
           :create-transaction="submitTransaction"
           :has-accounts-load-error="Boolean(accountsQuery.error.value)"
           :is-creating="transactionMutation.isLoading.value"
+          :is-updating="updateTransactionMutation.isLoading.value"
+          :update-error="updateTransactionMutation.error.value?.message"
+          :update-transaction="updateTransaction"
         />
         <BudgetWorkspace v-else-if="activeSection === 'budget'" />
         <GoalsWorkspace v-else-if="activeSection === 'goals'" />

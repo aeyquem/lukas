@@ -5,6 +5,7 @@ import {
   createManualTransaction,
   getMonthlyCashflow,
   getMovements,
+  updateManualTransaction,
 } from "@/api/ledger";
 
 describe("ledger api", () => {
@@ -60,6 +61,7 @@ describe("ledger api", () => {
           currency: "CLP",
           accountEffect: "decrease",
           description: "Arriendo",
+          categoryName: "Casa",
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -73,6 +75,7 @@ describe("ledger api", () => {
       currency: "CLP",
       accountEffect: "decrease",
       description: "Arriendo",
+      categoryName: "Casa",
     });
 
     expect(transaction.description).toBe("Arriendo");
@@ -88,6 +91,56 @@ describe("ledger api", () => {
           currency: "CLP",
           accountEffect: "decrease",
           description: "Arriendo",
+          categoryName: "Casa",
+        }),
+      }),
+    );
+  });
+
+  it("updates manual transactions with the expected endpoint and body", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "transaction-id",
+          kind: "expense",
+          accountId: "account-id",
+          transactionDate: "2026-05-03",
+          amount: "130000",
+          currency: "CLP",
+          accountEffect: "decrease",
+          description: "Arriendo actualizado",
+          categoryName: "Casa",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const transaction = await updateManualTransaction({
+      id: "transaction-id",
+      kind: "expense",
+      accountId: "account-id",
+      transactionDate: "2026-05-03",
+      amount: "130000",
+      currency: "CLP",
+      accountEffect: "decrease",
+      description: "Arriendo actualizado",
+      categoryName: "Casa",
+    });
+
+    expect(transaction.amount).toBe("130000");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/transactions/transaction-id",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          kind: "expense",
+          accountId: "account-id",
+          transactionDate: "2026-05-03",
+          amount: "130000",
+          currency: "CLP",
+          accountEffect: "decrease",
+          description: "Arriendo actualizado",
+          categoryName: "Casa",
         }),
       }),
     );
@@ -126,13 +179,15 @@ describe("ledger api", () => {
             transactionDate: "2026-05-02",
             accountId: "account-id",
             accountName: "Banco",
+            kind: "expense",
+            accountEffect: "decrease",
             direction: "out",
             originalAmount: "125000",
             originalCurrency: "CLP",
             baseAmount: "125000",
             baseCurrency: "CLP",
             description: "Arriendo",
-            categoryName: null,
+            categoryName: "Casa",
             notes: "Contrato anual",
           },
         ]),
@@ -143,8 +198,10 @@ describe("ledger api", () => {
     const movements = await getMovements();
 
     expect(movements[0]?.accountName).toBe("Banco");
+    expect(movements[0]?.kind).toBe("expense");
+    expect(movements[0]?.accountEffect).toBe("decrease");
     expect(movements[0]?.date).toBe("2026-05-02");
-    expect(movements[0]?.categoryName).toBeUndefined();
+    expect(movements[0]?.categoryName).toBe("Casa");
     expect(movements[0]?.notes).toBe("Contrato anual");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/movements",

@@ -12,6 +12,8 @@ public sealed class LedgerTransactionEntity
 
     public string Description { get; set; } = string.Empty;
 
+    public string? CategoryName { get; set; }
+
     public string? Notes { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

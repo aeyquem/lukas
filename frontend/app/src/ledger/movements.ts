@@ -1,3 +1,5 @@
+import type { AccountEffect, TransactionKind } from "@/api/ledger";
+
 export type MovementDirection = "in" | "out";
 
 export type LedgerMovement = {
@@ -6,6 +8,8 @@ export type LedgerMovement = {
   date: string;
   accountId: string;
   accountName: string;
+  kind: TransactionKind;
+  accountEffect: AccountEffect;
   categoryName?: string;
   description: string;
   notes?: string;

@@ -21,6 +21,19 @@ public sealed record CreateManualTransactionCommand(
     string Currency,
     string AccountEffect,
     string Description,
+    string? CategoryName,
+    string? Notes);
+
+public sealed record UpdateManualTransactionCommand(
+    Guid Id,
+    string Kind,
+    Guid AccountId,
+    DateOnly TransactionDate,
+    string Amount,
+    string Currency,
+    string AccountEffect,
+    string Description,
+    string? CategoryName,
     string? Notes);
 
 public sealed record TransactionReadModel(
@@ -32,6 +45,7 @@ public sealed record TransactionReadModel(
     string Currency,
     string AccountEffect,
     string Description,
+    string? CategoryName,
     string? Notes);
 
 public sealed record MovementReadModel(
@@ -40,6 +54,8 @@ public sealed record MovementReadModel(
     DateOnly TransactionDate,
     Guid AccountId,
     string AccountName,
+    string Kind,
+    string AccountEffect,
     string Direction,
     decimal OriginalAmount,
     string OriginalCurrency,

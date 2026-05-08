@@ -9,11 +9,7 @@ import Select from "primevue/select";
 import type { DataTableFilterMeta } from "primevue/datatable";
 
 import { formatDate, formatMoney } from "@/formatters";
-import {
-  directionLabel,
-  type LedgerMovement,
-  type MovementDirection,
-} from "@/ledger/movements";
+import type { LedgerMovement, MovementDirection } from "@/ledger/movements";
 
 type DisplayMovement = LedgerMovement & {
   displayAmount: string;
@@ -21,7 +17,8 @@ type DisplayMovement = LedgerMovement & {
   categoryDisplay: string;
   isUncategorized: boolean;
   signedDisplayAmount: string;
-  directionLabel: string;
+  displayAmountNumber: string;
+  displayAmountPrefix: string;
 };
 
 type GroupField = "none" | "accountName";
@@ -48,9 +45,12 @@ const props = withDefaults(
   },
 );
 
+const emit = defineEmits<{
+  editMovement: [movement: LedgerMovement];
+}>();
+
 const selectedAccountNames = ref<string[]>([]);
 const selectedGroupBy = ref<GroupField>(props.groupBy);
-const rowsPerPage = ref(20);
 const filters = ref<DataTableFilterMeta>({
   notes: {
     operator: FilterOperator.AND,
@@ -62,8 +62,6 @@ const groupOptions: GroupOption[] = [
   { label: "Sin agrupar", value: "none" },
   { label: "Cuenta", value: "accountName" },
 ];
-
-const rowsPerPageOptions = [10, 20, 50, 100, 250, 500];
 
 const accountOptions = computed<AccountOption[]>(() =>
   Array.from(new Set(props.movements.map((movement) => movement.accountName)))
@@ -112,19 +110,21 @@ const displayMovements = computed<DisplayMovement[]>(() =>
       const displayCurrency = props.showOriginalCurrency
         ? movement.originalCurrency
         : movement.baseCurrency;
+      const amountParts = signedAmountParts(
+        movement.direction,
+        displayAmount,
+        displayCurrency,
+      );
 
       return {
         ...movement,
-        directionLabel: directionLabel(movement.direction),
         displayAmount,
         displayCurrency,
         categoryDisplay: movement.categoryName ?? "Sin categoría",
         isUncategorized: !movement.categoryName,
-        signedDisplayAmount: signedAmount(
-          movement.direction,
-          displayAmount,
-          displayCurrency,
-        ),
+        signedDisplayAmount: `${amountParts.prefix}${amountParts.number}`,
+        displayAmountNumber: amountParts.number,
+        displayAmountPrefix: amountParts.prefix,
       };
     })
     .filter((movement) =>
@@ -132,13 +132,23 @@ const displayMovements = computed<DisplayMovement[]>(() =>
     ),
 );
 
-function signedAmount(
+function signedAmountParts(
   direction: MovementDirection,
   amount: string,
   currency: string,
-): string {
+): { number: string; prefix: string } {
   const sign = direction === "out" ? "-" : "+";
-  return `${sign}${formatMoney(amount, currency)}`;
+  const formattedAmount = formatMoney(amount, currency);
+  const amountMatch = /^(\D*)(.*)$/.exec(formattedAmount);
+
+  if (!amountMatch) {
+    return { number: formattedAmount, prefix: sign };
+  }
+
+  return {
+    number: amountMatch[2],
+    prefix: `${sign}${amountMatch[1]}`,
+  };
 }
 
 function groupHeading(data: DisplayMovement): string {
@@ -151,6 +161,10 @@ function groupHeading(data: DisplayMovement): string {
 
 function movementRowClass(data: DisplayMovement): string {
   return data.isUncategorized ? "movement-row--uncategorized" : "";
+}
+
+function editMovement(movement: DisplayMovement) {
+  emit("editMovement", movement);
 }
 </script>
 
@@ -168,8 +182,7 @@ function movementRowClass(data: DisplayMovement): string {
     filter-display="menu"
     :row-class="movementRowClass"
     :row-group-mode="activeGroupBy ? 'subheader' : undefined"
-    :rows="rowsPerPage"
-    :rows-per-page-options="rowsPerPageOptions"
+    :rows="20"
     show-gridlines
     :sort-field="sortField"
     :sort-order="sortOrder"
@@ -204,14 +217,6 @@ function movementRowClass(data: DisplayMovement): string {
           />
         </div>
 
-        <div class="table-filter table-filter--rows">
-          <label for="movement-table-rows">Filas</label>
-          <Select
-            id="movement-table-rows"
-            v-model="rowsPerPage"
-            :options="rowsPerPageOptions"
-          />
-        </div>
       </div>
     </template>
 
@@ -278,14 +283,6 @@ function movementRowClass(data: DisplayMovement): string {
       </template>
     </Column>
 
-    <Column field="directionLabel" header="Tipo" sortable style="width: 10rem">
-      <template #body="{ data }">
-        <span class="direction" :data-direction="data.direction">
-          {{ data.directionLabel }}
-        </span>
-      </template>
-    </Column>
-
     <Column
       field="displayCurrency"
       header="Moneda"
@@ -300,9 +297,22 @@ function movementRowClass(data: DisplayMovement): string {
       style="width: 12rem"
     >
       <template #body="{ data }">
-        <span class="numeric" :data-direction="data.direction">
-          {{ data.signedDisplayAmount }}
+        <span
+          class="numeric"
+          :aria-label="data.signedDisplayAmount"
+          :data-direction="data.direction"
+        >
+          <span class="numeric__prefix">{{ data.displayAmountPrefix }}</span>
+          <span class="numeric__amount">{{ data.displayAmountNumber }}</span>
         </span>
+      </template>
+    </Column>
+
+    <Column header="Acciones" style="width: 7rem">
+      <template #body="{ data }">
+        <button class="row-action" type="button" @click="editMovement(data)">
+          Editar
+        </button>
       </template>
     </Column>
 
@@ -313,9 +323,7 @@ function movementRowClass(data: DisplayMovement): string {
 <style scoped>
 .table-toolbar {
   display: grid;
-  grid-template-columns:
-    minmax(14rem, 1.2fr) minmax(11rem, 0.65fr)
-    minmax(7rem, 0.35fr);
+  grid-template-columns: minmax(14rem, 1.2fr) minmax(11rem, 0.65fr);
   gap: var(--space-2);
 }
 
@@ -336,44 +344,28 @@ function movementRowClass(data: DisplayMovement): string {
   inline-size: 100%;
 }
 
-.table-filter--rows {
-  justify-self: end;
-  inline-size: min(8rem, 100%);
-}
-
 .group-heading {
   color: var(--color-primary-strong);
   font-size: var(--font-size-sm);
   font-weight: 800;
 }
 
-.direction {
-  display: inline-flex;
-  align-items: center;
-  min-block-size: 1.65rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-round);
-  padding-inline: var(--space-3);
-  font-size: var(--font-size-xs);
-  font-weight: 800;
-}
-
-.direction[data-direction="in"] {
-  border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
-  background: color-mix(in srgb, var(--color-success) 10%, transparent);
-  color: var(--color-primary-strong);
-}
-
-.direction[data-direction="out"] {
-  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
-  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
-  color: var(--color-danger-strong);
-}
-
 .numeric {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1);
   font-family: var(--font-mono);
   font-weight: 700;
+  inline-size: 100%;
   white-space: nowrap;
+}
+
+.numeric__prefix {
+  justify-self: start;
+}
+
+.numeric__amount {
+  justify-self: end;
 }
 
 .notes {
@@ -417,6 +409,21 @@ function movementRowClass(data: DisplayMovement): string {
   color: var(--color-danger-strong);
 }
 
+.row-action {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-primary-strong);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.row-action:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 :deep(.p-datatable-header) {
   border-start-start-radius: var(--radius-lg);
   border-start-end-radius: var(--radius-lg);
@@ -444,9 +451,5 @@ function movementRowClass(data: DisplayMovement): string {
     grid-template-columns: 1fr;
   }
 
-  .table-filter--rows {
-    justify-self: stretch;
-    inline-size: 100%;
-  }
 }
 </style>

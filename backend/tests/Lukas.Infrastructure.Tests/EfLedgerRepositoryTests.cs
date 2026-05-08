@@ -39,10 +39,10 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null),
+            new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", "Ingresos", null),
             TestContext.Current.CancellationToken);
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -71,12 +71,47 @@ public sealed class EfLedgerRepositoryTests
 
         movement.AccountId.ShouldBe(account.Id);
         movement.AccountName.ShouldBe("Banco");
+        movement.Kind.ShouldBe("expense");
+        movement.AccountEffect.ShouldBe("decrease");
         movement.Direction.ShouldBe("out");
         movement.OriginalAmount.ShouldBe(125000m);
         movement.OriginalCurrency.ShouldBe("CLP");
         movement.Description.ShouldBe("Arriendo");
-        movement.CategoryName.ShouldBeNull();
+        movement.CategoryName.ShouldBe("Casa");
         movement.Notes.ShouldBe("Contrato anual");
+    }
+
+    [Fact]
+    public async Task UpdateManualTransactionChangesMovementAndBalance()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        var transaction = await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, null),
+            TestContext.Current.CancellationToken);
+
+        await repository.UpdateManualTransactionAsync(
+            new UpdateManualTransactionCommand(transaction.Id, "income", account.Id, new DateOnly(2026, 5, 3), "150000", "CLP", "increase", "Reembolso", "Ingresos", "Corregido"),
+            TestContext.Current.CancellationToken);
+
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var accounts = await repository.GetAccountsAsync(TestContext.Current.CancellationToken);
+        var movement = movements.Single();
+
+        movement.TransactionId.ShouldBe(transaction.Id);
+        movement.TransactionDate.ShouldBe(new DateOnly(2026, 5, 3));
+        movement.Kind.ShouldBe("income");
+        movement.AccountEffect.ShouldBe("increase");
+        movement.Direction.ShouldBe("in");
+        movement.OriginalAmount.ShouldBe(150000m);
+        movement.Description.ShouldBe("Reembolso");
+        movement.CategoryName.ShouldBe("Ingresos");
+        movement.Notes.ShouldBe("Corregido");
+        accounts.Single().CurrentBalance.ShouldBe(150000m);
     }
 
     private static async Task<TestDatabase> CreateDatabaseAsync()

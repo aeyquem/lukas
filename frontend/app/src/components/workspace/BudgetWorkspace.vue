@@ -14,6 +14,7 @@ import TreeTable from "primevue/treetable";
 import type { TreeNode } from "primevue/treenode";
 
 import BaseBadge from "@/components/base/BaseBadge.vue";
+import BaseButton from "@/components/base/BaseButton.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import { formatMoney } from "@/formatters";
@@ -83,6 +84,11 @@ type DragElement = HTMLElement & {
 
 const currency = "CLP";
 const editingAssignedEnvelopeId = ref("");
+const editingNameNodeId = ref("");
+const isTreeEditing = ref(false);
+const nextCategoryNumber = ref(3);
+const nextSubcategoryNumber = ref(4);
+const nextEnvelopeNumber = ref(5);
 const expandedKeys = ref<TreeTableExpandedKeys>({
   "cat-living": true,
   "cat-planning": true,
@@ -210,6 +216,223 @@ const vAssignedInputFocus = {
     }
   },
 };
+
+const vNameInputFocus = {
+  mounted(element: HTMLElement) {
+    element.focus();
+
+    if (element instanceof HTMLInputElement) {
+      element.select();
+    }
+  },
+};
+
+function toggleTreeEditing() {
+  isTreeEditing.value = !isTreeEditing.value;
+
+  if (!isTreeEditing.value) {
+    editingNameNodeId.value = "";
+  }
+}
+
+function addCategory() {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  const categoryNumber = nextCategoryNumber.value;
+  const categoryId = `cat-new-${categoryNumber}`;
+  nextCategoryNumber.value = categoryNumber + 1;
+  categories.value = [
+    ...categories.value,
+    { id: categoryId, name: `Nueva categoría ${categoryNumber}` },
+  ];
+  expandedKeys.value = {
+    ...expandedKeys.value,
+    [categoryId]: true,
+  };
+  editingNameNodeId.value = categoryId;
+}
+
+function addSubcategory(categoryId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  const subcategoryNumber = nextSubcategoryNumber.value;
+  const subcategoryId = `sub-new-${subcategoryNumber}`;
+  nextSubcategoryNumber.value = subcategoryNumber + 1;
+  subcategories.value = [
+    ...subcategories.value,
+    {
+      id: subcategoryId,
+      categoryId,
+      name: `Nueva subcategoría ${subcategoryNumber}`,
+    },
+  ];
+  expandSubcategoryParent(categoryId, subcategoryId);
+  editingNameNodeId.value = subcategoryId;
+}
+
+function addEnvelope(subcategoryId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  const envelopeNumber = nextEnvelopeNumber.value;
+  const envelopeId = `env-new-${envelopeNumber}`;
+  nextEnvelopeNumber.value = envelopeNumber + 1;
+  envelopes.value = [
+    ...envelopes.value,
+    {
+      id: envelopeId,
+      subcategoryId,
+      name: `Nuevo sobre ${envelopeNumber}`,
+      assignedAmount: "0",
+      spentAmount: "0",
+    },
+  ];
+  expandEnvelopeParent(subcategoryId);
+  editingNameNodeId.value = envelopeId;
+}
+
+function deleteCategory(categoryId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  const removedSubcategoryIds = subcategories.value
+    .filter((subcategory) => subcategory.categoryId === categoryId)
+    .map((subcategory) => subcategory.id);
+  const removedEnvelopeIds = envelopes.value
+    .filter((envelope) =>
+      removedSubcategoryIds.includes(envelope.subcategoryId),
+    )
+    .map((envelope) => envelope.id);
+  categories.value = categories.value.filter(
+    (category) => category.id !== categoryId,
+  );
+  subcategories.value = subcategories.value.filter(
+    (subcategory) => subcategory.categoryId !== categoryId,
+  );
+  envelopes.value = envelopes.value.filter(
+    (envelope) => !removedSubcategoryIds.includes(envelope.subcategoryId),
+  );
+  clearRemovedNodeEditing([
+    categoryId,
+    ...removedSubcategoryIds,
+    ...removedEnvelopeIds,
+  ]);
+}
+
+function deleteSubcategory(subcategoryId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  const removedEnvelopeIds = envelopes.value
+    .filter((envelope) => envelope.subcategoryId === subcategoryId)
+    .map((envelope) => envelope.id);
+  subcategories.value = subcategories.value.filter(
+    (subcategory) => subcategory.id !== subcategoryId,
+  );
+  envelopes.value = envelopes.value.filter(
+    (envelope) => envelope.subcategoryId !== subcategoryId,
+  );
+  clearRemovedNodeEditing([subcategoryId, ...removedEnvelopeIds]);
+}
+
+function deleteEnvelope(envelopeId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  envelopes.value = envelopes.value.filter(
+    (envelope) => envelope.id !== envelopeId,
+  );
+  clearRemovedNodeEditing([envelopeId]);
+}
+
+function editNodeName(nodeId: string) {
+  if (!isTreeEditing.value) {
+    return;
+  }
+
+  editingNameNodeId.value = nodeId;
+}
+
+function clearRemovedNodeEditing(nodeIds: string[]) {
+  if (nodeIds.includes(editingNameNodeId.value)) {
+    editingNameNodeId.value = "";
+  }
+
+  if (nodeIds.includes(editingAssignedEnvelopeId.value)) {
+    editingAssignedEnvelopeId.value = "";
+  }
+}
+
+function updateNodeName(
+  nodeType: BudgetNodeType,
+  nodeId: string,
+  name: string,
+) {
+  if (nodeType === "category") {
+    categories.value = categories.value.map((category) =>
+      category.id === nodeId ? { ...category, name } : category,
+    );
+    return;
+  }
+
+  if (nodeType === "subcategory") {
+    subcategories.value = subcategories.value.map((subcategory) =>
+      subcategory.id === nodeId ? { ...subcategory, name } : subcategory,
+    );
+    return;
+  }
+
+  envelopes.value = envelopes.value.map((envelope) =>
+    envelope.id === nodeId ? { ...envelope, name } : envelope,
+  );
+}
+
+function completeEditingNodeName(nodeType: BudgetNodeType, nodeId: string) {
+  const nodeName = nodeNameById(nodeType, nodeId).trim();
+  const fallbackName = defaultNodeName(nodeType);
+  updateNodeName(nodeType, nodeId, nodeName === "" ? fallbackName : nodeName);
+
+  if (editingNameNodeId.value === nodeId) {
+    editingNameNodeId.value = "";
+  }
+}
+
+function nodeNameById(nodeType: BudgetNodeType, nodeId: string): string {
+  if (nodeType === "category") {
+    return (
+      categories.value.find((category) => category.id === nodeId)?.name ?? ""
+    );
+  }
+
+  if (nodeType === "subcategory") {
+    return (
+      subcategories.value.find((subcategory) => subcategory.id === nodeId)
+        ?.name ?? ""
+    );
+  }
+
+  return envelopes.value.find((envelope) => envelope.id === nodeId)?.name ?? "";
+}
+
+function defaultNodeName(nodeType: BudgetNodeType): string {
+  if (nodeType === "category") {
+    return "Nueva categoría";
+  }
+
+  if (nodeType === "subcategory") {
+    return "Nueva subcategoría";
+  }
+
+  return "Nuevo sobre";
+}
 
 function buildNodeData(
   nodeType: BudgetNodeType,
@@ -359,7 +582,9 @@ function registerDraggableSubcategory(
 
 function canStartRowDrag(clientX: number, clientY: number): boolean {
   const target = document.elementFromPoint(clientX, clientY);
-  return !target?.closest("button, input, textarea, select, a, [contenteditable]");
+  return !target?.closest(
+    "button, input, textarea, select, a, [contenteditable]",
+  );
 }
 
 function registerEnvelopeDropTarget(element: DragElement, envelopeId: string) {
@@ -701,7 +926,10 @@ function moveCategoryNear(
   expandCategory(draggedCategory.id);
 }
 
-function updateEnvelopeAssignedAmount(envelopeId: string, assignedAmount: string) {
+function updateEnvelopeAssignedAmount(
+  envelopeId: string,
+  assignedAmount: string,
+) {
   envelopes.value = envelopes.value.map((envelope) =>
     envelope.id === envelopeId ? { ...envelope, assignedAmount } : envelope,
   );
@@ -849,7 +1077,18 @@ function formatDecimal(amount: number): string {
           <span>Categorías, subcategorías y sobres</span>
         </div>
 
-        <BaseBadge>{{ envelopes.length }} sobres</BaseBadge>
+        <div class="budget-heading__actions">
+          <BaseButton
+            :aria-pressed="isTreeEditing"
+            size="sm"
+            type="button"
+            variant="secondary"
+            @click="toggleTreeEditing"
+          >
+            {{ isTreeEditing ? "Terminar edición" : "Editar árbol" }}
+          </BaseButton>
+          <BaseBadge>{{ envelopes.length }} sobres</BaseBadge>
+        </div>
       </div>
     </template>
 
@@ -867,30 +1106,120 @@ function formatDecimal(amount: number): string {
           sortable
           style="min-width: 18rem"
         >
+          <template #header>
+            <div class="name-column-header">
+              <span>Sobre</span>
+              <button
+                v-if="isTreeEditing"
+                class="add-category-header-button"
+                type="button"
+                @click.stop="addCategory"
+              >
+                + Categoría
+              </button>
+            </div>
+          </template>
+
           <template #body="{ node }">
-            <span
-              v-if="node.data.nodeType === 'envelope'"
-              class="envelope-label"
-              :data-envelope-id="node.key"
-            >
-              <strong>{{ node.data.name }}</strong>
-            </span>
-            <span
-              v-else-if="node.data.nodeType === 'subcategory'"
-              class="group-label"
-              data-level="subcategory"
-              :data-subcategory-id="node.key"
-            >
-              <strong>{{ node.data.name }}</strong>
-            </span>
-            <span
-              v-else
-              class="group-label"
-              data-level="category"
-              :data-category-id="node.key"
-            >
-              {{ node.data.name }}
-            </span>
+            <div class="node-name-cell">
+              <BaseTextInput
+                v-if="isTreeEditing && editingNameNodeId === node.key"
+                v-name-input-focus
+                :aria-label="`Nombre para ${node.data.name}`"
+                class="node-name-input"
+                :model-value="node.data.name"
+                type="text"
+                @blur="completeEditingNodeName(node.data.nodeType, node.key)"
+                @keydown.enter="
+                  completeEditingNodeName(node.data.nodeType, node.key)
+                "
+                @update:model-value="
+                  (value) => updateNodeName(node.data.nodeType, node.key, value)
+                "
+              />
+              <span
+                v-else-if="node.data.nodeType === 'envelope'"
+                class="envelope-label"
+                :data-envelope-id="node.key"
+              >
+                <strong>{{ node.data.name }}</strong>
+              </span>
+              <span
+                v-else-if="node.data.nodeType === 'subcategory'"
+                class="group-label"
+                data-level="subcategory"
+                :data-subcategory-id="node.key"
+              >
+                <strong>{{ node.data.name }}</strong>
+              </span>
+              <span
+                v-else
+                class="group-label"
+                data-level="category"
+                :data-category-id="node.key"
+              >
+                {{ node.data.name }}
+              </span>
+
+              <button
+                v-if="isTreeEditing"
+                class="rename-node-button"
+                type="button"
+                :aria-label="`Renombrar ${node.data.name}`"
+                @click="editNodeName(node.key)"
+              >
+                Renombrar
+              </button>
+              <button
+                v-if="isTreeEditing && node.data.nodeType === 'category'"
+                class="add-child-button"
+                type="button"
+                :aria-label="`Agregar subcategoría en ${node.data.name}`"
+                @click="addSubcategory(node.key)"
+              >
+                + Subcategoría
+              </button>
+              <button
+                v-else-if="
+                  isTreeEditing && node.data.nodeType === 'subcategory'
+                "
+                class="add-child-button"
+                type="button"
+                :aria-label="`Agregar sobre en ${node.data.name}`"
+                @click="addEnvelope(node.key)"
+              >
+                + Sobre
+              </button>
+              <button
+                v-if="isTreeEditing && node.data.nodeType === 'category'"
+                class="delete-node-button"
+                type="button"
+                :aria-label="`Eliminar categoría ${node.data.name}`"
+                @click="deleteCategory(node.key)"
+              >
+                Eliminar
+              </button>
+              <button
+                v-else-if="
+                  isTreeEditing && node.data.nodeType === 'subcategory'
+                "
+                class="delete-node-button"
+                type="button"
+                :aria-label="`Eliminar subcategoría ${node.data.name}`"
+                @click="deleteSubcategory(node.key)"
+              >
+                Eliminar
+              </button>
+              <button
+                v-else-if="isTreeEditing && node.data.nodeType === 'envelope'"
+                class="delete-envelope-button"
+                type="button"
+                :aria-label="`Eliminar sobre ${node.data.name}`"
+                @click="deleteEnvelope(node.key)"
+              >
+                Eliminar
+              </button>
+            </div>
           </template>
         </Column>
 
@@ -972,6 +1301,46 @@ function formatDecimal(amount: number): string {
   font-size: var(--font-size-sm);
 }
 
+.budget-heading__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.node-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-inline-size: 100%;
+}
+
+.name-column-header {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.add-category-header-button {
+  min-block-size: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-secondary);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.add-category-header-button:hover,
+.add-category-header-button:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
+  color: var(--color-primary-strong);
+  outline: 0;
+}
+
 .group-label,
 .envelope-label {
   display: inline-flex;
@@ -986,6 +1355,60 @@ function formatDecimal(amount: number): string {
 
 .group-label[data-level="subcategory"] {
   color: var(--color-muted-foreground);
+}
+
+.node-name-input {
+  min-inline-size: 10rem;
+  max-inline-size: 16rem;
+  min-block-size: 2.25rem;
+}
+
+.rename-node-button,
+.add-child-button {
+  min-block-size: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-secondary);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.rename-node-button:hover,
+.rename-node-button:focus-visible,
+.add-child-button:hover,
+.add-child-button:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
+  color: var(--color-primary-strong);
+  outline: 0;
+}
+
+.delete-node-button,
+.delete-envelope-button {
+  min-block-size: 1.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-danger-strong);
+  cursor: pointer;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.delete-node-button:hover,
+.delete-node-button:focus-visible,
+.delete-envelope-button:hover,
+.delete-envelope-button:focus-visible {
+  border-color: color-mix(in srgb, var(--color-danger) 34%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+  outline: 0;
 }
 
 .numeric {
@@ -1066,6 +1489,15 @@ function formatDecimal(amount: number): string {
 @media (max-width: 680px) {
   .budget-heading {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .budget-heading__actions {
+    justify-content: space-between;
+  }
+
+  .node-name-cell {
+    align-items: flex-start;
     flex-direction: column;
   }
 }

@@ -50,6 +50,33 @@ export async function postJson<TResponse, TRequest>(
   return { ok: true, value: (await response.json()) as TResponse };
 }
 
+export async function putJson<TResponse, TRequest>(
+  path: string,
+  body: TRequest,
+): Promise<Result<TResponse, ApiError>> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const problem = await readProblem(response);
+    return {
+      ok: false,
+      error: {
+        status: response.status,
+        title: problem?.title ?? response.statusText,
+        detail: problem?.detail,
+      },
+    };
+  }
+
+  return { ok: true, value: (await response.json()) as TResponse };
+}
+
 async function readProblem(
   response: Response,
 ): Promise<{ title?: string; detail?: string } | null> {

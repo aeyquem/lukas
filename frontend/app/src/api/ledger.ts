@@ -1,4 +1,4 @@
-import { getJson, postJson } from "@/api/client";
+import { getJson, postJson, putJson } from "@/api/client";
 import type { LedgerMovement, MovementDirection } from "@/ledger/movements";
 
 export type AccountType = "cash" | "bank" | "credit_card";
@@ -29,6 +29,7 @@ export interface TransactionDto {
   currency: string;
   accountEffect: AccountEffect;
   description: string;
+  categoryName?: string | null;
   notes?: string | null;
 }
 
@@ -38,6 +39,8 @@ export interface MovementDto {
   transactionDate: string;
   accountId: string;
   accountName: string;
+  kind: TransactionKind;
+  accountEffect: AccountEffect;
   direction: MovementDirection;
   originalAmount: string;
   originalCurrency: string;
@@ -56,6 +59,20 @@ export interface CreateManualTransactionRequest {
   currency: string;
   accountEffect: AccountEffect;
   description: string;
+  categoryName?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateManualTransactionRequest {
+  id: string;
+  kind: TransactionKind;
+  accountId: string;
+  transactionDate: string;
+  amount: string;
+  currency: string;
+  accountEffect: AccountEffect;
+  description: string;
+  categoryName?: string | null;
   notes?: string | null;
 }
 
@@ -118,6 +135,21 @@ export async function createManualTransaction(
   return result.value;
 }
 
+export async function updateManualTransaction(
+  request: UpdateManualTransactionRequest,
+): Promise<TransactionDto> {
+  const { id, ...body } = request;
+  const result = await putJson<TransactionDto, typeof body>(
+    `/api/transactions/${encodeURIComponent(id)}`,
+    body,
+  );
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
 export async function getMovements(): Promise<LedgerMovement[]> {
   const result = await getJson<MovementDto[]>("/api/movements");
   if (!result.ok) {
@@ -130,6 +162,8 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     date: movement.transactionDate,
     accountId: movement.accountId,
     accountName: movement.accountName,
+    kind: movement.kind,
+    accountEffect: movement.accountEffect,
     description: movement.description,
     direction: movement.direction,
     originalAmount: movement.originalAmount,

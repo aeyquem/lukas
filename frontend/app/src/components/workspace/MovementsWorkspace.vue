@@ -8,6 +8,7 @@ import {
   type AccountEffect,
   type CreateManualTransactionRequest,
   type TransactionKind,
+  type UpdateManualTransactionRequest,
 } from "@/api/ledger";
 import BaseAlert from "@/components/base/BaseAlert.vue";
 import BaseBadge from "@/components/base/BaseBadge.vue";
@@ -19,6 +20,7 @@ import BaseSelect from "@/components/base/BaseSelect.vue";
 import BaseTextarea from "@/components/base/BaseTextarea.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import LedgerMovementsTable from "@/components/ledger/LedgerMovementsTable.vue";
+import type { LedgerMovement } from "@/ledger/movements";
 
 const props = defineProps<{
   accounts: AccountDto[];
@@ -26,21 +28,26 @@ const props = defineProps<{
   createTransaction: (request: CreateManualTransactionRequest) => Promise<void>;
   hasAccountsLoadError: boolean;
   isCreating: boolean;
+  isUpdating: boolean;
+  updateError?: string;
+  updateTransaction: (request: UpdateManualTransactionRequest) => Promise<void>;
 }>();
 
-type DrawerMode = "closed" | "add";
+type DrawerMode = "closed" | "add" | "edit";
 
 const showOriginalCurrency = ref(false);
 const baseCurrency = "CLP";
 const drawerMode = ref<DrawerMode>("closed");
+const editingTransactionId = ref("");
+const categoryOptions = ["Ingresos", "Casa", "Comida", "Reservas"];
 const transactionForm = reactive({
   kind: "expense" as TransactionKind,
   accountId: "",
   transactionDate: new Date().toISOString().slice(0, 10),
   amount: "",
   currency: "CLP",
-  accountEffect: "decrease" as AccountEffect,
   description: "",
+  categoryName: "",
   notes: "",
 });
 
@@ -53,6 +60,18 @@ const movements = computed(() => movementsQuery.data.value ?? []);
 const movementCount = computed(() => movements.value.length);
 const isDrawerOpen = computed(() => drawerMode.value !== "closed");
 const hasRegisteredAccounts = computed(() => props.accounts.length > 0);
+const drawerTitle = computed(() =>
+  drawerMode.value === "edit" ? "Editar movimiento" : "Agregar movimiento",
+);
+const saveError = computed(() =>
+  drawerMode.value === "edit" ? props.updateError : props.createError,
+);
+const isSaving = computed(() =>
+  drawerMode.value === "edit" ? props.isUpdating : props.isCreating,
+);
+const submitLabel = computed(() =>
+  drawerMode.value === "edit" ? "Guardar cambios" : "Crear movimiento",
+);
 
 watch(
   () => props.accounts,
@@ -77,22 +96,22 @@ watch(
   },
 );
 
-watch(
-  () => transactionForm.kind,
-  (kind) => {
-    if (kind === "income") {
-      transactionForm.accountEffect = "increase";
-    }
-
-    if (kind === "expense") {
-      transactionForm.accountEffect = "decrease";
-    }
-  },
-);
-
 function openAddPanel() {
   resetForm();
   drawerMode.value = "add";
+}
+
+function openEditPanel(movement: LedgerMovement) {
+  transactionForm.kind = movement.kind;
+  transactionForm.accountId = movement.accountId;
+  transactionForm.transactionDate = movement.date;
+  transactionForm.amount = movement.originalAmount;
+  transactionForm.currency = movement.originalCurrency;
+  transactionForm.description = movement.description;
+  transactionForm.categoryName = movement.categoryName ?? "";
+  transactionForm.notes = movement.notes ?? "";
+  editingTransactionId.value = movement.transactionId;
+  drawerMode.value = "edit";
 }
 
 function closePanel() {
@@ -101,22 +120,17 @@ function closePanel() {
 
 async function submitTransaction() {
   const notes = transactionForm.notes.trim();
-  const request: CreateManualTransactionRequest = {
-    kind: transactionForm.kind,
-    accountId: transactionForm.accountId,
-    transactionDate: transactionForm.transactionDate,
-    amount: transactionForm.amount.trim(),
-    currency: transactionForm.currency.trim().toUpperCase(),
-    accountEffect: transactionForm.accountEffect,
-    description: transactionForm.description.trim(),
-  };
-
-  if (notes !== "") {
-    request.notes = notes;
-  }
+  const request = buildTransactionRequest(notes);
 
   try {
-    await props.createTransaction(request);
+    if (drawerMode.value === "edit") {
+      await props.updateTransaction({
+        id: editingTransactionId.value,
+        ...request,
+      });
+    } else {
+      await props.createTransaction(request);
+    }
   } catch {
     return;
   }
@@ -125,17 +139,47 @@ async function submitTransaction() {
   drawerMode.value = "closed";
 }
 
+function buildTransactionRequest(
+  notes: string,
+): CreateManualTransactionRequest {
+  const categoryName = transactionForm.categoryName.trim();
+  const request: CreateManualTransactionRequest = {
+    kind: transactionForm.kind,
+    accountId: transactionForm.accountId,
+    transactionDate: transactionForm.transactionDate,
+    amount: transactionForm.amount.trim(),
+    currency: transactionForm.currency.trim().toUpperCase(),
+    accountEffect: defaultAccountEffect(transactionForm.kind),
+    description: transactionForm.description.trim(),
+  };
+
+  if (categoryName !== "") {
+    request.categoryName = categoryName;
+  }
+
+  if (notes !== "") {
+    request.notes = notes;
+  }
+
+  return request;
+}
+
 function resetForm() {
   const firstAccount = props.accounts[0];
 
+  editingTransactionId.value = "";
   transactionForm.kind = "expense";
   transactionForm.accountId = firstAccount ? firstAccount.id : "";
   transactionForm.transactionDate = new Date().toISOString().slice(0, 10);
   transactionForm.amount = "";
   transactionForm.currency = firstAccount ? firstAccount.currency : "CLP";
-  transactionForm.accountEffect = "decrease";
   transactionForm.description = "";
+  transactionForm.categoryName = "";
   transactionForm.notes = "";
+}
+
+function defaultAccountEffect(kind: TransactionKind): AccountEffect {
+  return kind === "expense" ? "decrease" : "increase";
 }
 </script>
 
@@ -201,6 +245,7 @@ function resetForm() {
       <LedgerMovementsTable
         :movements="movements"
         :show-original-currency="showOriginalCurrency"
+        @edit-movement="openEditPanel"
       />
     </section>
   </BaseCard>
@@ -221,14 +266,14 @@ function resetForm() {
         <header class="movement-drawer__header">
           <div>
             <p class="eyebrow">Movimiento</p>
-            <h2 id="movement-drawer-title">Agregar movimiento</h2>
+            <h2 id="movement-drawer-title">{{ drawerTitle }}</h2>
           </div>
           <button type="button" @click="closePanel">Cerrar</button>
         </header>
 
         <form class="movement-form" @submit.prevent="submitTransaction">
-          <BaseAlert v-if="props.createError" tone="danger">
-            {{ props.createError }}
+          <BaseAlert v-if="saveError" tone="danger">
+            {{ saveError }}
           </BaseAlert>
 
           <BaseField input-id="movement-kind" label="Tipo">
@@ -286,14 +331,19 @@ function resetForm() {
             />
           </BaseField>
 
-          <BaseField input-id="movement-effect" label="Efecto en cuenta">
+          <BaseField input-id="movement-category" label="Categoría">
             <BaseSelect
-              id="movement-effect"
-              v-model="transactionForm.accountEffect"
-              required
+              id="movement-category"
+              v-model="transactionForm.categoryName"
             >
-              <option value="increase">Aumenta saldo</option>
-              <option value="decrease">Disminuye saldo</option>
+              <option value="">Sin categoría</option>
+              <option
+                v-for="categoryName in categoryOptions"
+                :key="categoryName"
+                :value="categoryName"
+              >
+                {{ categoryName }}
+              </option>
             </BaseSelect>
           </BaseField>
 
@@ -318,8 +368,8 @@ function resetForm() {
             <BaseButton type="button" variant="secondary" @click="closePanel">
               Cancelar
             </BaseButton>
-            <BaseButton :loading="props.isCreating" type="submit">
-              Crear movimiento
+            <BaseButton :loading="isSaving" type="submit">
+              {{ submitLabel }}
             </BaseButton>
           </div>
         </form>

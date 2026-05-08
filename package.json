@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "concurrently -n api,web,his \"dotnet run --project backend/src/Lukas.Api\" \"pnpm --dir frontend/app dev\" \"pnpm --dir frontend/app histoire:dev\"",
     "dev:web": "pnpm --dir frontend/app dev",
-    "historie:dev": "pnpm --dir frontend/app histoire:dev",
+    "dev:api": "dotnet run --project backend/src/Lukas.Api",
     "dev:desktop": "concurrently -n api,desktop \"dotnet run --project backend/src/Lukas.Api\" \"pnpm --dir apps/desktop tauri dev\"",
+    "story:dev": "pnpm --dir frontend/app histoire:dev",
     "check": "dotnet build backend/Lukas.slnx -m:1 && pnpm --dir frontend/app lint && pnpm --dir frontend/app typecheck",
     "test": "dotnet test backend/Lukas.slnx -m:1 && pnpm --dir frontend/app test",
     "test:e2e": "pnpm --dir tests/e2e test",
