@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { FilterOperator, FilterMatchMode } from "@primevue/core/api";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
+import InputText from "primevue/inputtext";
 import MultiSelect from "primevue/multiselect";
 import Select from "primevue/select";
+import type { DataTableFilterMeta } from "primevue/datatable";
 
 import { formatDate, formatMoney } from "@/formatters";
 import {
@@ -46,6 +49,12 @@ const props = withDefaults(
 const selectedAccountNames = ref<string[]>([]);
 const selectedGroupBy = ref<GroupField>(props.groupBy);
 const rowsPerPage = ref(20);
+const filters = ref<DataTableFilterMeta>({
+  notes: {
+    operator: FilterOperator.AND,
+    constraints: [{ value: "", matchMode: FilterMatchMode.CONTAINS }],
+  },
+});
 
 const groupOptions: GroupOption[] = [
   { label: "Sin agrupar", value: "none" },
@@ -139,6 +148,7 @@ function groupHeading(data: DisplayMovement): string {
 
 <template>
   <DataTable
+    v-model:filters="filters"
     class="ledger-movements-table"
     column-resize-mode="fit"
     data-key="id"
@@ -147,6 +157,7 @@ function groupHeading(data: DisplayMovement): string {
     removable-sort
     reorderable-columns
     resizable-columns
+    filter-display="menu"
     :row-group-mode="activeGroupBy ? 'subheader' : undefined"
     :rows="rowsPerPage"
     :rows-per-page-options="rowsPerPageOptions"
@@ -218,9 +229,26 @@ function groupHeading(data: DisplayMovement): string {
       style="min-width: 16rem"
     />
 
-    <Column field="notes" header="Notas" style="min-width: 14rem">
+    <Column
+      field="notes"
+      header="Notas"
+      style="min-width: 14rem"
+      filter-field="notes"
+      :filter-match-mode="FilterMatchMode.CONTAINS"
+      :show-add-button="false"
+      :show-filter-match-modes="false"
+      :show-filter-operator="false"
+    >
       <template #body="{ data }">
         <span class="notes">{{ data.notes || "Sin notas" }}</span>
+      </template>
+      <template #filter="{ filterModel }">
+        <InputText
+          v-model="filterModel.value"
+          class="notes-filter"
+          placeholder="Buscar notas"
+          type="text"
+        />
       </template>
     </Column>
 
@@ -325,6 +353,10 @@ function groupHeading(data: DisplayMovement): string {
 .notes {
   color: var(--color-muted-foreground);
   overflow-wrap: anywhere;
+}
+
+.notes-filter {
+  inline-size: 100%;
 }
 
 .numeric[data-direction="in"] {
