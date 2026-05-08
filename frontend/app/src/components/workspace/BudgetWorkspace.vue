@@ -47,6 +47,11 @@ type EnvelopeDropInstruction = {
   edge: "before" | "after";
 };
 
+type SubcategoryDropInstruction = {
+  targetSubcategoryId: string;
+  edge: "before" | "after";
+};
+
 type DragElement = HTMLElement & {
   budgetDraggableCleanup?: () => void;
   budgetDraggableKey?: string;
@@ -161,6 +166,20 @@ const vDraggableEnvelope = {
   },
 };
 
+const vDraggableSubcategory = {
+  mounted(element: DragElement, binding: { value: string }) {
+    registerDraggableSubcategory(element, binding.value);
+  },
+  updated(element: DragElement, binding: { value: string }) {
+    if (element.budgetDraggableKey !== binding.value) {
+      registerDraggableSubcategory(element, binding.value);
+    }
+  },
+  unmounted(element: DragElement) {
+    cleanupDraggableRegistration(element);
+  },
+};
+
 const vSubcategoryDropTarget = {
   mounted(element: DragElement, binding: { value: string }) {
     registerSubcategoryDropTarget(element, binding.value);
@@ -182,6 +201,20 @@ const vEnvelopeDropTarget = {
   updated(element: DragElement, binding: { value: string }) {
     if (element.budgetDropTargetKey !== binding.value) {
       registerEnvelopeDropTarget(element, binding.value);
+    }
+  },
+  unmounted(element: DragElement) {
+    cleanupDropTargetRegistration(element);
+  },
+};
+
+const vCategoryDropTarget = {
+  mounted(element: DragElement, binding: { value: string }) {
+    registerCategoryDropTarget(element, binding.value);
+  },
+  updated(element: DragElement, binding: { value: string }) {
+    if (element.budgetDropTargetKey !== binding.value) {
+      registerCategoryDropTarget(element, binding.value);
     }
   },
   unmounted(element: DragElement) {
@@ -217,6 +250,29 @@ function registerDraggableEnvelope(element: DragElement, envelopeId: string) {
       return {
         type: "budget-envelope",
         envelopeId,
+      };
+    },
+    onDragStart() {
+      element.dataset.dragging = "true";
+    },
+    onDrop() {
+      delete element.dataset.dragging;
+    },
+  });
+}
+
+function registerDraggableSubcategory(
+  element: DragElement,
+  subcategoryId: string,
+) {
+  cleanupDraggableRegistration(element);
+  element.budgetDraggableKey = subcategoryId;
+  element.budgetDraggableCleanup = draggable({
+    element,
+    getInitialData() {
+      return {
+        type: "budget-subcategory",
+        subcategoryId,
       };
     },
     onDragStart() {
@@ -278,12 +334,60 @@ function registerSubcategoryDropTarget(
   element.budgetDropTargetCleanup = dropTargetForElements({
     element,
     canDrop({ source }) {
-      return source.data.type === "budget-envelope";
+      return (
+        source.data.type === "budget-envelope" ||
+        (source.data.type === "budget-subcategory" &&
+          source.data.subcategoryId !== subcategoryId)
+      );
     },
-    getData() {
+    getData({ input }) {
       return {
         type: "budget-subcategory",
         subcategoryId,
+        targetSubcategoryId: subcategoryId,
+        edge: dropEdge(element, input.clientY),
+      };
+    },
+    onDrag({ source, self }) {
+      updateSubcategoryDropState(element, source.data.type, self.data.edge);
+    },
+    onDragEnter({ source, self }) {
+      updateSubcategoryDropState(element, source.data.type, self.data.edge);
+    },
+    onDragLeave() {
+      clearDropState(element);
+    },
+    onDrop({ source, self }) {
+      clearDropState(element);
+      if (typeof source.data.envelopeId === "string") {
+        moveEnvelope(source.data.envelopeId, subcategoryId);
+        return;
+      }
+
+      if (typeof source.data.subcategoryId !== "string") {
+        return;
+      }
+
+      const instruction = parseSubcategoryDropInstruction(self.data);
+      if (instruction) {
+        moveSubcategoryNear(source.data.subcategoryId, instruction);
+      }
+    },
+  });
+}
+
+function registerCategoryDropTarget(element: DragElement, categoryId: string) {
+  cleanupDropTargetRegistration(element);
+  element.budgetDropTargetKey = categoryId;
+  element.budgetDropTargetCleanup = dropTargetForElements({
+    element,
+    canDrop({ source }) {
+      return source.data.type === "budget-subcategory";
+    },
+    getData() {
+      return {
+        type: "budget-category",
+        categoryId,
       };
     },
     onDragEnter() {
@@ -294,11 +398,31 @@ function registerSubcategoryDropTarget(
     },
     onDrop({ source }) {
       delete element.dataset.dragOver;
-      if (typeof source.data.envelopeId === "string") {
-        moveEnvelope(source.data.envelopeId, subcategoryId);
+      if (typeof source.data.subcategoryId === "string") {
+        moveSubcategory(source.data.subcategoryId, categoryId);
       }
     },
   });
+}
+
+function updateSubcategoryDropState(
+  element: HTMLElement,
+  sourceType: unknown,
+  edge: unknown,
+) {
+  if (sourceType === "budget-envelope") {
+    delete element.dataset.dragEdge;
+    element.dataset.dragOver = "true";
+    return;
+  }
+
+  delete element.dataset.dragOver;
+  element.dataset.dragEdge = edge === "before" ? "before" : "after";
+}
+
+function clearDropState(element: HTMLElement) {
+  delete element.dataset.dragOver;
+  delete element.dataset.dragEdge;
 }
 
 function cleanupDraggableRegistration(element: DragElement) {
@@ -366,6 +490,64 @@ function moveEnvelopeNear(
   expandEnvelopeParent(targetEnvelope.subcategoryId);
 }
 
+function moveSubcategory(subcategoryId: string, targetCategoryId: string) {
+  const draggedSubcategory = subcategories.value.find(
+    (subcategory) => subcategory.id === subcategoryId,
+  );
+  const targetCategory = categories.value.find(
+    (category) => category.id === targetCategoryId,
+  );
+
+  if (!draggedSubcategory || !targetCategory) {
+    return;
+  }
+
+  const withoutDraggedSubcategory = subcategories.value.filter(
+    (subcategory) => subcategory.id !== subcategoryId,
+  );
+  subcategories.value = [
+    ...withoutDraggedSubcategory,
+    { ...draggedSubcategory, categoryId: targetCategory.id },
+  ];
+  expandSubcategoryParent(targetCategory.id, draggedSubcategory.id);
+}
+
+function moveSubcategoryNear(
+  subcategoryId: string,
+  instruction: SubcategoryDropInstruction,
+) {
+  const draggedSubcategory = subcategories.value.find(
+    (subcategory) => subcategory.id === subcategoryId,
+  );
+  const targetSubcategory = subcategories.value.find(
+    (subcategory) => subcategory.id === instruction.targetSubcategoryId,
+  );
+
+  if (!draggedSubcategory || !targetSubcategory) {
+    return;
+  }
+
+  const withoutDraggedSubcategory = subcategories.value.filter(
+    (subcategory) => subcategory.id !== subcategoryId,
+  );
+  const targetIndex = withoutDraggedSubcategory.findIndex(
+    (subcategory) => subcategory.id === instruction.targetSubcategoryId,
+  );
+
+  if (targetIndex < 0) {
+    return;
+  }
+
+  const insertionIndex =
+    instruction.edge === "before" ? targetIndex : targetIndex + 1;
+  subcategories.value = [
+    ...withoutDraggedSubcategory.slice(0, insertionIndex),
+    { ...draggedSubcategory, categoryId: targetSubcategory.categoryId },
+    ...withoutDraggedSubcategory.slice(insertionIndex),
+  ];
+  expandSubcategoryParent(targetSubcategory.categoryId, draggedSubcategory.id);
+}
+
 function expandEnvelopeParent(subcategoryId: string) {
   const subcategory = subcategories.value.find(
     (candidate) => candidate.id === subcategoryId,
@@ -382,6 +564,14 @@ function expandEnvelopeParent(subcategoryId: string) {
   };
 }
 
+function expandSubcategoryParent(categoryId: string, subcategoryId: string) {
+  expandedKeys.value = {
+    ...expandedKeys.value,
+    [categoryId]: true,
+    [subcategoryId]: true,
+  };
+}
+
 function parseEnvelopeDropInstruction(
   data: Record<string | symbol, unknown>,
 ): EnvelopeDropInstruction | undefined {
@@ -394,6 +584,22 @@ function parseEnvelopeDropInstruction(
 
   return {
     targetEnvelopeId: data.targetEnvelopeId,
+    edge: data.edge,
+  };
+}
+
+function parseSubcategoryDropInstruction(
+  data: Record<string | symbol, unknown>,
+): SubcategoryDropInstruction | undefined {
+  if (
+    typeof data.targetSubcategoryId !== "string" ||
+    (data.edge !== "before" && data.edge !== "after")
+  ) {
+    return undefined;
+  }
+
+  return {
+    targetSubcategoryId: data.targetSubcategoryId,
     edge: data.edge,
   };
 }
@@ -474,14 +680,23 @@ function formatDecimal(amount: number): string {
             </span>
             <span
               v-else-if="node.data.nodeType === 'subcategory'"
+              v-draggable-subcategory="node.key"
               v-subcategory-drop-target="node.key"
               class="group-label drop-target"
               data-level="subcategory"
               :data-subcategory-id="node.key"
+              draggable="true"
             >
-              {{ node.data.name }}
+              <span class="drag-handle" aria-hidden="true">::</span>
+              <strong>{{ node.data.name }}</strong>
             </span>
-            <span v-else class="group-label" data-level="category">
+            <span
+              v-else
+              v-category-drop-target="node.key"
+              class="group-label drop-target"
+              data-level="category"
+              :data-category-id="node.key"
+            >
               {{ node.data.name }}
             </span>
           </template>
@@ -567,11 +782,20 @@ function formatDecimal(amount: number): string {
   box-shadow: inset 0 0 0 1px var(--color-border-strong);
 }
 
+.drop-target[data-drag-edge="before"] {
+  box-shadow: inset 0 2px 0 var(--color-primary);
+}
+
+.drop-target[data-drag-edge="after"] {
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+}
+
 .envelope-label {
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-2);
 }
 
+.group-label[data-dragging="true"],
 .envelope-label[data-dragging="true"] {
   opacity: 0.55;
 }
