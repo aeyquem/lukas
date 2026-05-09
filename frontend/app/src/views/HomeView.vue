@@ -74,7 +74,10 @@ function selectSection(section: WorkspaceSection) {
           :update-transaction="updateTransaction"
         />
         <BudgetWorkspace v-else-if="activeSection === 'budget'" />
-        <GoalsWorkspace v-else-if="activeSection === 'goals'" />
+        <GoalsWorkspace
+          v-else-if="activeSection === 'goals'"
+          @open-budget="selectSection('budget')"
+        />
         <ReportsWorkspace v-else-if="activeSection === 'reports'" />
         <ProjectionsWorkspace v-else />
       </main>

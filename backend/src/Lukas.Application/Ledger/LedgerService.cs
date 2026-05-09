@@ -226,12 +226,29 @@ public sealed class LedgerService(ILedgerRepository repository)
             return new LedgerError("money.invalid_amount", "Envelope assigned amounts must be decimal numbers.");
         }
 
+        if (command.Goals.Any(goal => !TryParseAmount(goal.TargetAmount, out var targetAmount) || targetAmount <= 0))
+        {
+            return new LedgerError("money.invalid_amount", "Goal target amounts must be greater than zero.");
+        }
+
+        if (command.Goals.Any(goal => !IsGoalDeadline(goal.DeadlineDate)))
+        {
+            return new LedgerError("goal.invalid_deadline", "Goal deadlines must be blank or use YYYY-MM-DD.");
+        }
+
+        if (command.Goals.Any(goal => !IsGoalStatus(goal.Status)))
+        {
+            return new LedgerError("goal.invalid_status", "Goal status is invalid.");
+        }
+
         var categoryIds = command.Categories.Select(category => category.Id).ToHashSet();
         var subcategoryIds = command.Subcategories.Select(subcategory => subcategory.Id).ToHashSet();
+        var envelopeIds = command.Envelopes.Select(envelope => envelope.Id).ToHashSet();
 
         if (categoryIds.Count != command.Categories.Count
             || subcategoryIds.Count != command.Subcategories.Count
-            || command.Envelopes.Select(envelope => envelope.Id).ToHashSet().Count != command.Envelopes.Count)
+            || envelopeIds.Count != command.Envelopes.Count
+            || command.Goals.Select(goal => goal.Id).ToHashSet().Count != command.Goals.Count)
         {
             return new LedgerError("budget.duplicate_id", "Budget node ids must be unique.");
         }
@@ -240,6 +257,16 @@ public sealed class LedgerService(ILedgerRepository repository)
             || command.Envelopes.Any(envelope => !subcategoryIds.Contains(envelope.SubcategoryId)))
         {
             return new LedgerError("budget.invalid_parent", "Budget nodes must reference an existing parent.");
+        }
+
+        if (command.Goals.Any(goal => !envelopeIds.Contains(goal.EnvelopeId)))
+        {
+            return new LedgerError("goal.invalid_envelope", "Goals must reference an existing envelope.");
+        }
+
+        if (command.Goals.Select(goal => goal.EnvelopeId).ToHashSet().Count != command.Goals.Count)
+        {
+            return new LedgerError("goal.duplicate_envelope", "Only one goal can be linked to an envelope.");
         }
 
         return null;
@@ -253,6 +280,16 @@ public sealed class LedgerService(ILedgerRepository repository)
     private static bool IsAccountEffect(string value)
     {
         return value is "increase" or "decrease";
+    }
+
+    private static bool IsGoalDeadline(string value)
+    {
+        return value == string.Empty || DateOnly.TryParseExact(value, "yyyy-MM-dd", out _);
+    }
+
+    private static bool IsGoalStatus(string value)
+    {
+        return value is "active" or "completed" or "archived";
     }
 
     private static bool TryParseAmount(string value, out decimal amount)

@@ -175,6 +175,48 @@ public sealed class EfLedgerRepositoryTests
     }
 
     [Fact]
+    public async Task IncomeWithoutEnvelopeUsesSystemIncomeEnvelope()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("income", account.Id, null, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, null, null),
+            TestContext.Current.CancellationToken);
+
+        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
+
+        movements.Single().EnvelopeId.ShouldBe(envelope.Id);
+        movements.Single().EnvelopeName.ShouldBe("Ingresos");
+    }
+
+    [Fact]
+    public async Task IncomeEnvelopeCannotBeRemovedByBudgetSave()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var incomeEnvelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
+        var withoutIncomeEnvelope = new SaveBudgetTreeCommand(
+            tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
+            tree.Subcategories.Select(subcategory => new SaveBudgetSubcategoryCommand(subcategory.Id, subcategory.CategoryId, subcategory.Name, subcategory.SortOrder)).ToList(),
+            tree.Envelopes
+                .Where(candidate => candidate.Id != incomeEnvelope.Id)
+                .Select(candidate => new SaveBudgetEnvelopeCommand(candidate.Id, candidate.SubcategoryId, candidate.Name, candidate.AssignedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), candidate.SortOrder))
+                .ToList(),
+            tree.Goals.Select(goal => new SaveBudgetGoalCommand(goal.Id, goal.EnvelopeId, goal.TargetAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), goal.DeadlineDate, goal.Status)).ToList());
+
+        var savedTree = await repository.SaveBudgetTreeAsync(withoutIncomeEnvelope, TestContext.Current.CancellationToken);
+
+        savedTree.Envelopes.ShouldContain(envelope => envelope.Id == incomeEnvelope.Id);
+    }
+
+    [Fact]
     public async Task DeletedBudgetEnvelopeMovesToTrashAndKeepsMovementsCategorized()
     {
         await using var database = await CreateDatabaseAsync();
@@ -195,7 +237,8 @@ public sealed class EfLedgerRepositoryTests
             tree.Envelopes
                 .Where(candidate => candidate.Id != envelope.Id)
                 .Select(candidate => new SaveBudgetEnvelopeCommand(candidate.Id, candidate.SubcategoryId, candidate.Name, candidate.AssignedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), candidate.SortOrder))
-                .ToList());
+                .ToList(),
+            tree.Goals.Select(goal => new SaveBudgetGoalCommand(goal.Id, goal.EnvelopeId, goal.TargetAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), goal.DeadlineDate, goal.Status)).ToList());
 
         var savedTree = await repository.SaveBudgetTreeAsync(withoutEnvelope, TestContext.Current.CancellationToken);
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -205,6 +248,34 @@ public sealed class EfLedgerRepositoryTests
         trashedEnvelope.SubcategoryId.ShouldBe(trashSubcategory.Id);
         movements.Single().EnvelopeId.ShouldBe(envelope.Id);
         movements.Single().EnvelopeName.ShouldBe("Arriendo");
+    }
+
+    [Fact]
+    public async Task BudgetTreePersistsGoalMetadataLinkedToEnvelope()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var goalsSubcategory = tree.Subcategories.Single(candidate => candidate.Name == "Reservas y metas");
+        var envelopeId = Guid.CreateVersion7();
+        var goalId = Guid.CreateVersion7();
+        var command = new SaveBudgetTreeCommand(
+            tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
+            tree.Subcategories.Select(subcategory => new SaveBudgetSubcategoryCommand(subcategory.Id, subcategory.CategoryId, subcategory.Name, subcategory.SortOrder)).ToList(),
+            tree.Envelopes.Select(envelope => new SaveBudgetEnvelopeCommand(envelope.Id, envelope.SubcategoryId, envelope.Name, envelope.AssignedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), envelope.SortOrder))
+                .Append(new SaveBudgetEnvelopeCommand(envelopeId, goalsSubcategory.Id, "Fondo emergencia", "100000", 1))
+                .ToList(),
+            [new SaveBudgetGoalCommand(goalId, envelopeId, "600000", "2026-12-31", "active")]);
+
+        var savedTree = await repository.SaveBudgetTreeAsync(command, TestContext.Current.CancellationToken);
+        var savedGoal = savedTree.Goals.Single();
+
+        savedTree.Envelopes.ShouldContain(envelope => envelope.Id == envelopeId && envelope.AssignedAmount == 100000m);
+        savedGoal.Id.ShouldBe(goalId);
+        savedGoal.EnvelopeId.ShouldBe(envelopeId);
+        savedGoal.TargetAmount.ShouldBe(600000m);
+        savedGoal.DeadlineDate.ShouldBe("2026-12-31");
+        savedGoal.Status.ShouldBe("active");
     }
 
     private static async Task<TestDatabase> CreateDatabaseAsync()

@@ -5,7 +5,8 @@ namespace Lukas.Contracts.Budget;
 public sealed record BudgetTreeDto(
     IReadOnlyList<BudgetCategoryDto> Categories,
     IReadOnlyList<BudgetSubcategoryDto> Subcategories,
-    IReadOnlyList<BudgetEnvelopeDto> Envelopes);
+    IReadOnlyList<BudgetEnvelopeDto> Envelopes,
+    IReadOnlyList<BudgetGoalDto> Goals);
 
 public sealed record BudgetCategoryDto(
     Guid Id,
@@ -25,10 +26,18 @@ public sealed record BudgetEnvelopeDto(
     string AssignedAmount,
     int SortOrder);
 
+public sealed record BudgetGoalDto(
+    Guid Id,
+    Guid EnvelopeId,
+    string TargetAmount,
+    string DeadlineDate,
+    string Status);
+
 public sealed record SaveBudgetTreeRequest(
     [Required] IReadOnlyList<SaveBudgetCategoryRequest> Categories,
     [Required] IReadOnlyList<SaveBudgetSubcategoryRequest> Subcategories,
-    [Required] IReadOnlyList<SaveBudgetEnvelopeRequest> Envelopes);
+    [Required] IReadOnlyList<SaveBudgetEnvelopeRequest> Envelopes,
+    [Required] IReadOnlyList<SaveBudgetGoalRequest> Goals);
 
 public sealed record SaveBudgetCategoryRequest(
     Guid Id,
@@ -47,3 +56,10 @@ public sealed record SaveBudgetEnvelopeRequest(
     [Required, MinLength(1), MaxLength(120)] string Name,
     [Required, RegularExpression(@"^\d+(\.\d+)?$")] string AssignedAmount,
     int SortOrder);
+
+public sealed record SaveBudgetGoalRequest(
+    Guid Id,
+    Guid EnvelopeId,
+    [Required, RegularExpression(@"^\d+(\.\d+)?$")] string TargetAmount,
+    [Required, RegularExpression(@"^$|^\d{4}-\d{2}-\d{2}$")] string DeadlineDate,
+    [Required, RegularExpression(@"^(active|completed|archived)$")] string Status);

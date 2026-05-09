@@ -86,7 +86,8 @@ public sealed record MonthlyCashflowReadModel(
 public sealed record BudgetTreeReadModel(
     IReadOnlyList<BudgetCategoryReadModel> Categories,
     IReadOnlyList<BudgetSubcategoryReadModel> Subcategories,
-    IReadOnlyList<BudgetEnvelopeReadModel> Envelopes);
+    IReadOnlyList<BudgetEnvelopeReadModel> Envelopes,
+    IReadOnlyList<BudgetGoalReadModel> Goals);
 
 public sealed record BudgetCategoryReadModel(
     Guid Id,
@@ -106,10 +107,18 @@ public sealed record BudgetEnvelopeReadModel(
     decimal AssignedAmount,
     int SortOrder);
 
+public sealed record BudgetGoalReadModel(
+    Guid Id,
+    Guid EnvelopeId,
+    decimal TargetAmount,
+    string DeadlineDate,
+    string Status);
+
 public sealed record SaveBudgetTreeCommand(
     IReadOnlyList<SaveBudgetCategoryCommand> Categories,
     IReadOnlyList<SaveBudgetSubcategoryCommand> Subcategories,
-    IReadOnlyList<SaveBudgetEnvelopeCommand> Envelopes);
+    IReadOnlyList<SaveBudgetEnvelopeCommand> Envelopes,
+    IReadOnlyList<SaveBudgetGoalCommand> Goals);
 
 public sealed record SaveBudgetCategoryCommand(
     Guid Id,
@@ -128,3 +137,10 @@ public sealed record SaveBudgetEnvelopeCommand(
     string Name,
     string AssignedAmount,
     int SortOrder);
+
+public sealed record SaveBudgetGoalCommand(
+    Guid Id,
+    Guid EnvelopeId,
+    string TargetAmount,
+    string DeadlineDate,
+    string Status);

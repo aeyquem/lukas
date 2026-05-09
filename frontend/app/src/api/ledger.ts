@@ -99,6 +99,7 @@ export interface BudgetTreeDto {
   categories: BudgetCategoryDto[];
   subcategories: BudgetSubcategoryDto[];
   envelopes: BudgetEnvelopeDto[];
+  goals: BudgetGoalDto[];
 }
 
 export interface BudgetCategoryDto {
@@ -120,6 +121,16 @@ export interface BudgetEnvelopeDto {
   name: string;
   assignedAmount: string;
   sortOrder: number;
+}
+
+export type BudgetGoalStatus = "active" | "completed" | "archived";
+
+export interface BudgetGoalDto {
+  id: string;
+  envelopeId: string;
+  targetAmount: string;
+  deadlineDate: string;
+  status: BudgetGoalStatus;
 }
 
 export async function getAccounts(): Promise<AccountDto[]> {

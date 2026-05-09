@@ -16,6 +16,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     private static readonly Guid UncategorizedSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000202");
     private static readonly Guid TrashCategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000103");
     private static readonly Guid TrashSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000203");
+    private static readonly Guid IncomeCategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000104");
+    private static readonly Guid IncomeSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000204");
+    private static readonly Guid IncomeEnvelopeId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000304");
+    private static readonly Guid GoalsCategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000105");
+    private static readonly Guid GoalsSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000205");
 
     public async Task<AccountReadModel> CreateAccountAsync(
         CreateAccountCommand command,
@@ -83,6 +88,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         var account = await dbContext.Accounts
             .SingleOrDefaultAsync(
                 candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == command.AccountId,
@@ -105,7 +111,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             command.Kind,
             command.Currency,
             cancellationToken).ConfigureAwait(false);
-        var envelopeId = TransferEnvelopeId(command.Kind, command.EnvelopeId);
+        var envelopeId = SystemEnvelopeId(command.Kind, command.EnvelopeId);
         var envelopeName = await GetEnvelopeNameAsync(workspace.Id, envelopeId, cancellationToken).ConfigureAwait(false);
         var categoryName = TransferCategoryName(command.Kind, envelopeName, command.CategoryName);
         _ = TryParseAmount(command.Amount, out var amount);
@@ -133,6 +139,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         var transaction = await dbContext.LedgerTransactions
             .Include(candidate => candidate.Entries)
             .SingleOrDefaultAsync(
@@ -161,7 +168,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             throw new LedgerRuleException("transaction.currency_mismatch", "Transaction currency must match the account currency.");
         }
 
-        var envelopeId = TransferEnvelopeId(command.Kind, command.EnvelopeId);
+        var envelopeId = SystemEnvelopeId(command.Kind, command.EnvelopeId);
         var envelopeName = await GetEnvelopeNameAsync(workspace.Id, envelopeId, cancellationToken).ConfigureAwait(false);
         var categoryName = TransferCategoryName(command.Kind, envelopeName, command.CategoryName);
         _ = TryParseAmount(command.Amount, out var amount);
@@ -254,7 +261,9 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
         await EnsureBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         return await ReadBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
     }
@@ -264,7 +273,9 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await ReplaceBudgetTreeAsync(workspace.Id, command, cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
@@ -485,6 +496,100 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task EnsureGoalsBudgetNodesAsync(Guid workspaceId, CancellationToken cancellationToken)
+    {
+        var category = await dbContext.BudgetCategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == GoalsCategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (category is null)
+        {
+            dbContext.BudgetCategories.Add(new BudgetCategoryEntity
+            {
+                Id = GoalsCategoryId,
+                WorkspaceId = workspaceId,
+                Name = "Metas",
+                SortOrder = 2,
+            });
+        }
+
+        var subcategory = await dbContext.BudgetSubcategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == GoalsSubcategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (subcategory is null)
+        {
+            dbContext.BudgetSubcategories.Add(new BudgetSubcategoryEntity
+            {
+                Id = GoalsSubcategoryId,
+                WorkspaceId = workspaceId,
+                CategoryId = GoalsCategoryId,
+                Name = "Reservas y metas",
+                SortOrder = 0,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureIncomeBudgetNodesAsync(Guid workspaceId, CancellationToken cancellationToken)
+    {
+        var category = await dbContext.BudgetCategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == IncomeCategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (category is null)
+        {
+            dbContext.BudgetCategories.Add(new BudgetCategoryEntity
+            {
+                Id = IncomeCategoryId,
+                WorkspaceId = workspaceId,
+                Name = "Ingresos",
+                SortOrder = 0,
+            });
+        }
+
+        var subcategory = await dbContext.BudgetSubcategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == IncomeSubcategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (subcategory is null)
+        {
+            dbContext.BudgetSubcategories.Add(new BudgetSubcategoryEntity
+            {
+                Id = IncomeSubcategoryId,
+                WorkspaceId = workspaceId,
+                CategoryId = IncomeCategoryId,
+                Name = "Ingresos recibidos",
+                SortOrder = 0,
+            });
+        }
+
+        var envelope = await dbContext.BudgetEnvelopes
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == IncomeEnvelopeId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (envelope is null)
+        {
+            dbContext.BudgetEnvelopes.Add(new BudgetEnvelopeEntity
+            {
+                Id = IncomeEnvelopeId,
+                WorkspaceId = workspaceId,
+                SubcategoryId = IncomeSubcategoryId,
+                Name = "Ingresos",
+                AssignedAmount = "0",
+                SortOrder = 0,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task AttachTransactionsToEnvelopeAsync(
         Guid workspaceId,
         string categoryName,
@@ -531,11 +636,19 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .ThenBy(envelope => envelope.Name)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+        var goals = await dbContext.BudgetGoals
+            .AsNoTracking()
+            .Where(goal => goal.WorkspaceId == workspaceId)
+            .OrderBy(goal => goal.Status)
+            .ThenBy(goal => goal.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         return new BudgetTreeReadModel(
             categories.Select(ToBudgetCategoryReadModel).ToList(),
             subcategories.Select(ToBudgetSubcategoryReadModel).ToList(),
-            envelopes.Select(ToBudgetEnvelopeReadModel).ToList());
+            envelopes.Select(ToBudgetEnvelopeReadModel).ToList(),
+            goals.Select(ToBudgetGoalReadModel).ToList());
     }
 
     private async Task ReplaceBudgetTreeAsync(
@@ -547,6 +660,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await UpsertBudgetCategoriesAsync(workspaceId, command.Categories, cancellationToken).ConfigureAwait(false);
         await UpsertBudgetSubcategoriesAsync(workspaceId, command.Subcategories, cancellationToken).ConfigureAwait(false);
         await UpsertBudgetEnvelopesAsync(workspaceId, command.Envelopes, cancellationToken).ConfigureAwait(false);
+        await UpsertBudgetGoalsAsync(workspaceId, command.Goals, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RemoveDeletedBudgetNodesAsync(
@@ -557,8 +671,13 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         var categoryIds = command.Categories.Select(category => category.Id).ToHashSet();
         var subcategoryIds = command.Subcategories.Select(subcategory => subcategory.Id).ToHashSet();
         var envelopeIds = command.Envelopes.Select(envelope => envelope.Id).ToHashSet();
+        categoryIds.Add(IncomeCategoryId);
         categoryIds.Add(TrashCategoryId);
+        categoryIds.Add(GoalsCategoryId);
+        subcategoryIds.Add(IncomeSubcategoryId);
         subcategoryIds.Add(TrashSubcategoryId);
+        subcategoryIds.Add(GoalsSubcategoryId);
+        envelopeIds.Add(IncomeEnvelopeId);
         var deletedSubcategoryIds = await dbContext.BudgetSubcategories
             .Where(subcategory => subcategory.WorkspaceId == workspaceId && !subcategoryIds.Contains(subcategory.Id))
             .Select(subcategory => subcategory.Id)
@@ -574,8 +693,23 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .ConfigureAwait(false);
 
         await MoveEnvelopesToTrashAsync(workspaceId, deletedEnvelopeIds, deletedSubcategoryIds, cancellationToken).ConfigureAwait(false);
+        await RemoveDeletedBudgetGoalsAsync(workspaceId, command.Goals, cancellationToken).ConfigureAwait(false);
         dbContext.BudgetSubcategories.RemoveRange(dbContext.BudgetSubcategories.Where(subcategory => subcategory.WorkspaceId == workspaceId && !subcategoryIds.Contains(subcategory.Id)));
         dbContext.BudgetCategories.RemoveRange(dbContext.BudgetCategories.Where(category => category.WorkspaceId == workspaceId && !categoryIds.Contains(category.Id)));
+    }
+
+    private async Task RemoveDeletedBudgetGoalsAsync(
+        Guid workspaceId,
+        IReadOnlyList<SaveBudgetGoalCommand> commands,
+        CancellationToken cancellationToken)
+    {
+        var goalIds = commands.Select(goal => goal.Id).ToHashSet();
+        var goals = await dbContext.BudgetGoals
+            .Where(goal => goal.WorkspaceId == workspaceId && !goalIds.Contains(goal.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        dbContext.BudgetGoals.RemoveRange(goals);
     }
 
     private async Task MoveEnvelopesToTrashAsync(
@@ -605,7 +739,12 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         foreach (var command in commands)
         {
-            if (command.Id == TrashCategoryId)
+            if (command.Id == IncomeCategoryId || command.Id == TrashCategoryId)
+            {
+                continue;
+            }
+
+            if (command.Id == GoalsCategoryId)
             {
                 continue;
             }
@@ -631,7 +770,12 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         foreach (var command in commands)
         {
-            if (command.Id == TrashSubcategoryId)
+            if (command.Id == IncomeSubcategoryId || command.Id == TrashSubcategoryId)
+            {
+                continue;
+            }
+
+            if (command.Id == GoalsSubcategoryId)
             {
                 continue;
             }
@@ -658,6 +802,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         foreach (var command in commands)
         {
+            if (command.Id == IncomeEnvelopeId)
+            {
+                continue;
+            }
+
             var envelope = await dbContext.BudgetEnvelopes
                 .SingleOrDefaultAsync(candidate => candidate.WorkspaceId == workspaceId && candidate.Id == command.Id, cancellationToken)
                 .ConfigureAwait(false);
@@ -672,6 +821,38 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             envelope.Name = command.Name.Trim();
             envelope.AssignedAmount = assignedAmount;
             envelope.SortOrder = command.SortOrder;
+        }
+    }
+
+    private async Task UpsertBudgetGoalsAsync(
+        Guid workspaceId,
+        IReadOnlyList<SaveBudgetGoalCommand> commands,
+        CancellationToken cancellationToken)
+    {
+        foreach (var command in commands)
+        {
+            var goal = await dbContext.BudgetGoals
+                .SingleOrDefaultAsync(candidate => candidate.WorkspaceId == workspaceId && candidate.Id == command.Id, cancellationToken)
+                .ConfigureAwait(false);
+            var targetAmount = FormatAmount(decimal.Parse(command.TargetAmount, CultureInfo.InvariantCulture));
+            if (goal is null)
+            {
+                dbContext.BudgetGoals.Add(new BudgetGoalEntity
+                {
+                    Id = command.Id,
+                    WorkspaceId = workspaceId,
+                    EnvelopeId = command.EnvelopeId,
+                    TargetAmount = targetAmount,
+                    DeadlineDate = command.DeadlineDate.Trim(),
+                    Status = command.Status,
+                });
+                continue;
+            }
+
+            goal.EnvelopeId = command.EnvelopeId;
+            goal.TargetAmount = targetAmount;
+            goal.DeadlineDate = command.DeadlineDate.Trim();
+            goal.Status = command.Status;
         }
     }
 
@@ -951,6 +1132,16 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             envelope.SortOrder);
     }
 
+    private static BudgetGoalReadModel ToBudgetGoalReadModel(BudgetGoalEntity goal)
+    {
+        return new BudgetGoalReadModel(
+            goal.Id,
+            goal.EnvelopeId,
+            decimal.Parse(goal.TargetAmount, CultureInfo.InvariantCulture),
+            goal.DeadlineDate,
+            goal.Status);
+    }
+
     private static decimal SumClpTransactions(
         IEnumerable<LedgerTransactionEntity> transactions,
         string kind,
@@ -973,9 +1164,19 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private static Guid? TransferEnvelopeId(string kind, Guid? envelopeId)
+    private static Guid? SystemEnvelopeId(string kind, Guid? envelopeId)
     {
-        return kind == "transfer" ? null : envelopeId;
+        if (kind == "transfer")
+        {
+            return null;
+        }
+
+        if (kind == "income" && envelopeId is null)
+        {
+            return IncomeEnvelopeId;
+        }
+
+        return envelopeId;
     }
 
     private static string? TransferCategoryName(

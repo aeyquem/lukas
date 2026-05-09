@@ -117,6 +117,22 @@ public sealed class LukasDbContextModelSnapshot : ModelSnapshot
             entity.HasIndex(envelope => new { envelope.WorkspaceId, envelope.Name });
         });
 
+        modelBuilder.Entity<BudgetGoalEntity>(entity =>
+        {
+            entity.ToTable("budget_goals");
+            entity.HasKey(goal => goal.Id);
+            entity.Property(goal => goal.Id).HasColumnName("id");
+            entity.Property(goal => goal.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(goal => goal.EnvelopeId).HasColumnName("envelope_id");
+            entity.Property(goal => goal.TargetAmount).HasColumnName("target_amount").HasMaxLength(80).IsRequired();
+            entity.Property(goal => goal.DeadlineDate).HasColumnName("deadline_date").HasMaxLength(10).IsRequired();
+            entity.Property(goal => goal.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+            entity.HasOne(goal => goal.Workspace).WithMany().HasForeignKey(goal => goal.WorkspaceId);
+            entity.HasOne(goal => goal.Envelope).WithMany().HasForeignKey(goal => goal.EnvelopeId);
+            entity.HasIndex(goal => new { goal.WorkspaceId, goal.EnvelopeId }).IsUnique();
+            entity.HasIndex(goal => new { goal.WorkspaceId, goal.Status });
+        });
+
         modelBuilder.Entity<SourceRecordEntity>(entity =>
         {
             entity.ToTable("source_records");

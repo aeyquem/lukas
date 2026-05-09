@@ -11,7 +11,11 @@ import {
   type TransactionKind,
   type UpdateManualTransactionRequest,
 } from "@/api/ledger";
-import { applyBudgetTree, useBudgetTree } from "@/budget/budgetTree";
+import {
+  INCOME_ENVELOPE_ID,
+  applyBudgetTree,
+  useBudgetTree,
+} from "@/budget/budgetTree";
 import BaseAlert from "@/components/base/BaseAlert.vue";
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseButton from "@/components/base/BaseButton.vue";
@@ -137,6 +141,20 @@ watch(
     if (!destination) {
       transactionForm.destinationAccountId =
         transferDestinationAccounts.value[0]?.id ?? "";
+    }
+  },
+);
+
+watch(
+  () => transactionForm.kind,
+  (kind) => {
+    if (kind === "income" && transactionForm.envelopeId === "") {
+      transactionForm.envelopeId = INCOME_ENVELOPE_ID;
+      return;
+    }
+
+    if (kind !== "income" && transactionForm.envelopeId === INCOME_ENVELOPE_ID) {
+      transactionForm.envelopeId = "";
     }
   },
 );

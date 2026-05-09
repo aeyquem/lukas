@@ -16,6 +16,9 @@ import type { TreeNode } from "primevue/treenode";
 
 import { getBudgetTree, getMovements, saveBudgetTree } from "@/api/ledger";
 import {
+  INCOME_CATEGORY_ID,
+  INCOME_ENVELOPE_ID,
+  INCOME_SUBCATEGORY_ID,
   TRASH_CATEGORY_ID,
   TRASH_SUBCATEGORY_ID,
   applyBudgetTree,
@@ -26,6 +29,7 @@ import {
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseButton from "@/components/base/BaseButton.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
+import BaseField from "@/components/base/BaseField.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import { formatMoney } from "@/formatters";
 
@@ -35,6 +39,7 @@ type BudgetNodeData = {
   name: string;
   nodeType: BudgetNodeType;
   assignedAmount: string;
+  goalStatus: "" | "active" | "completed" | "archived";
   spentAmount: string;
   remainingAmount: string;
 };
@@ -89,13 +94,21 @@ const isTreeEditing = ref(false);
 const nextCategoryNumber = ref(3);
 const nextSubcategoryNumber = ref(4);
 const nextEnvelopeNumber = ref(5);
-const { categories, subcategories, envelopes } = useBudgetTree();
+const selectedGoalId = ref("");
+const goalForm = ref({
+  targetAmount: "0",
+  deadlineDate: "",
+  status: "active" as "" | "active" | "completed" | "archived",
+});
+const { categories, subcategories, envelopes, goals } = useBudgetTree();
 const expandedKeys = ref<TreeTableExpandedKeys>({
   "cat-living": true,
   "cat-planning": true,
   "sub-home": true,
   "sub-food": true,
   "sub-reserve": true,
+  [INCOME_CATEGORY_ID]: true,
+  [INCOME_SUBCATEGORY_ID]: true,
   [TRASH_CATEGORY_ID]: true,
   [TRASH_SUBCATEGORY_ID]: true,
 });
@@ -156,14 +169,74 @@ const budgetEnvelopes = computed<BudgetEnvelope[]>(() =>
     spentAmount: spentByEnvelopeId.value[envelope.id] ?? "0",
   })),
 );
+const goalByEnvelopeId = computed(() =>
+  Object.fromEntries(goals.value.map((goal) => [goal.envelopeId, goal])),
+);
+const activeBudgetEnvelopes = computed(() =>
+  budgetEnvelopes.value.filter(
+    (envelope) => goalByEnvelopeId.value[envelope.id]?.status !== "archived",
+  ),
+);
+const assignableBudgetEnvelopes = computed(() =>
+  activeBudgetEnvelopes.value.filter(
+    (envelope) =>
+      envelope.id !== INCOME_ENVELOPE_ID &&
+      envelope.subcategoryId !== TRASH_SUBCATEGORY_ID,
+  ),
+);
+const receivedIncomeAmount = computed(() =>
+  movements.value
+    .filter((movement) => movement.kind === "income")
+    .reduce((sum, movement) => sum + parseAmount(movement.baseAmount), 0),
+);
+const assignedBudgetAmount = computed(() =>
+  assignableBudgetEnvelopes.value.reduce(
+    (sum, envelope) => sum + parseAmount(envelope.assignedAmount),
+    0,
+  ),
+);
+const incomeLeftToAssign = computed(() =>
+  formatDecimal(receivedIncomeAmount.value - assignedBudgetAmount.value),
+);
+const incomeLeftTone = computed(() =>
+  parseAmount(incomeLeftToAssign.value) >= 0 ? "positive" : "negative",
+);
+const visibleEnvelopeCount = computed(
+  () => activeBudgetEnvelopes.value.filter((envelope) => envelope.id !== INCOME_ENVELOPE_ID).length,
+);
+const selectedGoal = computed(() =>
+  goals.value.find((goal) => goal.id === selectedGoalId.value),
+);
+const selectedGoalEnvelope = computed(() =>
+  budgetEnvelopes.value.find(
+    (envelope) => envelope.id === selectedGoal.value?.envelopeId,
+  ),
+);
+const isGoalDrawerOpen = computed(() => selectedGoal.value !== undefined);
+const suggestedGoalContribution = computed(() => {
+  const goal = selectedGoal.value;
+  const envelope = selectedGoalEnvelope.value;
+
+  if (!goal || !envelope) {
+    return "0";
+  }
+
+  return formatDecimal(
+    suggestedContribution(
+      goal.targetAmount,
+      envelope.assignedAmount,
+      goal.deadlineDate,
+    ),
+  );
+});
 
 const nodes = computed<TreeNode[]>(() =>
-  categories.value.map((category) => {
+  categories.value.filter((category) => category.id !== INCOME_CATEGORY_ID).map((category) => {
     const categorySubcategories = subcategories.value.filter(
       (subcategory) => subcategory.categoryId === category.id,
     );
     const categoryChildren = categorySubcategories.map((subcategory) => {
-      const subcategoryEnvelopes = budgetEnvelopes.value.filter(
+      const subcategoryEnvelopes = activeBudgetEnvelopes.value.filter(
         (envelope) => envelope.subcategoryId === subcategory.id,
       );
 
@@ -180,6 +253,7 @@ const nodes = computed<TreeNode[]>(() =>
             name: envelope.name,
             nodeType: "envelope",
             assignedAmount: envelope.assignedAmount,
+            goalStatus: goalByEnvelopeId.value[envelope.id]?.status ?? "",
             spentAmount: envelope.spentAmount,
             remainingAmount: remainingAmount(envelope),
           } satisfies BudgetNodeData,
@@ -347,6 +421,7 @@ function deleteCategory(categoryId: string) {
       removedSubcategoryIds.includes(envelope.subcategoryId),
     )
     .map((envelope) => envelope.id);
+  const archivedEnvelopeIds = goalEnvelopeIds(removedEnvelopeIds);
   categories.value = categories.value.filter(
     (category) => category.id !== categoryId,
   );
@@ -354,8 +429,12 @@ function deleteCategory(categoryId: string) {
     (subcategory) => subcategory.categoryId !== categoryId,
   );
   envelopes.value = envelopes.value.filter(
-    (envelope) => !removedSubcategoryIds.includes(envelope.subcategoryId),
+    (envelope) =>
+      !removedSubcategoryIds.includes(envelope.subcategoryId) ||
+      archivedEnvelopeIds.includes(envelope.id),
   );
+  moveEnvelopesToTrash(archivedEnvelopeIds);
+  archiveGoalsForEnvelopeIds(archivedEnvelopeIds);
   clearRemovedNodeEditing([
     categoryId,
     ...removedSubcategoryIds,
@@ -372,12 +451,17 @@ function deleteSubcategory(subcategoryId: string) {
   const removedEnvelopeIds = envelopes.value
     .filter((envelope) => envelope.subcategoryId === subcategoryId)
     .map((envelope) => envelope.id);
+  const archivedEnvelopeIds = goalEnvelopeIds(removedEnvelopeIds);
   subcategories.value = subcategories.value.filter(
     (subcategory) => subcategory.id !== subcategoryId,
   );
   envelopes.value = envelopes.value.filter(
-    (envelope) => envelope.subcategoryId !== subcategoryId,
+    (envelope) =>
+      envelope.subcategoryId !== subcategoryId ||
+      archivedEnvelopeIds.includes(envelope.id),
   );
+  moveEnvelopesToTrash(archivedEnvelopeIds);
+  archiveGoalsForEnvelopeIds(archivedEnvelopeIds);
   clearRemovedNodeEditing([subcategoryId, ...removedEnvelopeIds]);
   void persistBudgetTree();
 }
@@ -387,11 +471,39 @@ function deleteEnvelope(envelopeId: string) {
     return;
   }
 
+  if (goalByEnvelopeId.value[envelopeId]) {
+    moveEnvelopesToTrash([envelopeId]);
+    archiveGoalsForEnvelopeIds([envelopeId]);
+    clearRemovedNodeEditing([envelopeId]);
+    void persistBudgetTree();
+    return;
+  }
+
   envelopes.value = envelopes.value.filter(
     (envelope) => envelope.id !== envelopeId,
   );
   clearRemovedNodeEditing([envelopeId]);
   void persistBudgetTree();
+}
+
+function moveEnvelopesToTrash(envelopeIds: string[]) {
+  envelopes.value = envelopes.value.map((envelope) =>
+    envelopeIds.includes(envelope.id)
+      ? { ...envelope, subcategoryId: TRASH_SUBCATEGORY_ID }
+      : envelope,
+  );
+}
+
+function archiveGoalsForEnvelopeIds(envelopeIds: string[]) {
+  goals.value = goals.value.map((goal) =>
+    envelopeIds.includes(goal.envelopeId)
+      ? { ...goal, status: "archived" }
+      : goal,
+  );
+}
+
+function goalEnvelopeIds(envelopeIds: string[]): string[] {
+  return envelopeIds.filter((envelopeId) => goalByEnvelopeId.value[envelopeId]);
 }
 
 function editNodeName(nodeId: string) {
@@ -414,6 +526,15 @@ function clearRemovedNodeEditing(nodeIds: string[]) {
 
 function isTrashNode(node: { key: string }): boolean {
   return node.key === TRASH_CATEGORY_ID || node.key === TRASH_SUBCATEGORY_ID;
+}
+
+function isProtectedNode(node: { key: string }): boolean {
+  return (
+    node.key === INCOME_CATEGORY_ID ||
+    node.key === INCOME_SUBCATEGORY_ID ||
+    node.key === INCOME_ENVELOPE_ID ||
+    isTrashNode(node)
+  );
 }
 
 function updateNodeName(
@@ -493,6 +614,7 @@ function buildNodeData(
     name,
     nodeType,
     assignedAmount,
+    goalStatus: "",
     spentAmount,
     remainingAmount: formatDecimal(
       parseAmount(assignedAmount) - parseAmount(spentAmount),
@@ -512,6 +634,7 @@ function buildParentNodeData(
     name,
     nodeType,
     assignedAmount,
+    goalStatus: "",
     spentAmount,
     remainingAmount: formatDecimal(
       parseAmount(assignedAmount) - parseAmount(spentAmount),
@@ -999,6 +1122,52 @@ function stopEditingAssignedAmount(envelopeId: string) {
   void persistBudgetTree();
 }
 
+function openGoalDetails(envelopeId: string) {
+  const goal = goals.value.find((candidate) => candidate.envelopeId === envelopeId);
+
+  if (!goal) {
+    return;
+  }
+
+  selectedGoalId.value = goal.id;
+  goalForm.value = {
+    targetAmount: goal.targetAmount,
+    deadlineDate: goal.deadlineDate,
+    status: goal.status,
+  };
+}
+
+function closeGoalDetails() {
+  selectedGoalId.value = "";
+}
+
+function saveGoalDetails() {
+  const goalId = selectedGoalId.value;
+
+  goals.value = goals.value.map((goal) =>
+    goal.id === goalId
+      ? {
+          ...goal,
+          targetAmount: normalizedAmount(goalForm.value.targetAmount),
+          deadlineDate: goalForm.value.deadlineDate,
+          status: goalForm.value.status || "active",
+        }
+      : goal,
+  );
+  closeGoalDetails();
+  void persistBudgetTree();
+}
+
+function completeGoal() {
+  goalForm.value = { ...goalForm.value, status: "completed" };
+  saveGoalDetails();
+}
+
+function archiveGoal() {
+  goalForm.value = { ...goalForm.value, status: "archived" };
+  saveGoalDetails();
+}
+
 function expandEnvelopeParent(subcategoryId: string) {
   const subcategory = subcategories.value.find(
     (candidate) => candidate.id === subcategoryId,
@@ -1171,6 +1340,38 @@ function parseAmount(amount: string): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function normalizedAmount(amount: string): string {
+  return formatDecimal(Math.max(0, parseAmount(amount)));
+}
+
+function suggestedContribution(
+  targetAmount: string,
+  assignedAmount: string,
+  deadlineDate: string,
+): number {
+  const remaining = Math.max(0, parseAmount(targetAmount) - parseAmount(assignedAmount));
+  const months = monthsUntilDeadline(deadlineDate);
+  return months <= 1 ? remaining : Math.ceil(remaining / months);
+}
+
+function monthsUntilDeadline(deadlineDate: string): number {
+  if (deadlineDate === "") {
+    return 1;
+  }
+
+  const deadline = new Date(`${deadlineDate}T00:00:00`);
+  if (Number.isNaN(deadline.getTime())) {
+    return 1;
+  }
+
+  const today = new Date();
+  const monthDelta =
+    (deadline.getFullYear() - today.getFullYear()) * 12 +
+    (deadline.getMonth() - today.getMonth()) +
+    1;
+  return Math.max(1, monthDelta);
+}
+
 function formatDecimal(amount: number): string {
   return amount.toFixed(0);
 }
@@ -1195,12 +1396,22 @@ function formatDecimal(amount: number): string {
           >
             {{ isTreeEditing ? "Terminar edición" : "Editar árbol" }}
           </BaseButton>
-          <BaseBadge>{{ envelopes.length }} sobres</BaseBadge>
+          <BaseBadge>{{ visibleEnvelopeCount }} sobres</BaseBadge>
         </div>
       </div>
     </template>
 
     <section aria-labelledby="budget-heading">
+      <div class="zero-budget-banner">
+        <div>
+          <p class="eyebrow">Presupuesto base cero</p>
+          <strong>Ingresos por asignar</strong>
+        </div>
+        <span class="zero-budget-banner__amount" :data-tone="incomeLeftTone">
+          {{ formatMoney(incomeLeftToAssign, currency) }}
+        </span>
+      </div>
+
       <TreeTable
         v-model:expanded-keys="expandedKeys"
         class="budget-tree-table"
@@ -1251,6 +1462,15 @@ function formatDecimal(amount: number): string {
                 :data-envelope-id="node.key"
               >
                 <strong>{{ node.data.name }}</strong>
+                <button
+                  v-if="node.data.goalStatus"
+                  class="goal-marker"
+                  type="button"
+                  :aria-label="`Abrir meta ${node.data.name}`"
+                  @click="openGoalDetails(node.key)"
+                >
+                  Meta
+                </button>
               </span>
               <span
                 v-else-if="node.data.nodeType === 'subcategory'"
@@ -1270,7 +1490,7 @@ function formatDecimal(amount: number): string {
               </span>
 
               <button
-                v-if="isTreeEditing && !isTrashNode(node)"
+                v-if="isTreeEditing && !isProtectedNode(node)"
                 class="rename-node-button"
                 type="button"
                 :aria-label="`Renombrar ${node.data.name}`"
@@ -1282,7 +1502,7 @@ function formatDecimal(amount: number): string {
                 v-if="
                   isTreeEditing &&
                   node.data.nodeType === 'category' &&
-                  !isTrashNode(node)
+                  !isProtectedNode(node)
                 "
                 class="add-child-button"
                 type="button"
@@ -1295,7 +1515,7 @@ function formatDecimal(amount: number): string {
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'subcategory' &&
-                  !isTrashNode(node)
+                  !isProtectedNode(node)
                 "
                 class="add-child-button"
                 type="button"
@@ -1308,7 +1528,7 @@ function formatDecimal(amount: number): string {
                 v-if="
                   isTreeEditing &&
                   node.data.nodeType === 'category' &&
-                  !isTrashNode(node)
+                  !isProtectedNode(node)
                 "
                 class="delete-node-button"
                 type="button"
@@ -1321,7 +1541,7 @@ function formatDecimal(amount: number): string {
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'subcategory' &&
-                  !isTrashNode(node)
+                  !isProtectedNode(node)
                 "
                 class="delete-node-button"
                 type="button"
@@ -1331,7 +1551,11 @@ function formatDecimal(amount: number): string {
                 Eliminar
               </button>
               <button
-                v-else-if="isTreeEditing && node.data.nodeType === 'envelope'"
+                v-else-if="
+                  isTreeEditing &&
+                  node.data.nodeType === 'envelope' &&
+                  !isProtectedNode(node)
+                "
                 class="delete-envelope-button"
                 type="button"
                 :aria-label="`Eliminar sobre ${node.data.name}`"
@@ -1410,6 +1634,81 @@ function formatDecimal(amount: number): string {
       </TreeTable>
     </section>
   </BaseCard>
+
+  <Teleport to="body">
+    <div
+      v-if="isGoalDrawerOpen"
+      class="goal-drawer-backdrop"
+      role="presentation"
+      @click.self="closeGoalDetails"
+    >
+      <aside
+        aria-labelledby="goal-drawer-title"
+        aria-modal="true"
+        class="goal-drawer"
+        role="dialog"
+      >
+        <header class="goal-drawer__header">
+          <div>
+            <p class="eyebrow">Meta</p>
+            <h2 id="goal-drawer-title">
+              {{ selectedGoalEnvelope?.name ?? "Meta" }}
+            </h2>
+          </div>
+          <button type="button" @click="closeGoalDetails">Cerrar</button>
+        </header>
+
+        <form class="goal-form" @submit.prevent="saveGoalDetails">
+          <dl class="goal-summary">
+            <div>
+              <dt>Asignado este periodo</dt>
+              <dd>
+                {{
+                  formatMoney(selectedGoalEnvelope?.assignedAmount ?? "0", currency)
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Sugerido mensual</dt>
+              <dd>{{ formatMoney(suggestedGoalContribution, currency) }}</dd>
+            </div>
+            <div>
+              <dt>Sobre vinculado</dt>
+              <dd>{{ selectedGoalEnvelope?.name ?? "Sin sobre" }}</dd>
+            </div>
+          </dl>
+
+          <BaseField input-id="goal-target" label="Monto objetivo">
+            <BaseTextInput
+              id="goal-target"
+              v-model="goalForm.targetAmount"
+              inputmode="decimal"
+              pattern="\d+(\.\d+)?"
+              required
+            />
+          </BaseField>
+
+          <BaseField input-id="goal-deadline" label="Fecha objetivo">
+            <BaseTextInput
+              id="goal-deadline"
+              v-model="goalForm.deadlineDate"
+              type="date"
+            />
+          </BaseField>
+
+          <div class="goal-form__actions">
+            <BaseButton type="button" variant="secondary" @click="completeGoal">
+              Completar
+            </BaseButton>
+            <BaseButton type="button" variant="danger" @click="archiveGoal">
+              Archivar
+            </BaseButton>
+            <BaseButton type="submit">Guardar</BaseButton>
+          </div>
+        </form>
+      </aside>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -1436,6 +1735,43 @@ function formatDecimal(amount: number): string {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.zero-budget-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-secondary);
+  margin-block-end: var(--space-4);
+  padding: var(--space-4);
+}
+
+.zero-budget-banner .eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--color-muted-foreground);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.zero-budget-banner strong {
+  color: var(--color-primary-strong);
+  font-size: var(--font-size-md);
+}
+
+.zero-budget-banner__amount {
+  color: var(--color-primary-strong);
+  font-size: 1.5rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.zero-budget-banner__amount[data-tone="negative"] {
+  color: var(--color-danger);
 }
 
 .node-name-cell {
@@ -1477,6 +1813,25 @@ function formatDecimal(amount: number): string {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.goal-marker {
+  min-block-size: 1.35rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-strong);
+  cursor: pointer;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.goal-marker:hover,
+.goal-marker:focus-visible {
+  border-color: var(--color-primary);
+  outline: 0;
 }
 
 .group-label {
@@ -1646,6 +2001,108 @@ function formatDecimal(amount: number): string {
   .node-name-cell {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+</style>
+
+<style>
+.goal-drawer-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(24 43 26 / 0.28);
+}
+
+.goal-drawer {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  inline-size: min(28rem, 100%);
+  block-size: 100dvh;
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--color-border);
+  background: var(--color-card);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-lg);
+}
+
+.goal-drawer__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.goal-drawer__header h2 {
+  margin: 0;
+  color: var(--color-primary-strong);
+  font-size: 1.2rem;
+}
+
+.goal-drawer__header button {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-primary-strong);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.goal-drawer .eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--color-muted-foreground);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.goal-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.goal-summary {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.goal-summary div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  padding-block-end: var(--space-2);
+}
+
+.goal-summary dt {
+  color: var(--color-muted-foreground);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.goal-summary dd {
+  margin: 0;
+  color: var(--color-primary-strong);
+  font-weight: 800;
+  text-align: end;
+}
+
+.goal-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-block-start: var(--space-2);
+}
+
+@media (max-width: 680px) {
+  .goal-drawer {
+    inline-size: 100%;
   }
 }
 </style>

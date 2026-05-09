@@ -34,6 +34,10 @@ question is answered, move the accepted decision into the relevant
 - Define timezone policy for institutions and source-specific reporting rules.
 - Define period-rule schemas for fixed days, relative dates, source-specific
   rules and manual overrides.
+- Decide how budget envelope rollover works between periods, including whether
+  unspent assigned money carries forward automatically, whether overspending
+  reduces the next period, and how goal-backed envelopes differ from ordinary
+  spending envelopes.
 - Define period locking, reopening and post-close adjustment behavior.
 - Decide whether reports are calculated on demand, cached, materialized or a
   mix.
