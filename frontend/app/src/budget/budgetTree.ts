@@ -2,6 +2,10 @@ import { computed, ref } from "vue";
 
 import type { BudgetTreeDto } from "@/api/ledger";
 
+export const TRASH_CATEGORY_ID = "018f9df8-6c1f-7c1a-9a32-700000000103";
+export const TRASH_SUBCATEGORY_ID =
+  "018f9df8-6c1f-7c1a-9a32-700000000203";
+
 export type BudgetCategory = {
   id: string;
   name: string;
@@ -28,10 +32,12 @@ const subcategories = ref<BudgetSubcategory[]>([]);
 const envelopes = ref<BudgetEnvelope[]>([]);
 
 const movementCategoryOptions = computed(() =>
-  envelopes.value.map((envelope) => ({
-    id: envelope.id,
-    name: envelope.name,
-  })),
+  envelopes.value
+    .filter((envelope) => envelope.subcategoryId !== TRASH_SUBCATEGORY_ID)
+    .map((envelope) => ({
+      id: envelope.id,
+      name: envelope.name,
+    })),
 );
 
 export function applyBudgetTree(tree: BudgetTreeDto) {

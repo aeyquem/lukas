@@ -14,6 +14,8 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     private static readonly Guid DefaultSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000201");
     private static readonly Guid UncategorizedCategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000102");
     private static readonly Guid UncategorizedSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000202");
+    private static readonly Guid TrashCategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000103");
+    private static readonly Guid TrashSubcategoryId = Guid.Parse("018f9df8-6c1f-7c1a-9a32-700000000203");
 
     public async Task<AccountReadModel> CreateAccountAsync(
         CreateAccountCommand command,
@@ -252,6 +254,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
         await EnsureBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         return await ReadBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
     }
@@ -261,6 +264,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await ReplaceBudgetTreeAsync(workspace.Id, command, cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
@@ -443,6 +447,44 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return UncategorizedSubcategoryId;
     }
 
+    private async Task EnsureTrashBudgetNodesAsync(Guid workspaceId, CancellationToken cancellationToken)
+    {
+        var category = await dbContext.BudgetCategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == TrashCategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (category is null)
+        {
+            dbContext.BudgetCategories.Add(new BudgetCategoryEntity
+            {
+                Id = TrashCategoryId,
+                WorkspaceId = workspaceId,
+                Name = "Papelera",
+                SortOrder = int.MaxValue,
+            });
+        }
+
+        var subcategory = await dbContext.BudgetSubcategories
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == TrashSubcategoryId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (subcategory is null)
+        {
+            dbContext.BudgetSubcategories.Add(new BudgetSubcategoryEntity
+            {
+                Id = TrashSubcategoryId,
+                WorkspaceId = workspaceId,
+                CategoryId = TrashCategoryId,
+                Name = "Categorías eliminadas",
+                SortOrder = 0,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task AttachTransactionsToEnvelopeAsync(
         Guid workspaceId,
         string categoryName,
@@ -515,24 +557,45 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         var categoryIds = command.Categories.Select(category => category.Id).ToHashSet();
         var subcategoryIds = command.Subcategories.Select(subcategory => subcategory.Id).ToHashSet();
         var envelopeIds = command.Envelopes.Select(envelope => envelope.Id).ToHashSet();
+        categoryIds.Add(TrashCategoryId);
+        subcategoryIds.Add(TrashSubcategoryId);
+        var deletedSubcategoryIds = await dbContext.BudgetSubcategories
+            .Where(subcategory => subcategory.WorkspaceId == workspaceId && !subcategoryIds.Contains(subcategory.Id))
+            .Select(subcategory => subcategory.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
         var deletedEnvelopeIds = await dbContext.BudgetEnvelopes
-            .Where(envelope => envelope.WorkspaceId == workspaceId && !envelopeIds.Contains(envelope.Id))
+            .Where(envelope =>
+                envelope.WorkspaceId == workspaceId
+                && !envelopeIds.Contains(envelope.Id)
+                && envelope.SubcategoryId != TrashSubcategoryId)
             .Select(envelope => envelope.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-        var transactions = await dbContext.LedgerTransactions
-            .Where(transaction => transaction.WorkspaceId == workspaceId && transaction.EnvelopeId != null && deletedEnvelopeIds.Contains(transaction.EnvelopeId.Value))
+
+        await MoveEnvelopesToTrashAsync(workspaceId, deletedEnvelopeIds, deletedSubcategoryIds, cancellationToken).ConfigureAwait(false);
+        dbContext.BudgetSubcategories.RemoveRange(dbContext.BudgetSubcategories.Where(subcategory => subcategory.WorkspaceId == workspaceId && !subcategoryIds.Contains(subcategory.Id)));
+        dbContext.BudgetCategories.RemoveRange(dbContext.BudgetCategories.Where(category => category.WorkspaceId == workspaceId && !categoryIds.Contains(category.Id)));
+    }
+
+    private async Task MoveEnvelopesToTrashAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> deletedEnvelopeIds,
+        IReadOnlyCollection<Guid> deletedSubcategoryIds,
+        CancellationToken cancellationToken)
+    {
+        var envelopes = await dbContext.BudgetEnvelopes
+            .Where(envelope =>
+                envelope.WorkspaceId == workspaceId
+                && (deletedEnvelopeIds.Contains(envelope.Id) || deletedSubcategoryIds.Contains(envelope.SubcategoryId)))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        foreach (var transaction in transactions)
+        foreach (var envelope in envelopes)
         {
-            transaction.EnvelopeId = null;
+            envelope.SubcategoryId = TrashSubcategoryId;
+            envelope.SortOrder = int.MaxValue;
         }
-
-        dbContext.BudgetEnvelopes.RemoveRange(dbContext.BudgetEnvelopes.Where(envelope => envelope.WorkspaceId == workspaceId && !envelopeIds.Contains(envelope.Id)));
-        dbContext.BudgetSubcategories.RemoveRange(dbContext.BudgetSubcategories.Where(subcategory => subcategory.WorkspaceId == workspaceId && !subcategoryIds.Contains(subcategory.Id)));
-        dbContext.BudgetCategories.RemoveRange(dbContext.BudgetCategories.Where(category => category.WorkspaceId == workspaceId && !categoryIds.Contains(category.Id)));
     }
 
     private async Task UpsertBudgetCategoriesAsync(
@@ -542,6 +605,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         foreach (var command in commands)
         {
+            if (command.Id == TrashCategoryId)
+            {
+                continue;
+            }
+
             var category = await dbContext.BudgetCategories
                 .SingleOrDefaultAsync(candidate => candidate.WorkspaceId == workspaceId && candidate.Id == command.Id, cancellationToken)
                 .ConfigureAwait(false);
@@ -563,6 +631,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     {
         foreach (var command in commands)
         {
+            if (command.Id == TrashSubcategoryId)
+            {
+                continue;
+            }
+
             var subcategory = await dbContext.BudgetSubcategories
                 .SingleOrDefaultAsync(candidate => candidate.WorkspaceId == workspaceId && candidate.Id == command.Id, cancellationToken)
                 .ConfigureAwait(false);

@@ -16,6 +16,8 @@ import type { TreeNode } from "primevue/treenode";
 
 import { getBudgetTree, getMovements, saveBudgetTree } from "@/api/ledger";
 import {
+  TRASH_CATEGORY_ID,
+  TRASH_SUBCATEGORY_ID,
   applyBudgetTree,
   toBudgetTreeDto,
   useBudgetTree,
@@ -94,6 +96,8 @@ const expandedKeys = ref<TreeTableExpandedKeys>({
   "sub-home": true,
   "sub-food": true,
   "sub-reserve": true,
+  [TRASH_CATEGORY_ID]: true,
+  [TRASH_SUBCATEGORY_ID]: true,
 });
 
 const movementsQuery = useQuery({
@@ -406,6 +410,10 @@ function clearRemovedNodeEditing(nodeIds: string[]) {
   if (nodeIds.includes(editingAssignedEnvelopeId.value)) {
     editingAssignedEnvelopeId.value = "";
   }
+}
+
+function isTrashNode(node: { key: string }): boolean {
+  return node.key === TRASH_CATEGORY_ID || node.key === TRASH_SUBCATEGORY_ID;
 }
 
 function updateNodeName(
@@ -1262,7 +1270,7 @@ function formatDecimal(amount: number): string {
               </span>
 
               <button
-                v-if="isTreeEditing"
+                v-if="isTreeEditing && !isTrashNode(node)"
                 class="rename-node-button"
                 type="button"
                 :aria-label="`Renombrar ${node.data.name}`"
@@ -1271,7 +1279,11 @@ function formatDecimal(amount: number): string {
                 Renombrar
               </button>
               <button
-                v-if="isTreeEditing && node.data.nodeType === 'category'"
+                v-if="
+                  isTreeEditing &&
+                  node.data.nodeType === 'category' &&
+                  !isTrashNode(node)
+                "
                 class="add-child-button"
                 type="button"
                 :aria-label="`Agregar subcategoría en ${node.data.name}`"
@@ -1281,7 +1293,9 @@ function formatDecimal(amount: number): string {
               </button>
               <button
                 v-else-if="
-                  isTreeEditing && node.data.nodeType === 'subcategory'
+                  isTreeEditing &&
+                  node.data.nodeType === 'subcategory' &&
+                  !isTrashNode(node)
                 "
                 class="add-child-button"
                 type="button"
@@ -1291,7 +1305,11 @@ function formatDecimal(amount: number): string {
                 + Sobre
               </button>
               <button
-                v-if="isTreeEditing && node.data.nodeType === 'category'"
+                v-if="
+                  isTreeEditing &&
+                  node.data.nodeType === 'category' &&
+                  !isTrashNode(node)
+                "
                 class="delete-node-button"
                 type="button"
                 :aria-label="`Eliminar categoría ${node.data.name}`"
@@ -1301,7 +1319,9 @@ function formatDecimal(amount: number): string {
               </button>
               <button
                 v-else-if="
-                  isTreeEditing && node.data.nodeType === 'subcategory'
+                  isTreeEditing &&
+                  node.data.nodeType === 'subcategory' &&
+                  !isTrashNode(node)
                 "
                 class="delete-node-button"
                 type="button"

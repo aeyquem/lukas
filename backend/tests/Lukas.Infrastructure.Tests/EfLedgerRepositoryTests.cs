@@ -174,6 +174,39 @@ public sealed class EfLedgerRepositoryTests
         movements.Single().EnvelopeName.ShouldBe("Arriendo");
     }
 
+    [Fact]
+    public async Task DeletedBudgetEnvelopeMovesToTrashAndKeepsMovementsCategorized()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
+            TestContext.Current.CancellationToken);
+
+        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Arriendo");
+        var withoutEnvelope = new SaveBudgetTreeCommand(
+            tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
+            tree.Subcategories.Select(subcategory => new SaveBudgetSubcategoryCommand(subcategory.Id, subcategory.CategoryId, subcategory.Name, subcategory.SortOrder)).ToList(),
+            tree.Envelopes
+                .Where(candidate => candidate.Id != envelope.Id)
+                .Select(candidate => new SaveBudgetEnvelopeCommand(candidate.Id, candidate.SubcategoryId, candidate.Name, candidate.AssignedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), candidate.SortOrder))
+                .ToList());
+
+        var savedTree = await repository.SaveBudgetTreeAsync(withoutEnvelope, TestContext.Current.CancellationToken);
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var trashSubcategory = savedTree.Subcategories.Single(candidate => candidate.Name == "Categorías eliminadas");
+        var trashedEnvelope = savedTree.Envelopes.Single(candidate => candidate.Id == envelope.Id);
+
+        trashedEnvelope.SubcategoryId.ShouldBe(trashSubcategory.Id);
+        movements.Single().EnvelopeId.ShouldBe(envelope.Id);
+        movements.Single().EnvelopeName.ShouldBe("Arriendo");
+    }
+
     private static async Task<TestDatabase> CreateDatabaseAsync()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
