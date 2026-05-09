@@ -8,6 +8,7 @@ export type LedgerMovement = {
   date: string;
   accountId: string;
   accountName: string;
+  destinationAccountId?: string;
   kind: TransactionKind;
   accountEffect: AccountEffect;
   envelopeId?: string;

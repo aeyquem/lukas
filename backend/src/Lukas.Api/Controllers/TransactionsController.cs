@@ -33,6 +33,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                 new CreateManualTransactionCommand(
                     request.Kind,
                     request.AccountId,
+                    request.DestinationAccountId,
                     request.TransactionDate,
                     request.Amount,
                     request.Currency,
@@ -65,6 +66,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     id,
                     request.Kind,
                     request.AccountId,
+                    request.DestinationAccountId,
                     request.TransactionDate,
                     request.Amount,
                     request.Currency,
@@ -90,6 +92,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
             transaction.Id,
             transaction.Kind,
             transaction.AccountId,
+            transaction.DestinationAccountId,
             transaction.TransactionDate,
             FormatAmount(transaction.Amount),
             transaction.Currency,

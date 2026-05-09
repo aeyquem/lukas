@@ -2,7 +2,7 @@ import { getJson, postJson, putJson } from "@/api/client";
 import type { LedgerMovement, MovementDirection } from "@/ledger/movements";
 
 export type AccountType = "cash" | "bank" | "credit_card";
-export type TransactionKind = "income" | "expense" | "adjustment";
+export type TransactionKind = "income" | "expense" | "adjustment" | "transfer";
 export type AccountEffect = "increase" | "decrease";
 
 export interface AccountDto {
@@ -24,6 +24,7 @@ export interface TransactionDto {
   id: string;
   kind: TransactionKind;
   accountId: string;
+  destinationAccountId?: string | null;
   transactionDate: string;
   amount: string;
   currency: string;
@@ -41,6 +42,7 @@ export interface MovementDto {
   transactionDate: string;
   accountId: string;
   accountName: string;
+  destinationAccountId?: string | null;
   kind: TransactionKind;
   accountEffect: AccountEffect;
   direction: MovementDirection;
@@ -58,6 +60,7 @@ export interface MovementDto {
 export interface CreateManualTransactionRequest {
   kind: TransactionKind;
   accountId: string;
+  destinationAccountId?: string | null;
   transactionDate: string;
   amount: string;
   currency: string;
@@ -72,6 +75,7 @@ export interface UpdateManualTransactionRequest {
   id: string;
   kind: TransactionKind;
   accountId: string;
+  destinationAccountId?: string | null;
   transactionDate: string;
   amount: string;
   currency: string;
@@ -195,6 +199,9 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     date: movement.transactionDate,
     accountId: movement.accountId,
     accountName: movement.accountName,
+    ...(movement.destinationAccountId
+      ? { destinationAccountId: movement.destinationAccountId }
+      : {}),
     kind: movement.kind,
     accountEffect: movement.accountEffect,
     description: movement.description,

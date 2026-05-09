@@ -6,6 +6,7 @@ public sealed record MovementDto(
     DateOnly TransactionDate,
     Guid AccountId,
     string AccountName,
+    Guid? DestinationAccountId,
     string Kind,
     string AccountEffect,
     string Direction,

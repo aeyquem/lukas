@@ -46,6 +46,7 @@ const { movementCategoryOptions } = useBudgetTree();
 const transactionForm = reactive({
   kind: "expense" as TransactionKind,
   accountId: "",
+  destinationAccountId: "",
   transactionDate: new Date().toISOString().slice(0, 10),
   amount: "",
   currency: "CLP",
@@ -78,6 +79,14 @@ const isSaving = computed(() =>
 );
 const submitLabel = computed(() =>
   drawerMode.value === "edit" ? "Guardar cambios" : "Crear movimiento",
+);
+const isTransfer = computed(() => transactionForm.kind === "transfer");
+const transferDestinationAccounts = computed(() =>
+  props.accounts.filter(
+    (account) =>
+      account.id !== transactionForm.accountId &&
+      account.currency === transactionForm.currency,
+  ),
 );
 
 watch(
@@ -114,6 +123,24 @@ watch(
   },
 );
 
+watch(
+  [() => transactionForm.accountId, () => transactionForm.kind],
+  () => {
+    if (!isTransfer.value) {
+      transactionForm.destinationAccountId = "";
+      return;
+    }
+
+    const destination = transferDestinationAccounts.value.find(
+      (account) => account.id === transactionForm.destinationAccountId,
+    );
+    if (!destination) {
+      transactionForm.destinationAccountId =
+        transferDestinationAccounts.value[0]?.id ?? "";
+    }
+  },
+);
+
 function openAddPanel() {
   resetForm();
   drawerMode.value = "add";
@@ -121,7 +148,8 @@ function openAddPanel() {
 
 function openEditPanel(movement: LedgerMovement) {
   transactionForm.kind = movement.kind;
-  transactionForm.accountId = movement.accountId;
+  transactionForm.accountId = sourceAccountId(movement);
+  transactionForm.destinationAccountId = destinationAccountId(movement);
   transactionForm.transactionDate = movement.date;
   transactionForm.amount = movement.originalAmount;
   transactionForm.currency = movement.originalCurrency;
@@ -164,6 +192,9 @@ function buildTransactionRequest(
   const request: CreateManualTransactionRequest = {
     kind: transactionForm.kind,
     accountId: transactionForm.accountId,
+    destinationAccountId: isTransfer.value
+      ? transactionForm.destinationAccountId
+      : null,
     transactionDate: transactionForm.transactionDate,
     amount: transactionForm.amount.trim(),
     currency: transactionForm.currency.trim().toUpperCase(),
@@ -171,7 +202,7 @@ function buildTransactionRequest(
     description: transactionForm.description.trim(),
   };
 
-  if (envelopeId !== "") {
+  if (!isTransfer.value && envelopeId !== "") {
     request.envelopeId = envelopeId;
   }
 
@@ -188,6 +219,7 @@ function resetForm() {
   editingTransactionId.value = "";
   transactionForm.kind = "expense";
   transactionForm.accountId = firstAccount ? firstAccount.id : "";
+  transactionForm.destinationAccountId = "";
   transactionForm.transactionDate = new Date().toISOString().slice(0, 10);
   transactionForm.amount = "";
   transactionForm.currency = firstAccount ? firstAccount.currency : "CLP";
@@ -197,7 +229,27 @@ function resetForm() {
 }
 
 function defaultAccountEffect(kind: TransactionKind): AccountEffect {
-  return kind === "expense" ? "decrease" : "increase";
+  return kind === "expense" || kind === "transfer" ? "decrease" : "increase";
+}
+
+function sourceAccountId(movement: LedgerMovement): string {
+  if (movement.kind === "transfer" && movement.accountEffect === "increase") {
+    return movement.destinationAccountId ?? movement.accountId;
+  }
+
+  return movement.accountId;
+}
+
+function destinationAccountId(movement: LedgerMovement): string {
+  if (movement.kind !== "transfer") {
+    return "";
+  }
+
+  if (movement.accountEffect === "increase") {
+    return movement.accountId;
+  }
+
+  return movement.destinationAccountId ?? "";
 }
 </script>
 
@@ -298,11 +350,15 @@ function defaultAccountEffect(kind: TransactionKind): AccountEffect {
             <BaseSelect id="movement-kind" v-model="transactionForm.kind">
               <option value="expense">Gasto</option>
               <option value="income">Ingreso</option>
+              <option value="transfer">Transferencia</option>
               <option value="adjustment">Ajuste</option>
             </BaseSelect>
           </BaseField>
 
-          <BaseField input-id="movement-account" label="Cuenta">
+          <BaseField
+            input-id="movement-account"
+            :label="isTransfer ? 'Desde' : 'Cuenta'"
+          >
             <BaseSelect
               id="movement-account"
               v-model="transactionForm.accountId"
@@ -310,6 +366,26 @@ function defaultAccountEffect(kind: TransactionKind): AccountEffect {
             >
               <option
                 v-for="account in props.accounts"
+                :key="account.id"
+                :value="account.id"
+              >
+                {{ account.displayName }}
+              </option>
+            </BaseSelect>
+          </BaseField>
+
+          <BaseField
+            v-if="isTransfer"
+            input-id="movement-destination-account"
+            label="Hacia"
+          >
+            <BaseSelect
+              id="movement-destination-account"
+              v-model="transactionForm.destinationAccountId"
+              required
+            >
+              <option
+                v-for="account in transferDestinationAccounts"
                 :key="account.id"
                 :value="account.id"
               >
@@ -349,7 +425,11 @@ function defaultAccountEffect(kind: TransactionKind): AccountEffect {
             />
           </BaseField>
 
-          <BaseField input-id="movement-category" label="Categoría">
+          <BaseField
+            v-if="!isTransfer"
+            input-id="movement-category"
+            label="Categoría"
+          >
             <BaseSelect
               id="movement-category"
               v-model="transactionForm.envelopeId"

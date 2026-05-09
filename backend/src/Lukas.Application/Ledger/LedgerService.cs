@@ -42,6 +42,8 @@ public sealed class LedgerService(ILedgerRepository repository)
     {
         var error = ValidateTransaction(
             command.Kind,
+            command.AccountId,
+            command.DestinationAccountId,
             command.Amount,
             command.Currency,
             command.AccountEffect,
@@ -60,6 +62,8 @@ public sealed class LedgerService(ILedgerRepository repository)
     {
         var error = ValidateTransaction(
             command.Kind,
+            command.AccountId,
+            command.DestinationAccountId,
             command.Amount,
             command.Currency,
             command.AccountEffect,
@@ -143,11 +147,13 @@ public sealed class LedgerService(ILedgerRepository repository)
 
     private static bool IsTransactionKind(string value)
     {
-        return value is "income" or "expense" or "adjustment";
+        return value is "income" or "expense" or "adjustment" or "transfer";
     }
 
     private static LedgerError? ValidateTransaction(
         string kind,
+        Guid accountId,
+        Guid? destinationAccountId,
         string amountValue,
         string currency,
         string accountEffect,
@@ -171,6 +177,21 @@ public sealed class LedgerService(ILedgerRepository repository)
         if (!IsAccountEffect(accountEffect))
         {
             return new LedgerError("transaction.invalid_account_effect", "Account effect is invalid.");
+        }
+
+        if (kind == "transfer" && destinationAccountId is null)
+        {
+            return new LedgerError("transaction.destination_account_required", "Destination account is required.");
+        }
+
+        if (kind == "transfer" && destinationAccountId == accountId)
+        {
+            return new LedgerError("transaction.same_transfer_account", "Transfer accounts must be different.");
+        }
+
+        if (kind == "transfer" && accountEffect != "decrease")
+        {
+            return new LedgerError("transaction.invalid_transfer_effect", "Transfer source account effect must be decrease.");
         }
 
         if (string.IsNullOrWhiteSpace(description))

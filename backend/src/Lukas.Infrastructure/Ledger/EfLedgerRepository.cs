@@ -40,6 +40,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             AddManualTransaction(
                 workspace.Id,
                 account.Id,
+                null,
                 "adjustment",
                 DateOnly.FromDateTime(now.DateTime),
                 Math.Abs(openingBalance),
@@ -96,19 +97,28 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             throw new LedgerRuleException("transaction.currency_mismatch", "Transaction currency must match the account currency.");
         }
 
-        var envelopeName = await GetEnvelopeNameAsync(workspace.Id, command.EnvelopeId, cancellationToken).ConfigureAwait(false);
+        var destinationAccount = await GetDestinationAccountAsync(
+            workspace.Id,
+            command.DestinationAccountId,
+            command.Kind,
+            command.Currency,
+            cancellationToken).ConfigureAwait(false);
+        var envelopeId = TransferEnvelopeId(command.Kind, command.EnvelopeId);
+        var envelopeName = await GetEnvelopeNameAsync(workspace.Id, envelopeId, cancellationToken).ConfigureAwait(false);
+        var categoryName = TransferCategoryName(command.Kind, envelopeName, command.CategoryName);
         _ = TryParseAmount(command.Amount, out var amount);
         var transaction = AddManualTransaction(
             workspace.Id,
             account.Id,
+            destinationAccount?.Id,
             command.Kind,
             command.TransactionDate,
             amount,
             command.Currency,
             command.AccountEffect,
             command.Description.Trim(),
-            command.EnvelopeId,
-            envelopeName ?? EmptyToNull(command.CategoryName),
+            envelopeId,
+            categoryName,
             string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim(),
             DateTimeOffset.UtcNow);
 
@@ -149,19 +159,25 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             throw new LedgerRuleException("transaction.currency_mismatch", "Transaction currency must match the account currency.");
         }
 
-        var envelopeName = await GetEnvelopeNameAsync(workspace.Id, command.EnvelopeId, cancellationToken).ConfigureAwait(false);
+        var envelopeId = TransferEnvelopeId(command.Kind, command.EnvelopeId);
+        var envelopeName = await GetEnvelopeNameAsync(workspace.Id, envelopeId, cancellationToken).ConfigureAwait(false);
+        var categoryName = TransferCategoryName(command.Kind, envelopeName, command.CategoryName);
         _ = TryParseAmount(command.Amount, out var amount);
-        var entry = transaction.Entries.Single();
+        var destinationAccount = await GetDestinationAccountAsync(
+            workspace.Id,
+            command.DestinationAccountId,
+            command.Kind,
+            command.Currency,
+            cancellationToken).ConfigureAwait(false);
         transaction.Kind = command.Kind;
         transaction.TransactionDate = command.TransactionDate;
         transaction.Description = command.Description.Trim();
-        transaction.EnvelopeId = command.EnvelopeId;
-        transaction.CategoryName = envelopeName ?? EmptyToNull(command.CategoryName);
+        transaction.EnvelopeId = envelopeId;
+        transaction.CategoryName = categoryName;
         transaction.Notes = string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim();
-        entry.AccountId = account.Id;
-        entry.AmountValue = FormatAmount(amount);
-        entry.Currency = command.Currency;
-        entry.AccountEffect = command.AccountEffect;
+        dbContext.LedgerEntries.RemoveRange(transaction.Entries);
+        transaction.Entries.Clear();
+        AddManualEntries(transaction, account.Id, destinationAccount?.Id, amount, command.Currency, command.AccountEffect);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return ToTransactionReadModel(transaction);
@@ -184,6 +200,12 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 entry.LedgerTransaction!.TransactionDate,
                 entry.AccountId,
                 AccountName = entry.Account!.DisplayName,
+                DestinationAccountId = entry.LedgerTransaction.Kind == "transfer"
+                    ? entry.LedgerTransaction.Entries
+                        .Where(candidate => candidate.Id != entry.Id)
+                        .Select(candidate => (Guid?)candidate.AccountId)
+                        .FirstOrDefault()
+                    : null,
                 entry.LedgerTransaction.Kind,
                 entry.AccountEffect,
                 entry.AmountValue,
@@ -191,7 +213,9 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 entry.LedgerTransaction.Description,
                 entry.LedgerTransaction.EnvelopeId,
                 EnvelopeName = entry.LedgerTransaction.Envelope == null ? null : entry.LedgerTransaction.Envelope.Name,
-                entry.LedgerTransaction.CategoryName,
+                CategoryName = entry.LedgerTransaction.Kind == "transfer"
+                    ? "Transferencia"
+                    : entry.LedgerTransaction.CategoryName,
                 entry.LedgerTransaction.Notes,
             })
             .ToListAsync(cancellationToken)
@@ -207,6 +231,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     entry.TransactionDate,
                     entry.AccountId,
                     entry.AccountName,
+                    entry.DestinationAccountId,
                     entry.Kind,
                     entry.AccountEffect,
                     entry.AccountEffect == "decrease" ? "out" : "in",
@@ -329,6 +354,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .Where(transaction =>
                 transaction.WorkspaceId == workspaceId
                 && transaction.EnvelopeId == null
+                && transaction.Kind != "transfer"
                 && transaction.CategoryName != null)
             .Select(transaction => transaction.CategoryName!)
             .Distinct()
@@ -427,6 +453,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .Where(transaction =>
                 transaction.WorkspaceId == workspaceId
                 && transaction.EnvelopeId == null
+                && transaction.Kind != "transfer"
                 && transaction.CategoryName == categoryName)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -625,9 +652,41 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return envelope.Name;
     }
 
+    private async Task<AccountEntity?> GetDestinationAccountAsync(
+        Guid workspaceId,
+        Guid? destinationAccountId,
+        string kind,
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        if (kind != "transfer")
+        {
+            return null;
+        }
+
+        var account = await dbContext.Accounts
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == destinationAccountId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (account is null)
+        {
+            throw new LedgerRuleException("account.destination_not_found", "Destination account was not found.");
+        }
+
+        if (account.Currency != currency)
+        {
+            throw new LedgerRuleException("transaction.currency_mismatch", "Transaction currency must match both account currencies.");
+        }
+
+        return account;
+    }
+
     private LedgerTransactionEntity AddManualTransaction(
         Guid workspaceId,
         Guid accountId,
+        Guid? destinationAccountId,
         string kind,
         DateOnly transactionDate,
         decimal amount,
@@ -652,21 +711,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             CreatedAt = now,
         };
 
-        var entry = new LedgerEntryEntity
-        {
-            Id = Guid.CreateVersion7(),
-            WorkspaceId = workspaceId,
-            LedgerTransactionId = transaction.Id,
-            AccountId = accountId,
-            AmountValue = FormatAmount(amount),
-            Currency = currency,
-            AccountEffect = accountEffect,
-        };
-
         var snapshots = JsonSerializer.Serialize(new
         {
             kind,
             accountId,
+            destinationAccountId,
             transactionDate,
             amount = FormatAmount(amount),
             currency,
@@ -688,7 +737,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         };
 
         dbContext.LedgerTransactions.Add(transaction);
-        dbContext.LedgerEntries.Add(entry);
+        AddManualEntries(transaction, accountId, destinationAccountId, amount, currency, accountEffect);
         dbContext.SourceRecords.Add(sourceRecord);
         dbContext.TransactionSourceLinks.Add(new TransactionSourceLinkEntity
         {
@@ -697,6 +746,52 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         });
 
         return transaction;
+    }
+
+    private void AddManualEntries(
+        LedgerTransactionEntity transaction,
+        Guid accountId,
+        Guid? destinationAccountId,
+        decimal amount,
+        string currency,
+        string accountEffect)
+    {
+        AddManualEntry(transaction, accountId, amount, currency, accountEffect);
+        if (transaction.Kind == "transfer" && destinationAccountId is not null)
+        {
+            AddManualEntry(transaction, destinationAccountId.Value, amount, currency, "increase");
+        }
+    }
+
+    private void AddManualEntry(
+        LedgerTransactionEntity transaction,
+        Guid accountId,
+        decimal amount,
+        string currency,
+        string accountEffect)
+    {
+        var entry = CreateEntry(transaction, accountId, amount, currency, accountEffect);
+        transaction.Entries.Add(entry);
+        dbContext.LedgerEntries.Add(entry);
+    }
+
+    private static LedgerEntryEntity CreateEntry(
+        LedgerTransactionEntity transaction,
+        Guid accountId,
+        decimal amount,
+        string currency,
+        string accountEffect)
+    {
+        return new LedgerEntryEntity
+        {
+            Id = Guid.CreateVersion7(),
+            WorkspaceId = transaction.WorkspaceId,
+            LedgerTransactionId = transaction.Id,
+            AccountId = accountId,
+            AmountValue = FormatAmount(amount),
+            Currency = currency,
+            AccountEffect = accountEffect,
+        };
     }
 
     private async Task<AccountReadModel> ToAccountReadModelAsync(
@@ -720,11 +815,12 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
 
     private static TransactionReadModel ToTransactionReadModel(LedgerTransactionEntity transaction)
     {
-        var entry = transaction.Entries.Single();
+        var entry = PrimaryEntry(transaction);
         return new TransactionReadModel(
             transaction.Id,
             transaction.Kind,
             entry.AccountId,
+            DestinationAccountId(transaction, entry.Id),
             transaction.TransactionDate,
             decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture),
             entry.Currency,
@@ -732,8 +828,30 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             transaction.Description,
             transaction.EnvelopeId,
             transaction.Envelope?.Name,
-            transaction.CategoryName,
+            EffectiveCategoryName(transaction.Kind, transaction.CategoryName),
             transaction.Notes);
+    }
+
+    private static LedgerEntryEntity PrimaryEntry(LedgerTransactionEntity transaction)
+    {
+        if (transaction.Kind == "transfer")
+        {
+            return transaction.Entries.Single(entry => entry.AccountEffect == "decrease");
+        }
+
+        return transaction.Entries.Single();
+    }
+
+    private static Guid? DestinationAccountId(
+        LedgerTransactionEntity transaction,
+        Guid entryId)
+    {
+        if (transaction.Kind != "transfer")
+        {
+            return null;
+        }
+
+        return transaction.Entries.Single(entry => entry.Id != entryId).AccountId;
     }
 
     private static BudgetCategoryReadModel ToBudgetCategoryReadModel(BudgetCategoryEntity category)
@@ -780,6 +898,24 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     private static string? EmptyToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static Guid? TransferEnvelopeId(string kind, Guid? envelopeId)
+    {
+        return kind == "transfer" ? null : envelopeId;
+    }
+
+    private static string? TransferCategoryName(
+        string kind,
+        string? envelopeName,
+        string? categoryName)
+    {
+        return kind == "transfer" ? "Transferencia" : envelopeName ?? EmptyToNull(categoryName);
+    }
+
+    private static string? EffectiveCategoryName(string kind, string? categoryName)
+    {
+        return kind == "transfer" ? "Transferencia" : categoryName;
     }
 
     private static string FormatAmount(decimal amount)

@@ -39,10 +39,10 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("income", account.Id, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, "Ingresos", null),
+            new CreateManualTransactionCommand("income", account.Id, null, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, "Ingresos", null),
             TestContext.Current.CancellationToken);
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -91,11 +91,11 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         var transaction = await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, null, null),
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, null, null),
             TestContext.Current.CancellationToken);
 
         await repository.UpdateManualTransactionAsync(
-            new UpdateManualTransactionCommand(transaction.Id, "income", account.Id, new DateOnly(2026, 5, 3), "150000", "CLP", "increase", "Reembolso", null, "Ingresos", "Corregido"),
+            new UpdateManualTransactionCommand(transaction.Id, "income", account.Id, null, new DateOnly(2026, 5, 3), "150000", "CLP", "increase", "Reembolso", null, "Ingresos", "Corregido"),
             TestContext.Current.CancellationToken);
 
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
@@ -115,6 +115,45 @@ public sealed class EfLedgerRepositoryTests
     }
 
     [Fact]
+    public async Task TransferCreatesOutAndInMovementsWithoutCashflowImpact()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var checking = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Cuenta corriente", "bank", "CLP", "100000"),
+            TestContext.Current.CancellationToken);
+        var savings = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Ahorro", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("transfer", checking.Id, savings.Id, new DateOnly(2026, 5, 4), "30000", "CLP", "decrease", "Ahorro mensual", null, null, null),
+            TestContext.Current.CancellationToken);
+
+        var accounts = await repository.GetAccountsAsync(TestContext.Current.CancellationToken);
+        var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+        var budgetTree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+
+        accounts.Single(account => account.Id == checking.Id).CurrentBalance.ShouldBe(70000m);
+        accounts.Single(account => account.Id == savings.Id).CurrentBalance.ShouldBe(30000m);
+        cashflow.IncomeTotal.ShouldBe(0m);
+        cashflow.ExpenseTotal.ShouldBe(0m);
+        budgetTree.Envelopes.ShouldNotContain(envelope => envelope.Name == "Transferencia");
+        movements.Count(movement => movement.Kind == "transfer").ShouldBe(2);
+        movements.ShouldContain(movement =>
+            movement.AccountId == checking.Id
+            && movement.DestinationAccountId == savings.Id
+            && movement.CategoryName == "Transferencia"
+            && movement.Direction == "out");
+        movements.ShouldContain(movement =>
+            movement.AccountId == savings.Id
+            && movement.DestinationAccountId == checking.Id
+            && movement.CategoryName == "Transferencia"
+            && movement.Direction == "in");
+    }
+
+    [Fact]
     public async Task BudgetTreePromotesExistingMovementCategoriesToEnvelopes()
     {
         await using var database = await CreateDatabaseAsync();
@@ -124,7 +163,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         await repository.CreateManualTransactionAsync(
-            new CreateManualTransactionCommand("expense", account.Id, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
             TestContext.Current.CancellationToken);
 
         var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);

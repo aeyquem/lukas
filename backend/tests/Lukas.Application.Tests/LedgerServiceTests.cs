@@ -39,6 +39,7 @@ public sealed class LedgerServiceTests
                 Guid.CreateVersion7(),
                 "expense",
                 Guid.CreateVersion7(),
+                null,
                 new DateOnly(2026, 5, 2),
                 "0",
                 "CLP",

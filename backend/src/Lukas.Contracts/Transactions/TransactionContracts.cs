@@ -3,8 +3,9 @@ using System.ComponentModel.DataAnnotations;
 namespace Lukas.Contracts.Transactions;
 
 public sealed record CreateManualTransactionRequest(
-    [Required, RegularExpression("^(income|expense|adjustment)$")] string Kind,
+    [Required, RegularExpression("^(income|expense|adjustment|transfer)$")] string Kind,
     [Required] Guid AccountId,
+    Guid? DestinationAccountId,
     [Required] DateOnly TransactionDate,
     [Required, RegularExpression(@"^\d+(\.\d+)?$")] string Amount,
     [Required, RegularExpression("^[A-Z]{3}$")] string Currency,
@@ -15,8 +16,9 @@ public sealed record CreateManualTransactionRequest(
     [MaxLength(1000)] string? Notes);
 
 public sealed record UpdateManualTransactionRequest(
-    [Required, RegularExpression("^(income|expense|adjustment)$")] string Kind,
+    [Required, RegularExpression("^(income|expense|adjustment|transfer)$")] string Kind,
     [Required] Guid AccountId,
+    Guid? DestinationAccountId,
     [Required] DateOnly TransactionDate,
     [Required, RegularExpression(@"^\d+(\.\d+)?$")] string Amount,
     [Required, RegularExpression("^[A-Z]{3}$")] string Currency,
@@ -30,6 +32,7 @@ public sealed record TransactionDto(
     Guid Id,
     string Kind,
     Guid AccountId,
+    Guid? DestinationAccountId,
     DateOnly TransactionDate,
     string Amount,
     string Currency,

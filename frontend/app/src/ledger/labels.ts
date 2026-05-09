@@ -10,6 +10,7 @@ const transactionKindLabels: Record<TransactionKind, string> = {
   income: "Ingreso",
   expense: "Gasto",
   adjustment: "Ajuste",
+  transfer: "Transferencia",
 };
 
 export function accountTypeLabel(type: AccountType): string {
