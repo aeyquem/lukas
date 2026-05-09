@@ -14,7 +14,7 @@ import type {
 import TreeTable from "primevue/treetable";
 import type { TreeNode } from "primevue/treenode";
 
-import { getBudgetTree, getMovements, saveBudgetTree } from "@/api/ledger";
+import { getBudgetTree, saveBudgetTree } from "@/api/ledger";
 import {
   INCOME_CATEGORY_ID,
   INCOME_ENVELOPE_ID,
@@ -87,6 +87,10 @@ type DragElement = HTMLElement & {
   budgetRowRegistrationKey?: string;
 };
 
+const props = defineProps<{
+  period: string;
+}>();
+
 const currency = "CLP";
 const editingAssignedEnvelopeId = ref("");
 const editingNameNodeId = ref("");
@@ -113,16 +117,10 @@ const expandedKeys = ref<TreeTableExpandedKeys>({
   [TRASH_SUBCATEGORY_ID]: true,
 });
 
-const movementsQuery = useQuery({
-  key: ["movements"],
-  query: getMovements,
-});
 const budgetTreeQuery = useQuery({
-  key: ["budget-tree"],
-  query: getBudgetTree,
+  key: () => ["budget-tree", props.period],
+  query: () => getBudgetTree(props.period),
 });
-
-const movements = computed(() => movementsQuery.data.value ?? []);
 
 watch(
   () => budgetTreeQuery.data.value,
@@ -135,39 +133,8 @@ watch(
   { immediate: true },
 );
 
-const spentByEnvelopeId = computed<Record<string, string>>(() => {
-  const totals: Record<string, number> = {};
-
-  movements.value.forEach((movement) => {
-    if (!movement.envelopeId) {
-      return;
-    }
-
-    totals[movement.envelopeId] =
-      (totals[movement.envelopeId] ?? 0) + budgetMovementAmount(movement);
-  });
-
-  return Object.fromEntries(
-    Object.entries(totals).map(([envelopeId, amount]) => [
-      envelopeId,
-      formatDecimal(amount),
-    ]),
-  );
-});
-
-function budgetMovementAmount(movement: {
-  baseAmount: string;
-  direction: "in" | "out";
-}): number {
-  const amount = parseAmount(movement.baseAmount);
-  return movement.direction === "out" ? amount : -amount;
-}
-
 const budgetEnvelopes = computed<BudgetEnvelope[]>(() =>
-  envelopes.value.map((envelope) => ({
-    ...envelope,
-    spentAmount: spentByEnvelopeId.value[envelope.id] ?? "0",
-  })),
+  envelopes.value.map((envelope) => ({ ...envelope })),
 );
 const goalByEnvelopeId = computed(() =>
   Object.fromEntries(goals.value.map((goal) => [goal.envelopeId, goal])),
@@ -185,9 +152,10 @@ const assignableBudgetEnvelopes = computed(() =>
   ),
 );
 const receivedIncomeAmount = computed(() =>
-  movements.value
-    .filter((movement) => movement.kind === "income")
-    .reduce((sum, movement) => sum + parseAmount(movement.baseAmount), 0),
+  parseAmount(
+    budgetEnvelopes.value.find((envelope) => envelope.id === INCOME_ENVELOPE_ID)
+      ?.spentAmount ?? "0",
+  ),
 );
 const assignedBudgetAmount = computed(() =>
   assignableBudgetEnvelopes.value.reduce(
@@ -328,7 +296,7 @@ function toggleTreeEditing() {
 }
 
 async function persistBudgetTree() {
-  const savedTree = await saveBudgetTree(toBudgetTreeDto());
+  const savedTree = await saveBudgetTree(props.period, toBudgetTreeDto(props.period));
   applyBudgetTree(savedTree);
 }
 
@@ -400,6 +368,8 @@ function addEnvelope(subcategoryId: string) {
       subcategoryId,
       name: `Nuevo sobre ${envelopeNumber}`,
       assignedAmount: "0",
+      activityAmount: "0",
+      remainingAmount: "0",
       spentAmount: "0",
     },
   ];

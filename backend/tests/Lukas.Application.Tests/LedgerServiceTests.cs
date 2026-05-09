@@ -30,6 +30,17 @@ public sealed class LedgerServiceTests
     }
 
     [Fact]
+    public async Task MonthlyPeriodExposesCalendarMonthRange()
+    {
+        var parsed = MonthlyPeriod.TryParse("2026-12", out var period);
+
+        parsed.ShouldBeTrue();
+        period.Key.ShouldBe("2026-12");
+        period.StartDate.ShouldBe(new DateOnly(2026, 12, 1));
+        period.EndDate.ShouldBe(new DateOnly(2027, 1, 1));
+    }
+
+    [Fact]
     public async Task UpdateTransactionRejectsInvalidAmount()
     {
         var service = new LedgerService(new ThrowingLedgerRepository());
@@ -87,12 +98,15 @@ public sealed class LedgerServiceTests
             throw new InvalidOperationException("Repository should not be called.");
         }
 
-        public Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken)
+        public Task<BudgetTreeReadModel> GetBudgetTreeAsync(
+            MonthlyPeriod period,
+            CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");
         }
 
         public Task<BudgetTreeReadModel> SaveBudgetTreeAsync(
+            MonthlyPeriod period,
             SaveBudgetTreeCommand command,
             CancellationToken cancellationToken)
         {
@@ -100,14 +114,14 @@ public sealed class LedgerServiceTests
         }
 
         public Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(
-            string period,
+            MonthlyPeriod period,
             CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");
         }
 
         public Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(
-            string period,
+            MonthlyPeriod period,
             CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");

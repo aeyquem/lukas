@@ -35,6 +35,7 @@ const props = defineProps<{
   hasAccountsLoadError: boolean;
   isCreating: boolean;
   isUpdating: boolean;
+  period: string;
   updateError?: string;
   updateTransaction: (request: UpdateManualTransactionRequest) => Promise<void>;
 }>();
@@ -64,8 +65,8 @@ const movementsQuery = useQuery({
   query: getMovements,
 });
 const budgetTreeQuery = useQuery({
-  key: ["budget-tree"],
-  query: getBudgetTree,
+  key: () => ["budget-tree", props.period],
+  query: () => getBudgetTree(props.period),
 });
 
 const movements = computed(() => movementsQuery.data.value ?? []);

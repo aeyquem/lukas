@@ -33,6 +33,7 @@ export function useLedgerWorkspace() {
     async onSettled() {
       await invalidateAccounts();
       await invalidateMovements();
+      await invalidateBudget();
     },
   });
 
@@ -41,6 +42,7 @@ export function useLedgerWorkspace() {
     async onSettled() {
       await invalidateAccounts();
       await invalidateMovements();
+      await invalidateBudget();
     },
   });
 
@@ -52,6 +54,10 @@ export function useLedgerWorkspace() {
 
   async function invalidateMovements() {
     await queryCache.invalidateQueries({ key: ["movements"] });
+  }
+
+  async function invalidateBudget() {
+    await queryCache.invalidateQueries({ key: ["budget-tree"] });
   }
 
   function submitAccount(request: CreateAccountRequest) {

@@ -9,19 +9,27 @@ namespace Lukas.Api.Controllers;
 public sealed class BudgetController(LedgerService ledgerService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<BudgetTreeDto>> GetBudgetTree(CancellationToken cancellationToken)
+    public async Task<ActionResult<BudgetTreeDto>> GetBudgetTree(
+        [FromQuery] string period,
+        CancellationToken cancellationToken)
     {
-        var tree = await ledgerService.GetBudgetTreeAsync(cancellationToken).ConfigureAwait(false);
-        return Ok(ToDto(tree));
+        var result = await ledgerService.GetBudgetTreeAsync(period, cancellationToken).ConfigureAwait(false);
+        if (result.IsFailure)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error.Message, type: result.Error.Code);
+        }
+
+        return Ok(ToDto(result.Value));
     }
 
     [HttpPut]
     public async Task<ActionResult<BudgetTreeDto>> SaveBudgetTree(
+        [FromQuery] string period,
         SaveBudgetTreeRequest request,
         CancellationToken cancellationToken)
     {
         var result = await ledgerService
-            .SaveBudgetTreeAsync(ToCommand(request), cancellationToken)
+            .SaveBudgetTreeAsync(period, ToCommand(request), cancellationToken)
             .ConfigureAwait(false);
 
         if (result.IsFailure)
@@ -44,9 +52,10 @@ public sealed class BudgetController(LedgerService ledgerService) : ControllerBa
     private static BudgetTreeDto ToDto(BudgetTreeReadModel tree)
     {
         return new BudgetTreeDto(
+            tree.Period,
             tree.Categories.Select(category => new BudgetCategoryDto(category.Id, category.Name, category.SortOrder)).ToList(),
             tree.Subcategories.Select(subcategory => new BudgetSubcategoryDto(subcategory.Id, subcategory.CategoryId, subcategory.Name, subcategory.SortOrder)).ToList(),
-            tree.Envelopes.Select(envelope => new BudgetEnvelopeDto(envelope.Id, envelope.SubcategoryId, envelope.Name, FormatAmount(envelope.AssignedAmount), envelope.SortOrder)).ToList(),
+            tree.Envelopes.Select(envelope => new BudgetEnvelopeDto(envelope.Id, envelope.SubcategoryId, envelope.Name, FormatAmount(envelope.AssignedAmount), FormatAmount(envelope.ActivityAmount), FormatAmount(envelope.RemainingAmount), envelope.SortOrder)).ToList(),
             tree.Goals.Select(goal => new BudgetGoalDto(goal.Id, goal.EnvelopeId, FormatAmount(goal.TargetAmount), goal.DeadlineDate, goal.Status)).ToList());
     }
 

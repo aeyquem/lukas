@@ -81,46 +81,59 @@ public sealed class LedgerService(ILedgerRepository repository)
         return repository.GetMovementsAsync(cancellationToken);
     }
 
-    public Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken)
+    public Task<Result<BudgetTreeReadModel>> GetBudgetTreeAsync(
+        string period,
+        CancellationToken cancellationToken)
     {
-        return repository.GetBudgetTreeAsync(cancellationToken);
+        if (!MonthlyPeriod.TryParse(period, out var monthlyPeriod))
+        {
+            return Failure<BudgetTreeReadModel>("period.invalid", "Period must use YYYY-MM.");
+        }
+
+        return Success(repository.GetBudgetTreeAsync(monthlyPeriod, cancellationToken));
     }
 
     public Task<Result<BudgetTreeReadModel>> SaveBudgetTreeAsync(
+        string period,
         SaveBudgetTreeCommand command,
         CancellationToken cancellationToken)
     {
+        if (!MonthlyPeriod.TryParse(period, out var monthlyPeriod))
+        {
+            return Failure<BudgetTreeReadModel>("period.invalid", "Period must use YYYY-MM.");
+        }
+
         var error = ValidateBudgetTree(command);
         if (error is not null)
         {
             return Failure<BudgetTreeReadModel>(error.Code, error.Message);
         }
 
-        return Success(repository.SaveBudgetTreeAsync(command, cancellationToken));
+        return Success(repository.SaveBudgetTreeAsync(monthlyPeriod, command, cancellationToken));
     }
 
     public Task<Result<IReadOnlyList<TransactionReadModel>>> GetTransactionsAsync(
         string period,
         CancellationToken cancellationToken)
     {
-        if (!IsPeriod(period))
+        if (!MonthlyPeriod.TryParse(period, out var monthlyPeriod))
         {
             return Failure<IReadOnlyList<TransactionReadModel>>("period.invalid", "Period must use YYYY-MM.");
         }
 
-        return Success(repository.GetTransactionsAsync(period, cancellationToken));
+        return Success(repository.GetTransactionsAsync(monthlyPeriod, cancellationToken));
     }
 
     public Task<Result<MonthlyCashflowReadModel>> GetMonthlyCashflowAsync(
         string period,
         CancellationToken cancellationToken)
     {
-        if (!IsPeriod(period))
+        if (!MonthlyPeriod.TryParse(period, out var monthlyPeriod))
         {
             return Failure<MonthlyCashflowReadModel>("period.invalid", "Period must use YYYY-MM.");
         }
 
-        return Success(repository.GetMonthlyCashflowAsync(period, cancellationToken));
+        return Success(repository.GetMonthlyCashflowAsync(monthlyPeriod, cancellationToken));
     }
 
     private static async Task<Result<T>> Success<T>(Task<T> task)
@@ -302,19 +315,6 @@ public sealed class LedgerService(ILedgerRepository repository)
         return currency.Length == 3 && currency.All(static character => character is >= 'A' and <= 'Z');
     }
 
-    private static bool IsPeriod(string value)
-    {
-        return value.Length == 7
-            && value[4] == '-'
-            && value[..4].All(static character => character is >= '0' and <= '9')
-            && value[5..].All(static character => character is >= '0' and <= '9')
-            && DateOnly.TryParseExact(
-                $"{value}-01",
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out _);
-    }
 }
 
 public sealed class LedgerRuleException(string code, string message) : Exception(message)

@@ -96,6 +96,7 @@ export interface MonthlyCashflowDto {
 }
 
 export interface BudgetTreeDto {
+  period: string;
   categories: BudgetCategoryDto[];
   subcategories: BudgetSubcategoryDto[];
   envelopes: BudgetEnvelopeDto[];
@@ -120,6 +121,8 @@ export interface BudgetEnvelopeDto {
   subcategoryId: string;
   name: string;
   assignedAmount: string;
+  activityAmount: string;
+  remainingAmount: string;
   sortOrder: number;
 }
 
@@ -228,8 +231,10 @@ export async function getMovements(): Promise<LedgerMovement[]> {
   }));
 }
 
-export async function getBudgetTree(): Promise<BudgetTreeDto> {
-  const result = await getJson<BudgetTreeDto>("/api/budget");
+export async function getBudgetTree(period: string): Promise<BudgetTreeDto> {
+  const result = await getJson<BudgetTreeDto>(
+    `/api/budget?period=${encodeURIComponent(period)}`,
+  );
   if (!result.ok) {
     throw new Error(result.error.title);
   }
@@ -238,10 +243,11 @@ export async function getBudgetTree(): Promise<BudgetTreeDto> {
 }
 
 export async function saveBudgetTree(
+  period: string,
   request: BudgetTreeDto,
 ): Promise<BudgetTreeDto> {
   const result = await putJson<BudgetTreeDto, BudgetTreeDto>(
-    "/api/budget",
+    `/api/budget?period=${encodeURIComponent(period)}`,
     request,
   );
   if (!result.ok) {

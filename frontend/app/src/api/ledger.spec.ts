@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAccount,
   createManualTransaction,
+  getBudgetTree,
   getMonthlyCashflow,
   getMovements,
+  saveBudgetTree,
   updateManualTransaction,
 } from "@/api/ledger";
 
@@ -166,6 +168,55 @@ describe("ledger api", () => {
     expect(cashflow.netCashflow).toBe("400000");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/cashflow/monthly?period=2026-05",
+    );
+  });
+
+  it("requests the budget tree for the selected period", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          period: "2026-05",
+          categories: [],
+          subcategories: [],
+          envelopes: [],
+          goals: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const tree = await getBudgetTree("2026-05");
+
+    expect(tree.period).toBe("2026-05");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/budget?period=2026-05",
+    );
+  });
+
+  it("saves the budget tree for the selected period", async () => {
+    const budgetTree = {
+      period: "2026-05",
+      categories: [],
+      subcategories: [],
+      envelopes: [],
+      goals: [],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(budgetTree), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const savedTree = await saveBudgetTree("2026-05", budgetTree);
+
+    expect(savedTree.period).toBe("2026-05");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/budget?period=2026-05",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify(budgetTree),
+      }),
     );
   });
 

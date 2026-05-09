@@ -84,6 +84,7 @@ public sealed record MonthlyCashflowReadModel(
     IReadOnlyList<AccountReadModel> Accounts);
 
 public sealed record BudgetTreeReadModel(
+    string Period,
     IReadOnlyList<BudgetCategoryReadModel> Categories,
     IReadOnlyList<BudgetSubcategoryReadModel> Subcategories,
     IReadOnlyList<BudgetEnvelopeReadModel> Envelopes,
@@ -105,6 +106,8 @@ public sealed record BudgetEnvelopeReadModel(
     Guid SubcategoryId,
     string Name,
     decimal AssignedAmount,
+    decimal ActivityAmount,
+    decimal RemainingAmount,
     int SortOrder);
 
 public sealed record BudgetGoalReadModel(

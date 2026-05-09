@@ -70,16 +70,21 @@ function selectSection(section: WorkspaceSection) {
           :has-accounts-load-error="Boolean(accountsQuery.error.value)"
           :is-creating="transactionMutation.isLoading.value"
           :is-updating="updateTransactionMutation.isLoading.value"
+          :period="selectedPeriod"
           :update-error="updateTransactionMutation.error.value?.message"
           :update-transaction="updateTransaction"
         />
-        <BudgetWorkspace v-else-if="activeSection === 'budget'" />
+        <BudgetWorkspace
+          v-else-if="activeSection === 'budget'"
+          :period="selectedPeriod"
+        />
         <GoalsWorkspace
           v-else-if="activeSection === 'goals'"
+          :period="selectedPeriod"
           @open-budget="selectSection('budget')"
         />
         <ReportsWorkspace v-else-if="activeSection === 'reports'" />
-        <ProjectionsWorkspace v-else />
+        <ProjectionsWorkspace v-else :period="selectedPeriod" />
       </main>
     </div>
   </div>

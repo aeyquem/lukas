@@ -133,6 +133,23 @@ public sealed class LukasDbContextModelSnapshot : ModelSnapshot
             entity.HasIndex(goal => new { goal.WorkspaceId, goal.Status });
         });
 
+        modelBuilder.Entity<BudgetPeriodAllocationEntity>(entity =>
+        {
+            entity.ToTable("budget_period_allocations");
+            entity.HasKey(allocation => allocation.Id);
+            entity.Property(allocation => allocation.Id).HasColumnName("id");
+            entity.Property(allocation => allocation.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(allocation => allocation.PeriodKey).HasColumnName("period_key").HasMaxLength(7).IsRequired();
+            entity.Property(allocation => allocation.EnvelopeId).HasColumnName("envelope_id");
+            entity.Property(allocation => allocation.AssignedAmount).HasColumnName("assigned_amount").HasMaxLength(80).IsRequired();
+            entity.Property(allocation => allocation.CreatedAt).HasColumnName("created_at").IsRequired();
+            entity.Property(allocation => allocation.UpdatedAt).HasColumnName("updated_at").IsRequired();
+            entity.HasOne(allocation => allocation.Workspace).WithMany().HasForeignKey(allocation => allocation.WorkspaceId);
+            entity.HasOne(allocation => allocation.Envelope).WithMany().HasForeignKey(allocation => allocation.EnvelopeId);
+            entity.HasIndex(allocation => new { allocation.WorkspaceId, allocation.PeriodKey, allocation.EnvelopeId }).IsUnique();
+            entity.HasIndex(allocation => new { allocation.WorkspaceId, allocation.PeriodKey });
+        });
+
         modelBuilder.Entity<SourceRecordEntity>(entity =>
         {
             entity.ToTable("source_records");

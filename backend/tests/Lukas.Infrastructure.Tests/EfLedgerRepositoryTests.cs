@@ -20,7 +20,7 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         var currentPeriod = DateTimeOffset.UtcNow.ToString("yyyy-MM");
-        var transactions = await repository.GetTransactionsAsync(currentPeriod, TestContext.Current.CancellationToken);
+        var transactions = await repository.GetTransactionsAsync(Period(currentPeriod), TestContext.Current.CancellationToken);
 
         account.CurrentBalance.ShouldBe(250000m);
         transactions.ShouldContain(transaction =>
@@ -45,12 +45,39 @@ public sealed class EfLedgerRepositoryTests
             new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Casa", "Contrato anual"),
             TestContext.Current.CancellationToken);
 
-        var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
+        var cashflow = await repository.GetMonthlyCashflowAsync(Period("2026-05"), TestContext.Current.CancellationToken);
 
         cashflow.IncomeTotal.ShouldBe(500000m);
         cashflow.ExpenseTotal.ShouldBe(125000m);
         cashflow.NetCashflow.ShouldBe(375000m);
         cashflow.Accounts.Single().CurrentBalance.ShouldBe(475000m);
+    }
+
+    [Fact]
+    public async Task TransactionsUseCalendarMonthBoundaries()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 4, 30), "1000", "CLP", "decrease", "Abril", null, null, null),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 1), "2000", "CLP", "decrease", "Inicio mayo", null, null, null),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 31), "3000", "CLP", "decrease", "Fin mayo", null, null, null),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 6, 1), "4000", "CLP", "decrease", "Junio", null, null, null),
+            TestContext.Current.CancellationToken);
+
+        var transactions = await repository.GetTransactionsAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+
+        transactions.Select(transaction => transaction.Description).ShouldBe(["Fin mayo", "Inicio mayo"]);
     }
 
     [Fact]
@@ -131,9 +158,9 @@ public sealed class EfLedgerRepositoryTests
             TestContext.Current.CancellationToken);
 
         var accounts = await repository.GetAccountsAsync(TestContext.Current.CancellationToken);
-        var cashflow = await repository.GetMonthlyCashflowAsync("2026-05", TestContext.Current.CancellationToken);
+        var cashflow = await repository.GetMonthlyCashflowAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
-        var budgetTree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var budgetTree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
 
         accounts.Single(account => account.Id == checking.Id).CurrentBalance.ShouldBe(70000m);
         accounts.Single(account => account.Id == savings.Id).CurrentBalance.ShouldBe(30000m);
@@ -166,12 +193,40 @@ public sealed class EfLedgerRepositoryTests
             new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
             TestContext.Current.CancellationToken);
 
-        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
         var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Arriendo");
 
         movements.Single().EnvelopeId.ShouldBe(envelope.Id);
         movements.Single().EnvelopeName.ShouldBe("Arriendo");
+    }
+
+    [Fact]
+    public async Task BudgetTreeIncludesSelectedPeriodActivity()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("income", account.Id, null, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, null, null),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 6, 2), "90000", "CLP", "decrease", "Arriendo junio", null, "Arriendo", null),
+            TestContext.Current.CancellationToken);
+
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var incomeEnvelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
+        var rentEnvelope = tree.Envelopes.Single(candidate => candidate.Name == "Arriendo");
+
+        incomeEnvelope.ActivityAmount.ShouldBe(500000m);
+        rentEnvelope.ActivityAmount.ShouldBe(125000m);
+        rentEnvelope.RemainingAmount.ShouldBe(-125000m);
     }
 
     [Fact]
@@ -187,7 +242,7 @@ public sealed class EfLedgerRepositoryTests
             new CreateManualTransactionCommand("income", account.Id, null, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, null, null),
             TestContext.Current.CancellationToken);
 
-        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
         var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
 
@@ -200,7 +255,7 @@ public sealed class EfLedgerRepositoryTests
     {
         await using var database = await CreateDatabaseAsync();
         var repository = new EfLedgerRepository(database.Context);
-        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var incomeEnvelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
         var withoutIncomeEnvelope = new SaveBudgetTreeCommand(
             tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
@@ -211,7 +266,7 @@ public sealed class EfLedgerRepositoryTests
                 .ToList(),
             tree.Goals.Select(goal => new SaveBudgetGoalCommand(goal.Id, goal.EnvelopeId, goal.TargetAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), goal.DeadlineDate, goal.Status)).ToList());
 
-        var savedTree = await repository.SaveBudgetTreeAsync(withoutIncomeEnvelope, TestContext.Current.CancellationToken);
+        var savedTree = await repository.SaveBudgetTreeAsync(Period("2026-05"), withoutIncomeEnvelope, TestContext.Current.CancellationToken);
 
         savedTree.Envelopes.ShouldContain(envelope => envelope.Id == incomeEnvelope.Id);
     }
@@ -229,7 +284,7 @@ public sealed class EfLedgerRepositoryTests
             new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "125000", "CLP", "decrease", "Arriendo", null, "Arriendo", null),
             TestContext.Current.CancellationToken);
 
-        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Arriendo");
         var withoutEnvelope = new SaveBudgetTreeCommand(
             tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
@@ -240,7 +295,7 @@ public sealed class EfLedgerRepositoryTests
                 .ToList(),
             tree.Goals.Select(goal => new SaveBudgetGoalCommand(goal.Id, goal.EnvelopeId, goal.TargetAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), goal.DeadlineDate, goal.Status)).ToList());
 
-        var savedTree = await repository.SaveBudgetTreeAsync(withoutEnvelope, TestContext.Current.CancellationToken);
+        var savedTree = await repository.SaveBudgetTreeAsync(Period("2026-05"), withoutEnvelope, TestContext.Current.CancellationToken);
         var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
         var trashSubcategory = savedTree.Subcategories.Single(candidate => candidate.Name == "Categorías eliminadas");
         var trashedEnvelope = savedTree.Envelopes.Single(candidate => candidate.Id == envelope.Id);
@@ -255,7 +310,7 @@ public sealed class EfLedgerRepositoryTests
     {
         await using var database = await CreateDatabaseAsync();
         var repository = new EfLedgerRepository(database.Context);
-        var tree = await repository.GetBudgetTreeAsync(TestContext.Current.CancellationToken);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
         var goalsSubcategory = tree.Subcategories.Single(candidate => candidate.Name == "Reservas y metas");
         var envelopeId = Guid.CreateVersion7();
         var goalId = Guid.CreateVersion7();
@@ -267,7 +322,7 @@ public sealed class EfLedgerRepositoryTests
                 .ToList(),
             [new SaveBudgetGoalCommand(goalId, envelopeId, "600000", "2026-12-31", "active")]);
 
-        var savedTree = await repository.SaveBudgetTreeAsync(command, TestContext.Current.CancellationToken);
+        var savedTree = await repository.SaveBudgetTreeAsync(Period("2026-05"), command, TestContext.Current.CancellationToken);
         var savedGoal = savedTree.Goals.Single();
 
         savedTree.Envelopes.ShouldContain(envelope => envelope.Id == envelopeId && envelope.AssignedAmount == 100000m);
@@ -276,6 +331,74 @@ public sealed class EfLedgerRepositoryTests
         savedGoal.TargetAmount.ShouldBe(600000m);
         savedGoal.DeadlineDate.ShouldBe("2026-12-31");
         savedGoal.Status.ShouldBe("active");
+    }
+
+    [Fact]
+    public async Task BudgetAssignedAmountsAreSpecificToPeriod()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var subcategory = tree.Subcategories.Single(candidate => candidate.Name == "General");
+        var envelopeId = Guid.CreateVersion7();
+        var mayCommand = BudgetCommandWithEnvelope(tree, envelopeId, subcategory.Id, "Vacaciones", "100000");
+
+        await repository.SaveBudgetTreeAsync(Period("2026-05"), mayCommand, TestContext.Current.CancellationToken);
+        var juneTree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var juneCommand = BudgetCommandWithEnvelope(juneTree, envelopeId, subcategory.Id, "Vacaciones", "250000");
+        await repository.SaveBudgetTreeAsync(Period("2026-06"), juneCommand, TestContext.Current.CancellationToken);
+
+        var mayTree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var savedJuneTree = await repository.GetBudgetTreeAsync(Period("2026-06"), TestContext.Current.CancellationToken);
+
+        mayTree.Envelopes.Single(envelope => envelope.Id == envelopeId).AssignedAmount.ShouldBe(100000m);
+        savedJuneTree.Envelopes.Single(envelope => envelope.Id == envelopeId).AssignedAmount.ShouldBe(250000m);
+    }
+
+    [Fact]
+    public async Task BudgetWithoutPeriodAllocationIgnoresLegacyEnvelopeAmount()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var tree = await repository.GetBudgetTreeAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var envelope = tree.Envelopes.Single(candidate => candidate.Name == "Ingresos");
+        var entity = await database.Context.BudgetEnvelopes.FindAsync(
+            [envelope.Id],
+            TestContext.Current.CancellationToken);
+
+        entity.ShouldNotBeNull();
+        entity.AssignedAmount = "750000";
+        await database.Context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var nextMonthTree = await repository.GetBudgetTreeAsync(Period("2026-06"), TestContext.Current.CancellationToken);
+
+        nextMonthTree.Envelopes.Single(candidate => candidate.Id == envelope.Id).AssignedAmount.ShouldBe(0m);
+    }
+
+    private static SaveBudgetTreeCommand BudgetCommandWithEnvelope(
+        BudgetTreeReadModel tree,
+        Guid envelopeId,
+        Guid subcategoryId,
+        string envelopeName,
+        string assignedAmount)
+    {
+        var envelopes = tree.Envelopes
+            .Where(envelope => envelope.Id != envelopeId)
+            .Select(envelope => new SaveBudgetEnvelopeCommand(envelope.Id, envelope.SubcategoryId, envelope.Name, envelope.AssignedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), envelope.SortOrder))
+            .Append(new SaveBudgetEnvelopeCommand(envelopeId, subcategoryId, envelopeName, assignedAmount, tree.Envelopes.Count))
+            .ToList();
+
+        return new SaveBudgetTreeCommand(
+            tree.Categories.Select(category => new SaveBudgetCategoryCommand(category.Id, category.Name, category.SortOrder)).ToList(),
+            tree.Subcategories.Select(subcategory => new SaveBudgetSubcategoryCommand(subcategory.Id, subcategory.CategoryId, subcategory.Name, subcategory.SortOrder)).ToList(),
+            envelopes,
+            tree.Goals.Select(goal => new SaveBudgetGoalCommand(goal.Id, goal.EnvelopeId, goal.TargetAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), goal.DeadlineDate, goal.Status)).ToList());
+    }
+
+    private static MonthlyPeriod Period(string key)
+    {
+        MonthlyPeriod.TryParse(key, out var period).ShouldBeTrue();
+        return period;
     }
 
     private static async Task<TestDatabase> CreateDatabaseAsync()

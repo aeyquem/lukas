@@ -28,6 +28,8 @@ export type BudgetEnvelope = {
   subcategoryId: string;
   name: string;
   assignedAmount: string;
+  activityAmount: string;
+  remainingAmount: string;
   spentAmount: string;
 };
 
@@ -80,7 +82,9 @@ export function applyBudgetTree(tree: BudgetTreeDto) {
       subcategoryId: envelope.subcategoryId,
       name: envelope.name,
       assignedAmount: envelope.assignedAmount,
-      spentAmount: "0",
+      activityAmount: envelope.activityAmount,
+      remainingAmount: envelope.remainingAmount,
+      spentAmount: envelope.activityAmount,
     }));
   goals.value = (tree.goals ?? []).map((goal) => ({
     id: goal.id,
@@ -91,8 +95,9 @@ export function applyBudgetTree(tree: BudgetTreeDto) {
   }));
 }
 
-export function toBudgetTreeDto(): BudgetTreeDto {
+export function toBudgetTreeDto(period: string): BudgetTreeDto {
   return {
+    period,
     categories: categories.value.map((category, index) => ({
       id: category.id,
       name: category.name,
@@ -109,6 +114,8 @@ export function toBudgetTreeDto(): BudgetTreeDto {
       subcategoryId: envelope.subcategoryId,
       name: envelope.name,
       assignedAmount: envelope.assignedAmount,
+      activityAmount: envelope.activityAmount,
+      remainingAmount: envelope.remainingAmount,
       sortOrder: index,
     })),
     goals: goals.value.map((goal) => ({

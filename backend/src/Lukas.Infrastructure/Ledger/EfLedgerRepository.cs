@@ -257,7 +257,9 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .ToList();
     }
 
-    public async Task<BudgetTreeReadModel> GetBudgetTreeAsync(CancellationToken cancellationToken)
+    public async Task<BudgetTreeReadModel> GetBudgetTreeAsync(
+        MonthlyPeriod period,
+        CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
         await EnsureBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
@@ -265,10 +267,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
-        return await ReadBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        return await ReadBudgetTreeAsync(workspace.Id, period, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<BudgetTreeReadModel> SaveBudgetTreeAsync(
+        MonthlyPeriod period,
         SaveBudgetTreeCommand command,
         CancellationToken cancellationToken)
     {
@@ -277,25 +280,25 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await ReplaceBudgetTreeAsync(workspace.Id, command, cancellationToken).ConfigureAwait(false);
+        await SaveBudgetPeriodAllocationsAsync(workspace.Id, period, command.Envelopes, cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
-        return await ReadBudgetTreeAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        return await ReadBudgetTreeAsync(workspace.Id, period, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(
-        string period,
+        MonthlyPeriod period,
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
-        var (start, end) = GetPeriodRange(period);
 
         var transactions = await dbContext.LedgerTransactions
             .AsNoTracking()
             .Include(transaction => transaction.Entries)
             .Where(transaction =>
                 transaction.WorkspaceId == workspace.Id
-                && transaction.TransactionDate >= start
-                && transaction.TransactionDate < end)
+                && transaction.TransactionDate >= period.StartDate
+                && transaction.TransactionDate < period.EndDate)
             .OrderByDescending(transaction => transaction.TransactionDate)
             .ThenByDescending(transaction => transaction.Id)
             .ToListAsync(cancellationToken)
@@ -305,19 +308,18 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     }
 
     public async Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(
-        string period,
+        MonthlyPeriod period,
         CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
-        var (start, end) = GetPeriodRange(period);
 
         var transactions = await dbContext.LedgerTransactions
             .AsNoTracking()
             .Include(transaction => transaction.Entries)
             .Where(transaction =>
                 transaction.WorkspaceId == workspace.Id
-                && transaction.TransactionDate >= start
-                && transaction.TransactionDate < end)
+                && transaction.TransactionDate >= period.StartDate
+                && transaction.TransactionDate < period.EndDate)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -326,7 +328,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         var accounts = await GetAccountsAsync(cancellationToken).ConfigureAwait(false);
 
         return new MonthlyCashflowReadModel(
-            period,
+            period.Key,
             workspace.BaseCurrency,
             income,
             expenses,
@@ -613,6 +615,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
 
     private async Task<BudgetTreeReadModel> ReadBudgetTreeAsync(
         Guid workspaceId,
+        MonthlyPeriod period,
         CancellationToken cancellationToken)
     {
         var categories = await dbContext.BudgetCategories
@@ -643,12 +646,46 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .ThenBy(goal => goal.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+        var allocations = await dbContext.BudgetPeriodAllocations
+            .AsNoTracking()
+            .Where(allocation => allocation.WorkspaceId == workspaceId && allocation.PeriodKey == period.Key)
+            .ToDictionaryAsync(
+                allocation => allocation.EnvelopeId,
+                allocation => allocation.AssignedAmount,
+                cancellationToken)
+            .ConfigureAwait(false);
+        var activityAmounts = await ReadBudgetActivityAmountsAsync(workspaceId, period, cancellationToken).ConfigureAwait(false);
 
         return new BudgetTreeReadModel(
+            period.Key,
             categories.Select(ToBudgetCategoryReadModel).ToList(),
             subcategories.Select(ToBudgetSubcategoryReadModel).ToList(),
-            envelopes.Select(ToBudgetEnvelopeReadModel).ToList(),
+            envelopes.Select(envelope => ToBudgetEnvelopeReadModel(envelope, allocations, activityAmounts)).ToList(),
             goals.Select(ToBudgetGoalReadModel).ToList());
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, decimal>> ReadBudgetActivityAmountsAsync(
+        Guid workspaceId,
+        MonthlyPeriod period,
+        CancellationToken cancellationToken)
+    {
+        var transactions = await dbContext.LedgerTransactions
+            .AsNoTracking()
+            .Include(transaction => transaction.Entries)
+            .Where(transaction =>
+                transaction.WorkspaceId == workspaceId
+                && transaction.EnvelopeId != null
+                && transaction.TransactionDate >= period.StartDate
+                && transaction.TransactionDate < period.EndDate
+                && (transaction.Kind == "income" || transaction.Kind == "expense"))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return transactions
+            .GroupBy(transaction => transaction.EnvelopeId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(BudgetActivityAmount));
     }
 
     private async Task ReplaceBudgetTreeAsync(
@@ -810,17 +847,51 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             var envelope = await dbContext.BudgetEnvelopes
                 .SingleOrDefaultAsync(candidate => candidate.WorkspaceId == workspaceId && candidate.Id == command.Id, cancellationToken)
                 .ConfigureAwait(false);
-            var assignedAmount = FormatAmount(decimal.Parse(command.AssignedAmount, CultureInfo.InvariantCulture));
             if (envelope is null)
             {
-                dbContext.BudgetEnvelopes.Add(new BudgetEnvelopeEntity { Id = command.Id, WorkspaceId = workspaceId, SubcategoryId = command.SubcategoryId, Name = command.Name.Trim(), AssignedAmount = assignedAmount, SortOrder = command.SortOrder });
+                dbContext.BudgetEnvelopes.Add(new BudgetEnvelopeEntity { Id = command.Id, WorkspaceId = workspaceId, SubcategoryId = command.SubcategoryId, Name = command.Name.Trim(), AssignedAmount = "0", SortOrder = command.SortOrder });
                 continue;
             }
 
             envelope.SubcategoryId = command.SubcategoryId;
             envelope.Name = command.Name.Trim();
-            envelope.AssignedAmount = assignedAmount;
             envelope.SortOrder = command.SortOrder;
+        }
+    }
+
+    private async Task SaveBudgetPeriodAllocationsAsync(
+        Guid workspaceId,
+        MonthlyPeriod period,
+        IReadOnlyList<SaveBudgetEnvelopeCommand> commands,
+        CancellationToken cancellationToken)
+    {
+        var allocations = await dbContext.BudgetPeriodAllocations
+            .Where(allocation => allocation.WorkspaceId == workspaceId && allocation.PeriodKey == period.Key)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var command in commands)
+        {
+            var assignedAmount = FormatAmount(decimal.Parse(command.AssignedAmount, CultureInfo.InvariantCulture));
+            var allocation = allocations.SingleOrDefault(candidate => candidate.EnvelopeId == command.Id);
+            if (allocation is null)
+            {
+                dbContext.BudgetPeriodAllocations.Add(new BudgetPeriodAllocationEntity
+                {
+                    Id = Guid.CreateVersion7(),
+                    WorkspaceId = workspaceId,
+                    PeriodKey = period.Key,
+                    EnvelopeId = command.Id,
+                    AssignedAmount = assignedAmount,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                });
+                continue;
+            }
+
+            allocation.AssignedAmount = assignedAmount;
+            allocation.UpdatedAt = now;
         }
     }
 
@@ -1122,13 +1193,23 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             subcategory.SortOrder);
     }
 
-    private static BudgetEnvelopeReadModel ToBudgetEnvelopeReadModel(BudgetEnvelopeEntity envelope)
+    private static BudgetEnvelopeReadModel ToBudgetEnvelopeReadModel(
+        BudgetEnvelopeEntity envelope,
+        IReadOnlyDictionary<Guid, string> assignedAmounts,
+        IReadOnlyDictionary<Guid, decimal> activityAmounts)
     {
+        var assignedAmount = assignedAmounts.TryGetValue(envelope.Id, out var assignedValue)
+            ? decimal.Parse(assignedValue, CultureInfo.InvariantCulture)
+            : 0;
+        var activityAmount = activityAmounts.GetValueOrDefault(envelope.Id);
+
         return new BudgetEnvelopeReadModel(
             envelope.Id,
             envelope.SubcategoryId,
             envelope.Name,
-            decimal.Parse(envelope.AssignedAmount, CultureInfo.InvariantCulture),
+            assignedAmount,
+            activityAmount,
+            assignedAmount - activityAmount,
             envelope.SortOrder);
     }
 
@@ -1152,6 +1233,27 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .Select(transaction => transaction.Entries.Single())
             .Where(entry => entry.Currency == "CLP" && entry.AccountEffect == accountEffect)
             .Sum(entry => decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture));
+    }
+
+    private static decimal BudgetActivityAmount(LedgerTransactionEntity transaction)
+    {
+        var entry = PrimaryEntry(transaction);
+        if (entry.Currency != "CLP")
+        {
+            return 0;
+        }
+
+        if (transaction.Kind == "income" && entry.AccountEffect == "increase")
+        {
+            return decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture);
+        }
+
+        if (transaction.Kind == "expense" && entry.AccountEffect == "decrease")
+        {
+            return decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture);
+        }
+
+        return 0;
     }
 
     private static bool TryParseAmount(string value, out decimal amount)
@@ -1197,9 +1299,4 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return amount.ToString("0.#############################", CultureInfo.InvariantCulture);
     }
 
-    private static (DateOnly Start, DateOnly End) GetPeriodRange(string period)
-    {
-        var start = DateOnly.ParseExact($"{period}-01", "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return (start, start.AddMonths(1));
-    }
 }

@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace Lukas.Contracts.Budget;
 
 public sealed record BudgetTreeDto(
+    string Period,
     IReadOnlyList<BudgetCategoryDto> Categories,
     IReadOnlyList<BudgetSubcategoryDto> Subcategories,
     IReadOnlyList<BudgetEnvelopeDto> Envelopes,
@@ -24,6 +25,8 @@ public sealed record BudgetEnvelopeDto(
     Guid SubcategoryId,
     string Name,
     string AssignedAmount,
+    string ActivityAmount,
+    string RemainingAmount,
     int SortOrder);
 
 public sealed record BudgetGoalDto(

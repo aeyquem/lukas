@@ -18,5 +18,8 @@ export function formatDate(date: string): string {
 }
 
 export function currentPeriod(): string {
-  return new Date().toISOString().slice(0, 7);
+  const today = new Date();
+  const year = today.getFullYear().toString();
+  const month = (today.getMonth() + 1).toString().padStart(2, "0");
+  return `${year}-${month}`;
 }

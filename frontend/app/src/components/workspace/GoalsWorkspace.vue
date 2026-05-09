@@ -20,6 +20,10 @@ const emit = defineEmits<{
   openBudget: [];
 }>();
 
+const props = defineProps<{
+  period: string;
+}>();
+
 const currency = "CLP";
 const { envelopes, goals } = useBudgetTree();
 const form = reactive({
@@ -29,8 +33,8 @@ const form = reactive({
 });
 
 const budgetTreeQuery = useQuery({
-  key: ["budget-tree"],
-  query: getBudgetTree,
+  key: () => ["budget-tree", props.period],
+  query: () => getBudgetTree(props.period),
 });
 
 const goalCards = computed(() =>
@@ -81,6 +85,8 @@ async function createGoal() {
       subcategoryId: GOALS_SUBCATEGORY_ID,
       name,
       assignedAmount: "0",
+      activityAmount: "0",
+      remainingAmount: "0",
       spentAmount: "0",
     },
   ];
@@ -101,7 +107,7 @@ async function createGoal() {
 }
 
 async function persistBudgetTree() {
-  const savedTree = await saveBudgetTree(toBudgetTreeDto());
+  const savedTree = await saveBudgetTree(props.period, toBudgetTreeDto(props.period));
   applyBudgetTree(savedTree);
 }
 
