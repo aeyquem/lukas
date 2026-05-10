@@ -42,6 +42,6 @@ const treeRows = ref([
 <style scoped>
 .story-stack {
   display: grid;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 </style>

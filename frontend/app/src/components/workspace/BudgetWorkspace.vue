@@ -1398,14 +1398,15 @@ function formatDecimal(amount: number): string {
           <template #header>
             <div class="name-column-header">
               <span>Sobre</span>
-              <button
+              <BaseButton
                 v-if="isTreeEditing"
-                class="add-category-header-button"
+                size="sm"
                 type="button"
+                variant="secondary"
                 @click.stop="addCategory"
               >
                 + Categoría
-              </button>
+              </BaseButton>
             </div>
           </template>
 
@@ -1432,15 +1433,16 @@ function formatDecimal(amount: number): string {
                 :data-envelope-id="node.key"
               >
                 <strong>{{ node.data.name }}</strong>
-                <button
+                <BaseButton
                   v-if="node.data.goalStatus"
-                  class="goal-marker"
+                  size="sm"
                   type="button"
+                  variant="secondary"
                   :aria-label="`Abrir meta ${node.data.name}`"
                   @click="openGoalDetails(node.key)"
                 >
                   Meta
-                </button>
+                </BaseButton>
               </span>
               <span
                 v-else-if="node.data.nodeType === 'subcategory'"
@@ -1459,80 +1461,86 @@ function formatDecimal(amount: number): string {
                 {{ node.data.name }}
               </span>
 
-              <button
+              <BaseButton
                 v-if="isTreeEditing && !isProtectedNode(node)"
-                class="rename-node-button"
+                size="sm"
                 type="button"
+                variant="secondary"
                 :aria-label="`Renombrar ${node.data.name}`"
                 @click="editNodeName(node.key)"
               >
                 Renombrar
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-if="
                   isTreeEditing &&
                   node.data.nodeType === 'category' &&
                   !isProtectedNode(node)
                 "
-                class="add-child-button"
+                size="sm"
                 type="button"
+                variant="secondary"
                 :aria-label="`Agregar subcategoría en ${node.data.name}`"
                 @click="addSubcategory(node.key)"
               >
                 + Subcategoría
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'subcategory' &&
                   !isProtectedNode(node)
                 "
-                class="add-child-button"
+                size="sm"
                 type="button"
+                variant="secondary"
                 :aria-label="`Agregar sobre en ${node.data.name}`"
                 @click="addEnvelope(node.key)"
               >
                 + Sobre
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-if="
                   isTreeEditing &&
                   node.data.nodeType === 'category' &&
                   !isProtectedNode(node)
                 "
-                class="delete-node-button"
+                size="sm"
                 type="button"
+                variant="danger"
                 :aria-label="`Eliminar categoría ${node.data.name}`"
                 @click="deleteCategory(node.key)"
               >
                 Eliminar
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'subcategory' &&
                   !isProtectedNode(node)
                 "
-                class="delete-node-button"
+                size="sm"
                 type="button"
+                variant="danger"
                 :aria-label="`Eliminar subcategoría ${node.data.name}`"
                 @click="deleteSubcategory(node.key)"
               >
                 Eliminar
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'envelope' &&
                   !isProtectedNode(node)
                 "
-                class="delete-envelope-button"
+                size="sm"
                 type="button"
+                variant="danger"
                 :aria-label="`Eliminar sobre ${node.data.name}`"
                 @click="deleteEnvelope(node.key)"
               >
                 Eliminar
-              </button>
+              </BaseButton>
             </div>
           </template>
         </BaseColumn>
@@ -1633,7 +1641,13 @@ function formatDecimal(amount: number): string {
               {{ selectedGoalEnvelope?.name ?? "Meta" }}
             </h2>
           </div>
-          <button type="button" @click="closeGoalDetails">Cerrar</button>
+          <BaseButton
+            type="button"
+            variant="secondary"
+            @click="closeGoalDetails"
+          >
+            Cerrar
+          </BaseButton>
         </header>
 
         <form class="goal-form" @submit.prevent="saveGoalDetails">
@@ -1694,131 +1708,89 @@ function formatDecimal(amount: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.75rem;
   margin-block-end: 0;
 }
 
 .budget-heading h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1rem;
 }
 
 .budget-heading span {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
 }
 
 .budget-heading__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
 }
 
 .zero-budget-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-secondary);
-  margin-block-end: var(--space-4);
-  padding: var(--space-4);
+  gap: 1rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 6px;
+  background: var(--p-content-hover-background);
+  margin-block-end: 1rem;
+  padding: 1rem;
 }
 
 .zero-budget-banner .eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  margin: 0 0 0.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .zero-budget-banner strong {
-  color: var(--color-primary-strong);
-  font-size: var(--font-size-md);
+  color: var(--p-text-color);
+  font-size: 1rem;
 }
 
 .zero-budget-banner__amount {
-  color: var(--color-primary-strong);
+  color: var(--p-text-color);
   font-size: 1.5rem;
   font-weight: 900;
   white-space: nowrap;
 }
 
 .zero-budget-banner__amount[data-tone="negative"] {
-  color: var(--color-danger);
+  color: var(--p-red-500);
 }
 
 .node-name-cell {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
   max-inline-size: 100%;
 }
 
 .name-column-header {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.add-category-header-button {
-  min-block-size: 1.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-secondary);
-  color: var(--color-muted-foreground);
-  cursor: pointer;
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.add-category-header-button:hover,
-.add-category-header-button:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
-  color: var(--color-primary-strong);
-  outline: 0;
+  gap: 0.5rem;
 }
 
 .group-label,
 .envelope-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.goal-marker {
-  min-block-size: 1.35rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
-  border-radius: var(--radius-round);
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  color: var(--color-primary-strong);
-  cursor: pointer;
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 800;
-  line-height: 1;
-}
-
-.goal-marker:hover,
-.goal-marker:focus-visible {
-  border-color: var(--color-primary);
-  outline: 0;
+  gap: 0.5rem;
 }
 
 .group-label {
-  color: var(--color-primary-strong);
   font-weight: 800;
 }
 
 .group-label[data-level="subcategory"] {
-  color: var(--color-muted-foreground);
+  color: var(--p-text-muted-color);
 }
 
 .node-name-input {
@@ -1827,71 +1799,23 @@ function formatDecimal(amount: number): string {
   min-block-size: 2.25rem;
 }
 
-.rename-node-button,
-.add-child-button {
-  min-block-size: 1.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-secondary);
-  color: var(--color-muted-foreground);
-  cursor: pointer;
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.rename-node-button:hover,
-.rename-node-button:focus-visible,
-.add-child-button:hover,
-.add-child-button:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
-  color: var(--color-primary-strong);
-  outline: 0;
-}
-
-.delete-node-button,
-.delete-envelope-button {
-  min-block-size: 1.75rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-danger-strong);
-  cursor: pointer;
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.delete-node-button:hover,
-.delete-node-button:focus-visible,
-.delete-envelope-button:hover,
-.delete-envelope-button:focus-visible {
-  border-color: color-mix(in srgb, var(--color-danger) 34%, transparent);
-  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
-  outline: 0;
-}
-
 .numeric {
-  color: var(--color-primary-strong);
-  font-family: var(--font-mono);
+  color: var(--p-text-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .numeric[data-tone="negative"] {
-  color: var(--color-danger-strong);
+  color: var(--p-red-600);
 }
 
 .numeric[data-direction="in"] {
-  color: var(--color-primary-strong);
+  color: var(--p-primary-700);
 }
 
 .numeric[data-direction="out"] {
-  color: var(--color-danger-strong);
+  color: var(--p-red-600);
 }
 
 .assigned-display {
@@ -1904,7 +1828,7 @@ function formatDecimal(amount: number): string {
 
 .assigned-display:hover,
 .assigned-display:focus-visible {
-  color: var(--color-primary);
+  color: var(--p-primary-color);
   outline: 0;
 }
 
@@ -1919,14 +1843,6 @@ function formatDecimal(amount: number): string {
   text-align: end;
 }
 
-:deep(.p-treetable-table) {
-  font-size: var(--font-size-sm);
-}
-
-:deep(.p-treetable-column-title) {
-  font-size: var(--font-size-sm);
-}
-
 :deep(.p-treetable-thead > tr > th) {
   white-space: nowrap;
 }
@@ -1936,11 +1852,11 @@ function formatDecimal(amount: number): string {
 }
 
 :deep(.budget-row--category > td) {
-  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  background: color-mix(in srgb, var(--p-primary-color) 9%, transparent);
 }
 
 :deep(.budget-row--subcategory > td) {
-  background: color-mix(in srgb, var(--color-secondary) 78%, transparent);
+  background: var(--p-content-hover-background);
 }
 
 :deep(.budget-row[data-dragging="true"] > td) {
@@ -1948,17 +1864,17 @@ function formatDecimal(amount: number): string {
 }
 
 :deep(.budget-row[data-drag-over="true"] > td) {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  color: var(--color-primary-strong);
-  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  color: var(--p-text-color);
+  box-shadow: inset 0 0 0 1px var(--p-primary-color);
 }
 
 :deep(.budget-row[data-drag-edge="before"] > td) {
-  box-shadow: inset 0 2px 0 var(--color-primary);
+  box-shadow: inset 0 2px 0 var(--p-primary-color);
 }
 
 :deep(.budget-row[data-drag-edge="after"] > td) {
-  box-shadow: inset 0 -2px 0 var(--color-primary);
+  box-shadow: inset 0 -2px 0 var(--p-primary-color);
 }
 
 :deep(.budget-row button),
@@ -1990,61 +1906,50 @@ function formatDecimal(amount: number): string {
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(24 43 26 / 0.28);
+  background: rgb(0 0 0 / 0.32);
 }
 
 .goal-drawer {
   display: grid;
   align-content: start;
-  gap: var(--space-5);
+  gap: 1.25rem;
   inline-size: min(28rem, 100%);
   block-size: 100dvh;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--color-border);
-  background: var(--color-card);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-lg);
+  border-inline-start: 1px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  padding: 1.25rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.16);
 }
 
 .goal-drawer__header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 
 .goal-drawer__header h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1.2rem;
 }
 
-.goal-drawer__header button {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-card);
-  color: var(--color-primary-strong);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
 .goal-drawer .eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  margin: 0 0 0.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .goal-form {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .goal-summary {
   display: grid;
-  gap: var(--space-2);
+  gap: 0.5rem;
   margin: 0;
 }
 
@@ -2052,20 +1957,20 @@ function formatDecimal(amount: number): string {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-3);
-  border-block-end: 1px solid var(--color-border);
-  padding-block-end: var(--space-2);
+  gap: 0.75rem;
+  border-block-end: 1px solid var(--p-content-border-color);
+  padding-block-end: 0.5rem;
 }
 
 .goal-summary dt {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
 .goal-summary dd {
   margin: 0;
-  color: var(--color-primary-strong);
+  color: var(--p-text-color);
   font-weight: 800;
   text-align: end;
 }
@@ -2074,8 +1979,8 @@ function formatDecimal(amount: number): string {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: var(--space-2);
-  padding-block-start: var(--space-2);
+  gap: 0.5rem;
+  padding-block-start: 0.5rem;
 }
 
 @media (max-width: 680px) {

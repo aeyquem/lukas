@@ -137,16 +137,23 @@ function resetForm() {
             </td>
             <td>
               <div class="row-actions">
-                <button type="button" @click="openEditPanel(account)">
+                <BaseButton
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                  @click="openEditPanel(account)"
+                >
                   Editar
-                </button>
-                <button
-                  disabled
+                </BaseButton>
+                <BaseButton
+                  :disabled="true"
+                  size="sm"
                   title="Cerrar cuenta requiere soporte de API"
                   type="button"
+                  variant="secondary"
                 >
                   Cerrar cuenta
-                </button>
+                </BaseButton>
               </div>
             </td>
           </tr>
@@ -173,7 +180,9 @@ function resetForm() {
             <p class="eyebrow">Cuenta</p>
             <h2 id="account-drawer-title">{{ drawerTitle }}</h2>
           </div>
-          <button type="button" @click="closePanel">Cerrar</button>
+          <BaseButton type="button" variant="secondary" @click="closePanel">
+            Cerrar
+          </BaseButton>
         </header>
 
         <form class="account-form" @submit.prevent="submitAccount">
@@ -254,29 +263,28 @@ function resetForm() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.75rem;
   margin-block-end: 0;
 }
 
 .panel-heading h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1rem;
 }
 
 .panel-heading span {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
 }
 
 .form-alert {
-  margin-block-end: var(--space-4);
+  margin-block-end: 1rem;
 }
 
 .accounts-table-wrap {
@@ -286,20 +294,20 @@ function resetForm() {
 .accounts-table {
   inline-size: 100%;
   border-collapse: collapse;
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
 }
 
 .accounts-table th,
 .accounts-table td {
-  border-block-end: 1px solid var(--color-border);
-  padding: var(--space-3);
+  border-block-end: 1px solid var(--p-content-border-color);
+  padding: 0.75rem;
   text-align: start;
   vertical-align: middle;
 }
 
 .accounts-table th {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   text-transform: uppercase;
 }
 
@@ -308,41 +316,26 @@ function resetForm() {
 }
 
 .numeric {
-  font-family: var(--font-mono);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: nowrap;
 }
 
 .row-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.row-actions button {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-card);
-  color: var(--color-primary-strong);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
-.row-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+  gap: 0.5rem;
 }
 
 .account-form {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .account-form__actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
-  padding-block-start: var(--space-2);
+  gap: 0.5rem;
+  padding-block-start: 0.5rem;
 }
 
 @media (max-width: 680px) {
@@ -365,49 +358,38 @@ function resetForm() {
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(24 43 26 / 0.28);
+  background: rgb(0 0 0 / 0.32);
 }
 
 .account-drawer {
   display: grid;
   align-content: start;
-  gap: var(--space-5);
+  gap: 1.25rem;
   inline-size: min(28rem, 100%);
   block-size: 100dvh;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--color-border);
-  background: var(--color-card);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-lg);
+  border-inline-start: 1px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  padding: 1.25rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.16);
 }
 
 .account-drawer__header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 
 .account-drawer__header h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1.2rem;
 }
 
-.account-drawer__header button {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-card);
-  color: var(--color-primary-strong);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
 .account-drawer .eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  margin: 0 0 0.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
 }

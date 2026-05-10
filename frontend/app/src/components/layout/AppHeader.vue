@@ -47,11 +47,15 @@ function updatePeriod(value: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: 1rem;
   min-block-size: 4.75rem;
-  border-block-end: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-background) 96%, var(--color-card));
-  padding: var(--space-3) var(--space-6);
+  border-block-end: 1px solid var(--p-content-border-color);
+  background: color-mix(
+    in srgb,
+    var(--p-content-background) 92%,
+    transparent
+  );
+  padding: 0.75rem 1.5rem;
 }
 
 .header-title {
@@ -60,17 +64,15 @@ function updatePeriod(value: string) {
 
 .header-title h1 {
   margin: 0;
-  color: var(--color-primary-strong);
-  font-family: var(--font-display);
   font-size: clamp(1.75rem, 3vw, 2.35rem);
-  font-weight: 400;
+  font-weight: 700;
   line-height: 1;
 }
 
 .header-context {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .header-context :deep(.base-field) {
@@ -78,9 +80,9 @@ function updatePeriod(value: string) {
 }
 
 .eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  margin: 0 0 0.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -104,7 +106,7 @@ function updatePeriod(value: string) {
 
 @media (max-width: 680px) {
   .app-header {
-    padding: var(--space-4);
+    padding: 1rem;
   }
 }
 </style>

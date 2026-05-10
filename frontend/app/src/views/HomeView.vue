@@ -95,9 +95,7 @@ function selectSection(section: WorkspaceSection) {
   display: grid;
   grid-template-columns: 17rem minmax(0, 1fr);
   min-block-size: 100dvh;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.42), transparent 16rem),
-    var(--color-background);
+  background: var(--p-surface-50);
 }
 
 .app-workspace {
@@ -106,9 +104,9 @@ function selectSection(section: WorkspaceSection) {
 
 .app-main {
   display: grid;
-  gap: var(--space-4);
+  gap: 1rem;
   max-inline-size: 76rem;
-  padding: var(--space-6);
+  padding: 1.5rem;
 }
 
 @media (max-width: 900px) {
@@ -119,7 +117,7 @@ function selectSection(section: WorkspaceSection) {
 
 @media (max-width: 680px) {
   .app-main {
-    padding: var(--space-4);
+    padding: 1rem;
   }
 }
 </style>

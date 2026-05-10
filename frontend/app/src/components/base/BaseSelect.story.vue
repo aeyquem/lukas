@@ -54,7 +54,7 @@ const categoryOptions: BaseSelectOption[] = [
 <style scoped>
 .story-stack {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
   max-inline-size: 24rem;
 }
 </style>

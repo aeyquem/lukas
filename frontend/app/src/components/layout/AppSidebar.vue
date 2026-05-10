@@ -64,24 +64,24 @@ function selectSection(section: WorkspaceSection) {
   inset-block-start: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: 1.5rem;
   block-size: 100dvh;
-  border-inline-end: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-card) 80%, transparent);
-  padding: var(--space-5);
+  border-inline-end: 1px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  padding: 1.25rem;
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .sidebar-brand__logo {
   inline-size: 2.4rem;
   block-size: 2.4rem;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
   object-fit: cover;
 }
 
@@ -91,38 +91,37 @@ function selectSection(section: WorkspaceSection) {
 }
 
 .sidebar-brand strong {
-  color: var(--color-primary-strong);
   font-size: 1.05rem;
   line-height: 1.1;
 }
 
 .sidebar-brand span {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
 .sidebar-nav {
   display: grid;
-  gap: var(--space-2);
+  gap: 0.5rem;
 }
 
 .sidebar-option {
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-3);
+  gap: 0.75rem;
   min-block-size: 2.75rem;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: transparent;
-  color: var(--color-muted-foreground);
-  padding: var(--space-2);
+  color: var(--p-text-muted-color);
+  padding: 0.5rem;
   text-align: start;
   transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    color var(--motion-fast);
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
 }
 
 .sidebar-option span {
@@ -130,16 +129,16 @@ function selectSection(section: WorkspaceSection) {
   place-items: center;
   inline-size: 2rem;
   block-size: 2rem;
-  border-radius: var(--radius-md);
-  background: var(--color-muted);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
+  border-radius: 6px;
+  background: var(--p-content-hover-background);
+  color: var(--p-primary-color);
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
 .sidebar-option strong {
   overflow: hidden;
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -147,21 +146,21 @@ function selectSection(section: WorkspaceSection) {
 .sidebar-option:hover,
 .sidebar-option:focus-visible,
 .sidebar-option[aria-pressed="true"] {
-  border-color: var(--color-border);
-  background: var(--color-secondary);
-  color: var(--color-primary-strong);
+  border-color: var(--p-content-border-color);
+  background: var(--p-content-hover-background);
+  color: var(--p-text-color);
 }
 
 .sidebar-option[aria-pressed="true"] span {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--p-primary-color);
+  color: var(--p-primary-contrast-color);
 }
 
 @media (max-width: 900px) {
   .app-sidebar {
     position: static;
     block-size: auto;
-    border-block-end: 1px solid var(--color-border);
+    border-block-end: 1px solid var(--p-content-border-color);
     border-inline-end: 0;
   }
 
@@ -172,7 +171,7 @@ function selectSection(section: WorkspaceSection) {
 
 @media (max-width: 680px) {
   .app-sidebar {
-    padding: var(--space-4);
+    padding: 1rem;
   }
 
   .sidebar-nav {

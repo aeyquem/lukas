@@ -383,7 +383,9 @@ function destinationAccountId(movement: LedgerMovement): string {
             <p class="eyebrow">Movimiento</p>
             <h2 id="movement-drawer-title">{{ drawerTitle }}</h2>
           </div>
-          <button type="button" @click="closePanel">Cerrar</button>
+          <BaseButton type="button" variant="secondary" @click="closePanel">
+            Cerrar
+          </BaseButton>
         </header>
 
         <form class="movement-form" @submit.prevent="submitTransaction">
@@ -503,20 +505,19 @@ function destinationAccountId(movement: LedgerMovement): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.75rem;
   margin-block-end: 0;
 }
 
 .movements-heading h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1rem;
 }
 
 .movements-heading span,
 .currency-note {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
 }
 
 .movements-actions {
@@ -524,31 +525,31 @@ function destinationAccountId(movement: LedgerMovement): string {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .currency-note {
-  margin-block-end: var(--space-4);
+  margin-block-end: 1rem;
 }
 
 .currency-note strong {
-  color: var(--color-primary-strong);
+  color: var(--p-text-color);
 }
 
 .movements-alert {
-  margin-block-end: var(--space-4);
+  margin-block-end: 1rem;
 }
 
 .movement-form {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .movement-form__actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
-  padding-block-start: var(--space-2);
+  gap: 0.5rem;
+  padding-block-start: 0.5rem;
 }
 
 @media (max-width: 680px) {
@@ -570,49 +571,38 @@ function destinationAccountId(movement: LedgerMovement): string {
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(24 43 26 / 0.28);
+  background: rgb(0 0 0 / 0.32);
 }
 
 .movement-drawer {
   display: grid;
   align-content: start;
-  gap: var(--space-5);
+  gap: 1.25rem;
   inline-size: min(28rem, 100%);
   block-size: 100dvh;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--color-border);
-  background: var(--color-card);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-lg);
+  border-inline-start: 1px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  padding: 1.25rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.16);
 }
 
 .movement-drawer__header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: 1rem;
 }
 
 .movement-drawer__header h2 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1.2rem;
 }
 
-.movement-drawer__header button {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-card);
-  color: var(--color-primary-strong);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-}
-
 .movement-drawer .eyebrow {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  margin: 0 0 0.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
 }

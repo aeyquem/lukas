@@ -4,6 +4,7 @@ import { FilterOperator, FilterMatchMode } from "@primevue/core/api";
 import type { DataTableFilterMeta } from "primevue/datatable";
 
 import BaseColumn from "@/components/base/BaseColumn.vue";
+import BaseButton from "@/components/base/BaseButton.vue";
 import BaseDataTable from "@/components/base/BaseDataTable.vue";
 import BaseMultiSelect from "@/components/base/BaseMultiSelect.vue";
 import BaseSelect from "@/components/base/BaseSelect.vue";
@@ -311,9 +312,14 @@ function editMovement(movement: DisplayMovement) {
 
     <BaseColumn header="Acciones" style="width: 7rem">
       <template #body="{ data }">
-        <button class="row-action" type="button" @click="editMovement(data)">
+        <BaseButton
+          size="sm"
+          type="button"
+          variant="secondary"
+          @click="editMovement(data)"
+        >
           Editar
-        </button>
+        </BaseButton>
       </template>
     </BaseColumn>
 
@@ -325,18 +331,18 @@ function editMovement(movement: DisplayMovement) {
 .table-toolbar {
   display: grid;
   grid-template-columns: minmax(14rem, 1.2fr) minmax(11rem, 0.65fr);
-  gap: var(--space-2);
+  gap: 0.5rem;
 }
 
 .table-filter {
   display: grid;
   align-content: start;
-  gap: var(--space-1);
+  gap: 0.25rem;
 }
 
 .table-filter label {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -346,16 +352,16 @@ function editMovement(movement: DisplayMovement) {
 }
 
 .group-heading {
-  color: var(--color-primary-strong);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-color);
+  font-size: 0.875rem;
   font-weight: 800;
 }
 
 .numeric {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: var(--space-1);
-  font-family: var(--font-mono);
+  gap: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-weight: 700;
   inline-size: 100%;
   white-space: nowrap;
@@ -370,32 +376,32 @@ function editMovement(movement: DisplayMovement) {
 }
 
 .notes {
-  color: var(--color-muted-foreground);
+  color: var(--p-text-muted-color);
   overflow-wrap: anywhere;
 }
 
 .category-state {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.5rem;
   min-block-size: 1.65rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-round);
-  padding-inline: var(--space-3);
-  font-size: var(--font-size-xs);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
 .category-state[data-state="missing"] {
-  border-color: color-mix(in srgb, var(--color-warning) 36%, transparent);
-  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--p-orange-500) 36%, transparent);
+  background: color-mix(in srgb, var(--p-orange-500) 12%, transparent);
+  color: var(--p-orange-500);
 }
 
 .category-state[data-state="set"] {
-  border-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-primary-strong);
+  border-color: color-mix(in srgb, var(--p-primary-color) 28%, transparent);
+  background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+  color: var(--p-text-color);
 }
 
 .notes-filter {
@@ -403,40 +409,11 @@ function editMovement(movement: DisplayMovement) {
 }
 
 .numeric[data-direction="in"] {
-  color: var(--color-primary-strong);
+  color: var(--p-primary-700);
 }
 
 .numeric[data-direction="out"] {
-  color: var(--color-danger-strong);
-}
-
-.row-action {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-card);
-  color: var(--color-primary-strong);
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 800;
-}
-
-.row-action:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-:deep(.p-datatable-header) {
-  border-start-start-radius: var(--radius-lg);
-  border-start-end-radius: var(--radius-lg);
-}
-
-:deep(.p-datatable-table) {
-  font-size: var(--font-size-sm);
-}
-
-:deep(.p-datatable-column-title),
-:deep(.p-paginator) {
-  font-size: var(--font-size-sm);
+  color: var(--p-red-600);
 }
 
 :deep(.p-datatable-thead > tr > th) {
@@ -444,7 +421,7 @@ function editMovement(movement: DisplayMovement) {
 }
 
 :deep(.movement-row--uncategorized > td) {
-  background: color-mix(in srgb, var(--color-warning) 7%, transparent);
+  background: color-mix(in srgb, var(--p-orange-500) 7%, transparent);
 }
 
 @media (max-width: 680px) {

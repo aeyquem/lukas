@@ -27,6 +27,6 @@ const checked = ref(true);
 <style scoped>
 .story-stack {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 </style>

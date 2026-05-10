@@ -39,7 +39,7 @@ const accountOptions: BaseMultiSelectOption[] = [
 <style scoped>
 .story-stack {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
   max-inline-size: 26rem;
 }
 </style>

@@ -266,13 +266,12 @@ function normalizedAmount(amount: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .goals-heading h2,
 .goal-card h3 {
   margin: 0;
-  color: var(--color-primary-strong);
   font-size: 1rem;
 }
 
@@ -280,33 +279,33 @@ function normalizedAmount(amount: string): string {
 .goal-card span,
 .goals-empty,
 .goal-warning {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-sm);
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
 }
 
 .goals-layout {
   display: grid;
   grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: 1.25rem;
 }
 
 .goal-create-form {
   align-content: start;
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .goals-list {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .goal-card {
   display: grid;
-  gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
+  gap: 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 6px;
+  padding: 1rem;
 }
 
 .goal-card__header,
@@ -314,21 +313,21 @@ function normalizedAmount(amount: string): string {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 0.75rem;
 }
 
 .goal-progress {
   overflow: hidden;
   block-size: 0.5rem;
-  border-radius: var(--radius-round);
-  background: var(--color-secondary);
+  border-radius: 999px;
+  background: var(--p-content-hover-background);
 }
 
 .goal-progress span {
   display: block;
   block-size: 100%;
   border-radius: inherit;
-  background: var(--color-primary);
+  background: var(--p-primary-color);
 }
 
 .goal-card__numbers {
@@ -336,22 +335,22 @@ function normalizedAmount(amount: string): string {
 }
 
 .goal-card__numbers dt {
-  color: var(--color-muted-foreground);
-  font-size: var(--font-size-xs);
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .goal-card__numbers dd {
-  margin: var(--space-1) 0 0;
-  color: var(--color-primary-strong);
-  font-family: var(--font-mono);
+  margin: 0.25rem 0 0;
+  color: var(--p-text-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-weight: 800;
 }
 
 .goal-warning {
   margin: 0;
-  color: var(--color-warning);
+  color: var(--p-orange-500);
   font-weight: 700;
 }
 
