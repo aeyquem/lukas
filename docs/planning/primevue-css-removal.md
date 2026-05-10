@@ -7,7 +7,7 @@ Status: Superseded by the project variables layer
 The cleanup below described the previous direction: keep only PrimeVue Aura
 tokens active and avoid project-owned global tokens. The current direction is to
 keep PrimeVue Aura as the visual baseline while adding a small project CSS layer
-in `frontend/app/src/styles/variables.css`.
+in `frontend/app/src/common/styles/variables.css`.
 
 The project variables use the `--lu-*` prefix and map back to PrimeVue semantic
 tokens for color, radius and surface behavior. Feature and layout CSS should use
@@ -27,9 +27,10 @@ cannot infer from the data.
 
 ## Current Wiring
 
-- `frontend/app/src/main.ts` imports `frontend/app/src/styles/main.css`.
+- `frontend/app/src/app/main.ts` imports
+  `frontend/app/src/common/styles/main.css`.
 - `frontend/app/histoire.setup.ts` imports the same stylesheet for stories.
-- `frontend/app/src/primevue.ts` installs PrimeVue with the Aura preset from
+- `frontend/app/src/app/primevue.ts` installs PrimeVue with the Aura preset from
   `@primeuix/themes/aura`.
 - PrimeVue and `@primeuix/themes` are already dependencies of
   `frontend/app/package.json`.
@@ -58,7 +59,7 @@ cannot infer from the data.
 
 ## Affected Areas
 
-- Global stylesheet: `frontend/app/src/styles/main.css`.
+- Global stylesheet: `frontend/app/src/common/styles/main.css`.
 - App shell and layout: `HomeView.vue`, `AppHeader.vue`, `AppSidebar.vue`.
 - Base-adjacent UI: `BaseField.vue` and base Histoire stories.
 - Ledger and workspace surfaces: `AccountsPanel.vue`,

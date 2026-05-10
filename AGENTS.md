@@ -6,7 +6,7 @@ Remember to refer to the docs folder for more guidelines on how and what to deve
 
 ## Project Structure & Module Organization
 
-This is a PNPM workspace for Lukas, a personal finance PoC. The Vue 3 frontend lives in `frontend/app`, with source under `frontend/app/src`, base components in `src/components/base`, router setup in `src/router`, and styles in `src/styles`. The ASP.NET backend is in `backend`, with production projects under `backend/src/Lukas.*` and xUnit tests under `backend/tests/Lukas.*.Tests`. The Tauri desktop shell is in `apps/desktop`, and Playwright end-to-end tests are in `tests/e2e/specs`. Planning and requirements documents live in `docs`.
+This is a PNPM workspace for Lukas, a personal finance PoC. The Vue 3 frontend lives in `frontend/app`, with source under `frontend/app/src`, app bootstrapping in `src/app`, shared UI/API/styling in `src/common`, and product workflows in `src/features`. The ASP.NET backend is in `backend`, with production projects under `backend/src/Lukas.*` and xUnit tests under `backend/tests/Lukas.*.Tests`. The Tauri desktop shell is in `apps/desktop`, and Playwright end-to-end tests are in `tests/e2e/specs`. Planning and requirements documents live in `docs`.
 
 ## Build, Test, and Development Commands
 
@@ -44,7 +44,7 @@ compile with these setting without any warnings.
 
 ## Coding Style & Naming Conventions
 
-C# uses nullable-enabled SDK-style projects with warnings treated as errors via `backend/Directory.Build.props`. Use four-space indentation, `PascalCase` for types and methods, and project namespaces such as `Lukas.Domain.Tests`. Vue and TypeScript use ESLint flat config plus Prettier; keep Vue components in `PascalCase.vue`, tests as `*.spec.ts`, and generated API files under `frontend/app/src/api/generated` untouched except through generation commands.
+C# uses nullable-enabled SDK-style projects with warnings treated as errors via `backend/Directory.Build.props`. Use four-space indentation, `PascalCase` for types and methods, and project namespaces such as `Lukas.Domain.Tests`. Vue and TypeScript use ESLint flat config plus Prettier; keep Vue components in `PascalCase.vue`, tests as `*.spec.ts`, and generated API files under `frontend/app/src/common/api/generated` untouched except through generation commands.
 
 Vue uses scoped styles when a CODE implementation is not enough. the css should mimic the html structure.
 

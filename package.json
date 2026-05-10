@@ -12,9 +12,9 @@
     "test": "dotnet test backend/Lukas.slnx -m:1 && pnpm --dir frontend/app test",
     "test:e2e": "pnpm --dir tests/e2e test",
     "format": "dotnet format backend/Lukas.slnx && pnpm --dir frontend/app format",
-    "api:openapi": "dotnet run --project backend/src/Lukas.Api -- --openapi-output frontend/app/src/api/generated/openapi.json",
-    "api:generate": "openapi-typescript frontend/app/src/api/generated/openapi.json -o frontend/app/src/api/generated/schema.ts",
-    "api:check": "pnpm api:openapi && pnpm api:generate && git diff --exit-code -- frontend/app/src/api/generated"
+    "api:openapi": "dotnet run --project backend/src/Lukas.Api -- --openapi-output frontend/app/src/common/api/generated/openapi.json",
+    "api:generate": "openapi-typescript frontend/app/src/common/api/generated/openapi.json -o frontend/app/src/common/api/generated/schema.ts",
+    "api:check": "pnpm api:openapi && pnpm api:generate && git diff --exit-code -- frontend/app/src/common/api/generated"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",

@@ -7,6 +7,11 @@ export default [
   ...vueTsEslintConfig(),
   skipFormatting,
   {
-    ignores: [".histoire/dist", "dist", "coverage", "src/api/generated"],
+    ignores: [
+      ".histoire/dist",
+      "dist",
+      "coverage",
+      "src/common/api/generated",
+    ],
   },
 ];

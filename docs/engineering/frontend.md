@@ -14,9 +14,24 @@ It must run directly in a browser against the .NET API without Tauri.
 - Do not use Pinia as a mirror database for API data.
 
 Generate TypeScript API DTOs from ASP.NET/OpenAPI into
-`frontend/app/src/api/generated/`. Generated files are committed and should not
-be edited by hand. Handwritten API clients, error mapping and composables live
-under `frontend/app/src/api/`.
+`frontend/app/src/common/api/generated/`. Generated files are committed and
+should not be edited by hand. Handwritten API clients and error mapping live
+under `frontend/app/src/common/api/`. Feature-specific API orchestration belongs
+with the feature that owns the workflow.
+
+## Folders
+
+Use a feature-first structure for product code:
+
+- `src/app/`: bootstrapping, router setup and app-shell views.
+- `src/common/`: base UI, layout blocks, styling, formatting, low-level API
+  clients and other feature-neutral code.
+- `src/features/<feature>/`: feature-owned components, composables, models,
+  stores, views, tests and stories.
+
+Features may import from `common`, but `common` must not import from features.
+Feature-to-feature imports should be reviewed and kept rare; promote stable
+shared concepts to `common` only after real reuse appears.
 
 ## UI
 

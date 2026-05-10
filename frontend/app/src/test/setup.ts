@@ -1,7 +1,7 @@
 import { config } from "@vue/test-utils";
 import PrimeVue from "primevue/config";
 
-import { primeVueOptions } from "@/primevue";
+import { primeVueOptions } from "@/app/primevue";
 
 config.global.plugins = [[PrimeVue, primeVueOptions]];
 

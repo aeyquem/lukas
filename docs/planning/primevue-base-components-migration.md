@@ -77,8 +77,8 @@ visual cleanup in this phase.
 - [x] `BaseAlert.vue`: remove `.base-alert`.
 - [x] `BaseBadge.vue`: remove `.base-badge`.
 - [x] `BaseCard.vue`: remove `.base-card`.
-- [x] Keep feature-level CSS and `frontend/app/src/styles/main.css` for later
-      consistency work.
+- [x] Keep feature-level CSS and `frontend/app/src/common/styles/main.css` for
+      later consistency work.
 
 ## Implementation Order
 
