@@ -98,6 +98,8 @@ const props = defineProps<{
   period: string;
 }>();
 
+const assignedAmountMaxDigits = 8;
+const assignedInputDisplaySize = 10;
 const currency = "CLP";
 const editingAssignedEnvelopeId = ref("");
 const editingNameNodeId = ref("");
@@ -1098,6 +1100,16 @@ function updateEnvelopeAssignedAmount(
   );
 }
 
+function updateEnvelopeAssignedAmountFromInput(
+  envelopeId: string,
+  assignedAmount: string,
+) {
+  updateEnvelopeAssignedAmount(
+    envelopeId,
+    assignedInputStorageValue(assignedAmount),
+  );
+}
+
 function editAssignedAmount(envelopeId: string) {
   editingAssignedEnvelopeId.value = envelopeId;
 }
@@ -1251,6 +1263,22 @@ function dropEdge(element: HTMLElement, clientY: number): "before" | "after" {
 
 function amountTone(amount: string): "positive" | "negative" {
   return Number.parseFloat(amount) >= 0 ? "positive" : "negative";
+}
+
+function assignedInputValue(amount: string): string {
+  return formatAssignedInputValue(assignedInputStorageValue(amount));
+}
+
+function assignedInputStorageValue(amount: string): string {
+  return amountDigits(amount).slice(0, assignedAmountMaxDigits);
+}
+
+function amountDigits(amount: string): string {
+  return amount.replace(/\D/g, "");
+}
+
+function formatAssignedInputValue(amount: string): string {
+  return amount.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
 function amountParts(amount: string): BudgetAmountParts {
@@ -1578,6 +1606,8 @@ function formatDecimal(amount: number): string {
         <BaseColumn
           field="assignedAmount"
           header="Asignado"
+          body-class="amount-column-body"
+          header-class="amount-column-header"
           style="width: 12rem"
         >
           <template #body="{ node }">
@@ -1589,11 +1619,14 @@ function formatDecimal(amount: number): string {
               v-assigned-input-focus
               :aria-label="`Asignado para ${node.data.name}`"
               class="assigned-input"
-              inputmode="decimal"
-              :model-value="node.data.assignedAmount"
+              inputmode="numeric"
+              :maxlength="assignedInputDisplaySize"
+              :model-value="assignedInputValue(node.data.assignedAmount)"
+              pattern="[0-9.]*"
+              :size="assignedInputDisplaySize"
               type="text"
               @update:model-value="
-                (value) => updateEnvelopeAssignedAmount(node.key, value)
+                (value) => updateEnvelopeAssignedAmountFromInput(node.key, value)
               "
               @blur="stopEditingAssignedAmount(node.key)"
             />
@@ -1626,7 +1659,13 @@ function formatDecimal(amount: number): string {
           </template>
         </BaseColumn>
 
-        <BaseColumn field="spentAmount" header="Gastado" style="width: 12rem">
+        <BaseColumn
+          field="spentAmount"
+          header="Gastado"
+          body-class="amount-column-body"
+          header-class="amount-column-header"
+          style="width: 12rem"
+        >
           <template #body="{ node }">
             <span
               class="numeric"
@@ -1648,6 +1687,8 @@ function formatDecimal(amount: number): string {
         <BaseColumn
           field="remainingAmount"
           header="Restante"
+          body-class="amount-column-body"
+          header-class="amount-column-header"
           style="width: 12rem"
         >
           <template #body="{ node }">
@@ -1857,20 +1898,17 @@ function formatDecimal(amount: number): string {
 }
 
 .numeric {
-  display: grid;
-  grid-template-columns: max-content 1fr;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
   gap: var(--lu-space-1);
   color: var(--lu-color-text);
   inline-size: 100%;
   white-space: nowrap;
 }
 
-.numeric__prefix {
-  justify-self: start;
-}
-
 .numeric__amount {
-  justify-self: end;
+  text-align: end;
 }
 
 .numeric[data-tone="negative"] {
@@ -1904,13 +1942,25 @@ function formatDecimal(amount: number): string {
 }
 
 .assigned-input {
+  box-sizing: content-box;
+  inline-size: 10ch;
   max-inline-size: 10rem;
   min-block-size: var(--lu-size-control-sm);
+  min-inline-size: 10ch;
   text-align: end;
 }
 
 :deep(.p-treetable-thead > tr > th) {
   white-space: nowrap;
+}
+
+:deep(.amount-column-header),
+:deep(.amount-column-body) {
+  text-align: end;
+}
+
+:deep(.amount-column-header .p-treetable-column-header-content) {
+  justify-content: flex-end;
 }
 
 :deep(.budget-row) {
