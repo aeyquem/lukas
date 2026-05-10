@@ -8,14 +8,17 @@ describe("BaseSelect", () => {
     const wrapper = mount(BaseSelect, {
       props: {
         modelValue: "bank",
-      },
-      slots: {
-        default:
-          '<option value="bank">Banco</option><option value="cash">Efectivo</option>',
+        options: [
+          { label: "Banco", value: "bank" },
+          { label: "Efectivo", value: "cash" },
+        ],
       },
     });
 
-    await wrapper.get("select").setValue("cash");
+    await wrapper.getComponent({ name: "Select" }).vm.$emit(
+      "update:modelValue",
+      "cash",
+    );
 
     expect(wrapper.emitted("update:modelValue")).toEqual([["cash"]]);
   });

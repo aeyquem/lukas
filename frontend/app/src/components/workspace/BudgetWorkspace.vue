@@ -5,13 +5,11 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import Column from "primevue/column";
 import type {
   TreeTableExpandedKeys,
   TreeTablePassThroughMethodOptions,
   TreeTablePassThroughOptions,
 } from "primevue/treetable";
-import TreeTable from "primevue/treetable";
 import type { TreeNode } from "primevue/treenode";
 
 import { getBudgetTree, saveBudgetTree } from "@/api/ledger";
@@ -29,8 +27,10 @@ import {
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseButton from "@/components/base/BaseButton.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
+import BaseColumn from "@/components/base/BaseColumn.vue";
 import BaseField from "@/components/base/BaseField.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
+import BaseTreeTable from "@/components/base/BaseTreeTable.vue";
 import { formatMoney } from "@/formatters";
 
 type BudgetNodeType = "category" | "subcategory" | "envelope";
@@ -1382,13 +1382,13 @@ function formatDecimal(amount: number): string {
         </span>
       </div>
 
-      <TreeTable
+      <BaseTreeTable
         v-model:expanded-keys="expandedKeys"
         class="budget-tree-table"
         :pt="treeTablePassThrough"
         :value="nodes"
       >
-        <Column
+        <BaseColumn
           field="name"
           header="Sobre"
           expander
@@ -1535,9 +1535,13 @@ function formatDecimal(amount: number): string {
               </button>
             </div>
           </template>
-        </Column>
+        </BaseColumn>
 
-        <Column field="assignedAmount" header="Asignado" style="width: 12rem">
+        <BaseColumn
+          field="assignedAmount"
+          header="Asignado"
+          style="width: 12rem"
+        >
           <template #body="{ node }">
             <BaseTextInput
               v-if="
@@ -1568,9 +1572,9 @@ function formatDecimal(amount: number): string {
               {{ formatMoney(node.data.assignedAmount, currency) }}
             </span>
           </template>
-        </Column>
+        </BaseColumn>
 
-        <Column field="spentAmount" header="Gastado" style="width: 12rem">
+        <BaseColumn field="spentAmount" header="Gastado" style="width: 12rem">
           <template #body="{ node }">
             <span
               class="numeric"
@@ -1587,9 +1591,13 @@ function formatDecimal(amount: number): string {
               </span>
             </span>
           </template>
-        </Column>
+        </BaseColumn>
 
-        <Column field="remainingAmount" header="Restante" style="width: 12rem">
+        <BaseColumn
+          field="remainingAmount"
+          header="Restante"
+          style="width: 12rem"
+        >
           <template #body="{ node }">
             <span
               class="numeric"
@@ -1598,10 +1606,10 @@ function formatDecimal(amount: number): string {
               {{ formatMoney(node.data.remainingAmount, currency) }}
             </span>
           </template>
-        </Column>
+        </BaseColumn>
 
         <template #empty>Sin sobres para mostrar.</template>
-      </TreeTable>
+      </BaseTreeTable>
     </section>
   </BaseCard>
 

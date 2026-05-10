@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { FilterOperator, FilterMatchMode } from "@primevue/core/api";
-import Column from "primevue/column";
-import DataTable from "primevue/datatable";
-import InputText from "primevue/inputtext";
-import MultiSelect from "primevue/multiselect";
-import Select from "primevue/select";
 import type { DataTableFilterMeta } from "primevue/datatable";
 
+import BaseColumn from "@/components/base/BaseColumn.vue";
+import BaseDataTable from "@/components/base/BaseDataTable.vue";
+import BaseMultiSelect from "@/components/base/BaseMultiSelect.vue";
+import BaseSelect from "@/components/base/BaseSelect.vue";
+import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import { formatDate, formatMoney } from "@/formatters";
 import type { LedgerMovement, MovementDirection } from "@/ledger/movements";
 
@@ -170,7 +170,7 @@ function editMovement(movement: DisplayMovement) {
 </script>
 
 <template>
-  <DataTable
+  <BaseDataTable
     v-model:filters="filters"
     class="ledger-movements-table"
     column-resize-mode="fit"
@@ -193,13 +193,11 @@ function editMovement(movement: DisplayMovement) {
       <div class="table-toolbar">
         <div class="table-filter">
           <label for="movement-table-accounts">Cuentas</label>
-          <MultiSelect
+          <BaseMultiSelect
             id="movement-table-accounts"
             v-model="selectedAccountNames"
             display="chip"
             :max-selected-labels="accountOptions.length - 1"
-            option-label="label"
-            option-value="value"
             filter
             :options="accountOptions"
             placeholder="Seleccionar"
@@ -209,11 +207,9 @@ function editMovement(movement: DisplayMovement) {
 
         <div class="table-filter table-filter--group">
           <label for="movement-table-group">Agrupar</label>
-          <Select
+          <BaseSelect
             id="movement-table-group"
             v-model="selectedGroupBy"
-            option-label="label"
-            option-value="value"
             :options="groupOptions"
           />
         </div>
@@ -224,26 +220,31 @@ function editMovement(movement: DisplayMovement) {
       <span class="group-heading">{{ groupHeading(data) }}</span>
     </template>
 
-    <Column field="date" header="Fecha" sortable style="width: 9.5rem">
+    <BaseColumn field="date" header="Fecha" sortable style="width: 9.5rem">
       <template #body="{ data }">
         {{ formatDate(data.date) }}
       </template>
-    </Column>
+    </BaseColumn>
 
-    <Column field="accountName" header="Cuenta" sortable style="width: 14rem">
+    <BaseColumn
+      field="accountName"
+      header="Cuenta"
+      sortable
+      style="width: 14rem"
+    >
       <template #body="{ data }">
         <strong>{{ data.accountName }}</strong>
       </template>
-    </Column>
+    </BaseColumn>
 
-    <Column
+    <BaseColumn
       field="description"
       header="Detalle"
       sortable
       style="min-width: 16rem"
     />
 
-    <Column
+    <BaseColumn
       field="categoryDisplay"
       header="Categoría"
       sortable
@@ -258,9 +259,9 @@ function editMovement(movement: DisplayMovement) {
           {{ data.categoryDisplay }}
         </span>
       </template>
-    </Column>
+    </BaseColumn>
 
-    <Column
+    <BaseColumn
       field="notes"
       header="Notas"
       style="min-width: 14rem"
@@ -274,23 +275,23 @@ function editMovement(movement: DisplayMovement) {
         <span class="notes">{{ data.notes || "Sin notas" }}</span>
       </template>
       <template #filter="{ filterModel }">
-        <InputText
+        <BaseTextInput
           v-model="filterModel.value"
           class="notes-filter"
           placeholder="Buscar notas"
           type="text"
         />
       </template>
-    </Column>
+    </BaseColumn>
 
-    <Column
+    <BaseColumn
       field="displayCurrency"
       header="Moneda"
       sortable
       style="width: 8rem"
     />
 
-    <Column
+    <BaseColumn
       field="signedDisplayAmount"
       header="Valor"
       sortable
@@ -306,18 +307,18 @@ function editMovement(movement: DisplayMovement) {
           <span class="numeric__amount">{{ data.displayAmountNumber }}</span>
         </span>
       </template>
-    </Column>
+    </BaseColumn>
 
-    <Column header="Acciones" style="width: 7rem">
+    <BaseColumn header="Acciones" style="width: 7rem">
       <template #body="{ data }">
         <button class="row-action" type="button" @click="editMovement(data)">
           Editar
         </button>
       </template>
-    </Column>
+    </BaseColumn>
 
     <template #empty>Sin movimientos para mostrar.</template>
-  </DataTable>
+  </BaseDataTable>
 </template>
 
 <style scoped>

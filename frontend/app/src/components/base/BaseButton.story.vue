@@ -4,6 +4,24 @@ import BaseButton from "@/components/base/BaseButton.vue";
 
 <template>
   <Story title="Base/Button">
-    <BaseButton>Guardar</BaseButton>
+    <div class="story-grid">
+      <BaseButton>Guardar</BaseButton>
+      <BaseButton variant="secondary">Cancelar</BaseButton>
+      <BaseButton variant="ghost">Ver detalle</BaseButton>
+      <BaseButton variant="danger">Archivar</BaseButton>
+      <BaseButton size="sm">Agregar cuenta</BaseButton>
+      <BaseButton loading>Guardando</BaseButton>
+      <BaseButton disabled>Deshabilitado</BaseButton>
+      <BaseButton type="submit">Enviar formulario</BaseButton>
+    </div>
   </Story>
 </template>
+
+<style scoped>
+.story-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+</style>

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-withDefaults(
+import { computed } from "vue";
+import Badge from "primevue/badge";
+
+const props = withDefaults(
   defineProps<{
     tone?: "neutral" | "success" | "warning" | "danger";
   }>(),
@@ -7,44 +10,22 @@ withDefaults(
     tone: "neutral",
   },
 );
+
+const severity = computed(() => {
+  if (props.tone === "neutral") {
+    return "secondary";
+  }
+
+  if (props.tone === "warning") {
+    return "warn";
+  }
+
+  return props.tone;
+});
 </script>
 
 <template>
-  <span class="base-badge" :class="`base-badge--${tone}`">
+  <Badge :severity="severity">
     <slot />
-  </span>
+  </Badge>
 </template>
-
-<style scoped>
-.base-badge {
-  display: inline-flex;
-  align-items: center;
-  min-block-size: 1.5rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-round);
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: 800;
-}
-
-.base-badge--neutral {
-  border-color: var(--color-border);
-  background: var(--color-secondary);
-  color: var(--color-secondary-foreground);
-}
-
-.base-badge--success {
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-  color: var(--color-success);
-}
-
-.base-badge--warning {
-  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
-  color: var(--color-warning);
-}
-
-.base-badge--danger {
-  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
-  color: var(--color-danger);
-}
-</style>

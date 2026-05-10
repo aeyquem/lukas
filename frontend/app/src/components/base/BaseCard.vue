@@ -1,28 +1,14 @@
+<script setup lang="ts">
+import Card from "primevue/card";
+</script>
+
 <template>
-  <article class="base-card">
-    <header v-if="$slots.header" class="base-card__header">
+  <Card>
+    <template v-if="$slots.header" #header>
       <slot name="header" />
-    </header>
-    <div class="base-card__body">
+    </template>
+    <template #content>
       <slot />
-    </div>
-  </article>
+    </template>
+  </Card>
 </template>
-
-<style scoped>
-.base-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-card);
-  box-shadow: var(--shadow-sm);
-}
-
-.base-card__header {
-  border-block-end: 1px solid var(--color-border);
-  padding: var(--space-4);
-}
-
-.base-card__body {
-  padding: var(--space-4);
-}
-</style>

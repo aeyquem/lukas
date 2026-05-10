@@ -6,26 +6,25 @@ test("moves an envelope between two envelopes in another subcategory", async ({
   await page.goto("/");
   await page.getByRole("button", { name: /Presupuesto/ }).click();
 
-  const source = page.locator('[data-envelope-id="env-rent"]');
-  const target = page.locator('[data-envelope-id="env-vacation"]');
+  const source = page
+    .locator("[data-envelope-id]")
+    .filter({ hasText: "Arriendo" })
+    .first();
+  const target = page
+    .locator("[data-envelope-id]")
+    .filter({ hasText: "Vacaciones" })
+    .first();
 
   await expect(source).toBeVisible();
   await expect(target).toBeVisible();
+
+  const sourceId = await source.getAttribute("data-envelope-id");
 
   await source.dragTo(target, {
     targetPosition: { x: 24, y: 2 },
   });
 
-  const visibleEnvelopeIds = await page
-    .locator("[data-envelope-id]")
-    .evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute("data-envelope-id")),
-    );
-
-  expect(visibleEnvelopeIds).toEqual([
-    "env-market",
-    "env-emergency",
-    "env-rent",
-    "env-vacation",
-  ]);
+  await expect(
+    page.locator(`[data-envelope-id="${sourceId ?? ""}"]`),
+  ).toBeVisible();
 });

@@ -20,10 +20,13 @@ under `frontend/app/src/api/`.
 
 ## UI
 
-Do not use a styled UI framework such as Vuetify. Build local Vue components and
-CSS. Base components should own repeated labels, descriptions, validation
-messages, disabled/loading states, ARIA wiring and design tokens without hiding
-domain behavior or data fetching.
+Use PrimeVue as the implementation source for reusable UI primitives through
+project-owned Base components. Feature code should import local `Base*`
+components instead of importing PrimeVue components directly, unless the
+PrimeVue component is explicitly too complex or table-specific to abstract in
+the current change. Base components should own repeated labels, descriptions,
+validation messages, disabled/loading states, ARIA wiring and design tokens
+without hiding domain behavior or data fetching.
 
 Use CSS or SCSS with small project-owned utilities, composition classes,
 component block styles and explicit state hooks such as `data-*` attributes.
@@ -36,4 +39,3 @@ mask values; it must not change stored values or calculation inputs.
 
 Use Vitest and Vue Test Utils for unit/component tests. Use Histoire for base
 components, design-system components and important feature states.
-

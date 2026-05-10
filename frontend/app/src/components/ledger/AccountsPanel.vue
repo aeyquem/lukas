@@ -13,6 +13,7 @@ import BaseButton from "@/components/base/BaseButton.vue";
 import BaseCard from "@/components/base/BaseCard.vue";
 import BaseField from "@/components/base/BaseField.vue";
 import BaseSelect from "@/components/base/BaseSelect.vue";
+import type { BaseSelectOption } from "@/components/base/BaseSelect.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import { accountTypeLabel } from "@/ledger/labels";
 
@@ -36,6 +37,11 @@ const accountForm = reactive({
   openingBalance: "",
   currentBalance: "",
 });
+const accountTypeOptions: BaseSelectOption[] = [
+  { label: "Banco", value: "bank" },
+  { label: "Efectivo", value: "cash" },
+  { label: "Tarjeta", value: "credit_card" },
+];
 
 const drawerTitle = computed(() =>
   drawerMode.value === "edit" ? "Editar cuenta" : "Agregar cuenta",
@@ -181,11 +187,11 @@ function resetForm() {
           </BaseField>
 
           <BaseField input-id="account-type" label="Tipo">
-            <BaseSelect id="account-type" v-model="accountForm.type">
-              <option value="bank">Banco</option>
-              <option value="cash">Efectivo</option>
-              <option value="credit_card">Tarjeta</option>
-            </BaseSelect>
+            <BaseSelect
+              id="account-type"
+              v-model="accountForm.type"
+              :options="accountTypeOptions"
+            />
           </BaseField>
 
           <BaseField input-id="account-currency" label="Moneda">

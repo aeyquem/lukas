@@ -23,6 +23,7 @@ import BaseCard from "@/components/base/BaseCard.vue";
 import BaseCheckbox from "@/components/base/BaseCheckbox.vue";
 import BaseField from "@/components/base/BaseField.vue";
 import BaseSelect from "@/components/base/BaseSelect.vue";
+import type { BaseSelectOption } from "@/components/base/BaseSelect.vue";
 import BaseTextarea from "@/components/base/BaseTextarea.vue";
 import BaseTextInput from "@/components/base/BaseTextInput.vue";
 import LedgerMovementsTable from "@/components/ledger/LedgerMovementsTable.vue";
@@ -59,6 +60,12 @@ const transactionForm = reactive({
   envelopeId: "",
   notes: "",
 });
+const transactionKindOptions: BaseSelectOption[] = [
+  { label: "Gasto", value: "expense" },
+  { label: "Ingreso", value: "income" },
+  { label: "Transferencia", value: "transfer" },
+  { label: "Ajuste", value: "adjustment" },
+];
 
 const movementsQuery = useQuery({
   key: ["movements"],
@@ -86,6 +93,12 @@ const submitLabel = computed(() =>
   drawerMode.value === "edit" ? "Guardar cambios" : "Crear movimiento",
 );
 const isTransfer = computed(() => transactionForm.kind === "transfer");
+const accountSelectOptions = computed<BaseSelectOption[]>(() =>
+  props.accounts.map((account) => ({
+    label: account.displayName,
+    value: account.id,
+  })),
+);
 const transferDestinationAccounts = computed(() =>
   props.accounts.filter(
     (account) =>
@@ -93,6 +106,19 @@ const transferDestinationAccounts = computed(() =>
       account.currency === transactionForm.currency,
   ),
 );
+const transferDestinationAccountOptions = computed<BaseSelectOption[]>(() =>
+  transferDestinationAccounts.value.map((account) => ({
+    label: account.displayName,
+    value: account.id,
+  })),
+);
+const movementEnvelopeOptions = computed<BaseSelectOption[]>(() => [
+  { label: "Sin categoría", value: "" },
+  ...movementCategoryOptions.value.map((envelope) => ({
+    label: envelope.name,
+    value: envelope.id,
+  })),
+]);
 
 watch(
   () => budgetTreeQuery.data.value,
@@ -366,12 +392,11 @@ function destinationAccountId(movement: LedgerMovement): string {
           </BaseAlert>
 
           <BaseField input-id="movement-kind" label="Tipo">
-            <BaseSelect id="movement-kind" v-model="transactionForm.kind">
-              <option value="expense">Gasto</option>
-              <option value="income">Ingreso</option>
-              <option value="transfer">Transferencia</option>
-              <option value="adjustment">Ajuste</option>
-            </BaseSelect>
+            <BaseSelect
+              id="movement-kind"
+              v-model="transactionForm.kind"
+              :options="transactionKindOptions"
+            />
           </BaseField>
 
           <BaseField
@@ -381,16 +406,9 @@ function destinationAccountId(movement: LedgerMovement): string {
             <BaseSelect
               id="movement-account"
               v-model="transactionForm.accountId"
+              :options="accountSelectOptions"
               required
-            >
-              <option
-                v-for="account in props.accounts"
-                :key="account.id"
-                :value="account.id"
-              >
-                {{ account.displayName }}
-              </option>
-            </BaseSelect>
+            />
           </BaseField>
 
           <BaseField
@@ -401,16 +419,9 @@ function destinationAccountId(movement: LedgerMovement): string {
             <BaseSelect
               id="movement-destination-account"
               v-model="transactionForm.destinationAccountId"
+              :options="transferDestinationAccountOptions"
               required
-            >
-              <option
-                v-for="account in transferDestinationAccounts"
-                :key="account.id"
-                :value="account.id"
-              >
-                {{ account.displayName }}
-              </option>
-            </BaseSelect>
+            />
           </BaseField>
 
           <BaseField input-id="movement-date" label="Fecha">
@@ -452,16 +463,8 @@ function destinationAccountId(movement: LedgerMovement): string {
             <BaseSelect
               id="movement-category"
               v-model="transactionForm.envelopeId"
-            >
-              <option value="">Sin categoría</option>
-              <option
-                v-for="envelope in movementCategoryOptions"
-                :key="envelope.id"
-                :value="envelope.id"
-              >
-                {{ envelope.name }}
-              </option>
-            </BaseSelect>
+              :options="movementEnvelopeOptions"
+            />
           </BaseField>
 
           <BaseField input-id="movement-description" label="Descripción">
