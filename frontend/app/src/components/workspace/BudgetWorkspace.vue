@@ -20,6 +20,7 @@ import {
   TRASH_CATEGORY_ID,
   TRASH_SUBCATEGORY_ID,
   applyBudgetTree,
+  isTrashEnvelope,
   toBudgetTreeDto,
   useBudgetTree,
   type BudgetEnvelope,
@@ -443,7 +444,7 @@ function deleteSubcategory(subcategoryId: string) {
 }
 
 function deleteEnvelope(envelopeId: string) {
-  if (!isTreeEditing.value) {
+  if (!isTreeEditing.value || isTrashEnvelope(envelopes.value, envelopeId)) {
     return;
   }
 
@@ -510,6 +511,17 @@ function isProtectedNode(node: { key: string }): boolean {
     node.key === INCOME_SUBCATEGORY_ID ||
     node.key === INCOME_ENVELOPE_ID ||
     isTrashNode(node)
+  );
+}
+
+function canDeleteNode(node: BudgetTreeNode): boolean {
+  if (isProtectedNode(node)) {
+    return false;
+  }
+
+  return (
+    node.data.nodeType !== "envelope" ||
+    !isTrashEnvelope(envelopes.value, node.key)
   );
 }
 
@@ -1493,7 +1505,7 @@ function formatDecimal(amount: number): string {
                 v-if="
                   isTreeEditing &&
                   node.data.nodeType === 'category' &&
-                  !isProtectedNode(node)
+                  canDeleteNode(node)
                 "
                 size="sm"
                 type="button"
@@ -1507,7 +1519,7 @@ function formatDecimal(amount: number): string {
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'subcategory' &&
-                  !isProtectedNode(node)
+                  canDeleteNode(node)
                 "
                 size="sm"
                 type="button"
@@ -1549,7 +1561,7 @@ function formatDecimal(amount: number): string {
                 v-else-if="
                   isTreeEditing &&
                   node.data.nodeType === 'envelope' &&
-                  !isProtectedNode(node)
+                  canDeleteNode(node)
                 "
                 size="sm"
                 type="button"

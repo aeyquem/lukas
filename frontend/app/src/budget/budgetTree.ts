@@ -58,6 +58,17 @@ const movementCategoryOptions = computed(() =>
     })),
 );
 
+export function isTrashEnvelope(
+  source: readonly BudgetEnvelope[],
+  envelopeId: string,
+): boolean {
+  return source.some(
+    (envelope) =>
+      envelope.id === envelopeId &&
+      envelope.subcategoryId === TRASH_SUBCATEGORY_ID,
+  );
+}
+
 export function applyBudgetTree(tree: BudgetTreeDto) {
   categories.value = tree.categories
     .slice()

@@ -195,6 +195,8 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
     public async Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
     {
         var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await RestoreOrphanedEnvelopeReferencesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
 
         var entries = await dbContext.LedgerEntries
             .AsNoTracking()
@@ -266,6 +268,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await RestoreOrphanedEnvelopeReferencesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await AttachLegacyCategoryNamesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         return await ReadBudgetTreeAsync(workspace.Id, period, cancellationToken).ConfigureAwait(false);
     }
@@ -279,6 +282,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureTrashBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await EnsureGoalsBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
+        await RestoreOrphanedEnvelopeReferencesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         await ReplaceBudgetTreeAsync(workspace.Id, command, cancellationToken).ConfigureAwait(false);
         await SaveBudgetPeriodAllocationsAsync(workspace.Id, period, command.Envelopes, cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -413,6 +417,57 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RestoreOrphanedEnvelopeReferencesAsync(Guid workspaceId, CancellationToken cancellationToken)
+    {
+        var orphanTransactions = await dbContext.LedgerTransactions
+            .Where(transaction =>
+                transaction.WorkspaceId == workspaceId
+                && transaction.EnvelopeId != null
+                && !dbContext.BudgetEnvelopes.Any(envelope =>
+                    envelope.WorkspaceId == workspaceId
+                    && envelope.Id == transaction.EnvelopeId.Value))
+            .Select(transaction => new
+            {
+                EnvelopeId = transaction.EnvelopeId!.Value,
+                transaction.CategoryName,
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (orphanTransactions.Count == 0)
+        {
+            return;
+        }
+
+        var nextSortOrder = await dbContext.BudgetEnvelopes
+            .Where(envelope => envelope.WorkspaceId == workspaceId)
+            .Select(envelope => (int?)envelope.SortOrder)
+            .MaxAsync(cancellationToken)
+            .ConfigureAwait(false) ?? 0;
+
+        foreach (var group in orphanTransactions.GroupBy(transaction => transaction.EnvelopeId))
+        {
+            nextSortOrder++;
+            dbContext.BudgetEnvelopes.Add(new BudgetEnvelopeEntity
+            {
+                Id = group.Key,
+                WorkspaceId = workspaceId,
+                SubcategoryId = TrashSubcategoryId,
+                Name = OrphanEnvelopeName(group.Select(transaction => transaction.CategoryName)),
+                AssignedAmount = "0",
+                SortOrder = nextSortOrder,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string OrphanEnvelopeName(IEnumerable<string?> categoryNames)
+    {
+        var categoryName = categoryNames.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate));
+        return categoryName is null ? "Sobre eliminado" : categoryName.Trim();
     }
 
     private async Task<Guid> GetOrCreateUncategorizedSubcategoryAsync(
