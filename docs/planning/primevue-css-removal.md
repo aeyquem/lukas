@@ -1,6 +1,18 @@
 # PrimeVue CSS Removal Handoff
 
-Status: Implemented for tokens-first cleanup and second-pass local button cleanup
+Status: Superseded by the project variables layer
+
+## Supersession Note
+
+The cleanup below described the previous direction: keep only PrimeVue Aura
+tokens active and avoid project-owned global tokens. The current direction is to
+keep PrimeVue Aura as the visual baseline while adding a small project CSS layer
+in `frontend/app/src/styles/variables.css`.
+
+The project variables use the `--lu-*` prefix and map back to PrimeVue semantic
+tokens for color, radius and surface behavior. Feature and layout CSS should use
+the project variables so spacing, typography, shadows and app-specific surfaces
+remain consistent as the design system grows.
 
 ## Goal
 

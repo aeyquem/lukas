@@ -1,0 +1,78 @@
+@layer variables {
+  :root {
+    --lu-color-background: var(--p-surface-50);
+    --lu-color-surface: var(--p-content-background);
+    --lu-color-surface-muted: var(--p-content-hover-background);
+    --lu-color-border: var(--p-content-border-color);
+    --lu-color-text: var(--p-text-color);
+    --lu-color-text-muted: var(--p-text-muted-color);
+    --lu-color-primary: var(--p-primary-color);
+    --lu-color-positive: var(--p-primary-700);
+    --lu-color-primary-contrast: var(--p-primary-contrast-color);
+    --lu-color-primary-soft: color-mix(
+      in srgb,
+      var(--p-primary-color) 9%,
+      transparent
+    );
+    --lu-color-warning: var(--p-orange-500);
+    --lu-color-warning-soft: color-mix(
+      in srgb,
+      var(--p-orange-500) 12%,
+      transparent
+    );
+    --lu-color-danger: var(--p-red-600);
+    --lu-color-danger-soft: color-mix(
+      in srgb,
+      var(--p-red-600) 10%,
+      transparent
+    );
+    --lu-color-backdrop: rgb(0 0 0 / 0.32);
+
+    --lu-font-body:
+      system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --lu-font-mono:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --p-font-family: var(--lu-font-body);
+
+    --lu-font-size-xs: 0.75rem;
+    --lu-font-size-sm: 0.875rem;
+    --lu-font-size-md: 1rem;
+    --lu-font-size-lg: 1.125rem;
+    --lu-font-size-xl: 1.25rem;
+    --lu-font-size-2xl: 1.5rem;
+
+    --lu-line-tight: 1.1;
+    --lu-line-normal: 1.4;
+
+    --lu-space-1: 0.25rem;
+    --lu-space-2: 0.5rem;
+    --lu-space-3: 0.75rem;
+    --lu-space-4: 1rem;
+    --lu-space-5: 1.25rem;
+    --lu-space-6: 1.5rem;
+    --lu-space-8: 2rem;
+
+    --lu-radius-sm: var(--p-border-radius-sm, 4px);
+    --lu-radius-md: var(--p-content-border-radius, 6px);
+    --lu-radius-lg: var(--p-border-radius-xl, 8px);
+    --lu-radius-pill: 999px;
+
+    --lu-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    --lu-shadow-md: 0 12px 28px rgb(0 0 0 / 0.08);
+    --lu-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.16);
+
+    --lu-duration-fast: 180ms;
+    --lu-duration-normal: 220ms;
+    --lu-ease-standard: ease;
+    --lu-transition-fast: var(--lu-duration-fast) var(--lu-ease-standard);
+
+    --lu-z-sticky: 8;
+    --lu-z-drawer: 40;
+
+    --lu-size-sidebar: 17rem;
+    --lu-size-drawer: 28rem;
+    --lu-size-main: 76rem;
+    --lu-size-icon: 2rem;
+    --lu-size-control-sm: 2.25rem;
+  }
+}

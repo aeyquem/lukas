@@ -46,6 +46,12 @@ type BudgetNodeData = {
 
 type BudgetSignedDirection = "in" | "out" | "none";
 
+type BudgetAmountParts = {
+  number: string;
+  prefix: string;
+  text: string;
+};
+
 type BudgetSignedAmountParts = {
   direction: BudgetSignedDirection;
   number: string;
@@ -1085,6 +1091,15 @@ function editAssignedAmount(envelopeId: string) {
 }
 
 function stopEditingAssignedAmount(envelopeId: string) {
+  const envelope = envelopes.value.find((candidate) => candidate.id === envelopeId);
+
+  if (envelope) {
+    updateEnvelopeAssignedAmount(
+      envelopeId,
+      normalizedAmount(envelope.assignedAmount),
+    );
+  }
+
   if (editingAssignedEnvelopeId.value === envelopeId) {
     editingAssignedEnvelopeId.value = "";
   }
@@ -1226,33 +1241,36 @@ function amountTone(amount: string): "positive" | "negative" {
   return Number.parseFloat(amount) >= 0 ? "positive" : "negative";
 }
 
+function amountParts(amount: string): BudgetAmountParts {
+  const formattedAmount = formatMoney(amount, currency);
+  const amountMatch = /^(\D*)(.*)$/.exec(formattedAmount);
+
+  if (!amountMatch) {
+    return {
+      number: formattedAmount,
+      prefix: "",
+      text: formattedAmount,
+    };
+  }
+
+  return {
+    number: amountMatch[2],
+    prefix: amountMatch[1],
+    text: formattedAmount,
+  };
+}
+
 function signedSpentAmountParts(spentAmount: string): BudgetSignedAmountParts {
   const spentValue = parseAmount(spentAmount);
   const direction = spentDirection(spentValue);
   const sign = spentSign(direction);
-  const formattedAmount = formatMoney(
-    formatDecimal(Math.abs(spentValue)),
-    currency,
-  );
-  const amountMatch = /^(\D*)(.*)$/.exec(formattedAmount);
-
-  if (!amountMatch) {
-    const text = `${sign}${formattedAmount}`;
-    return {
-      direction,
-      number: formattedAmount,
-      prefix: sign,
-      text,
-    };
-  }
-
-  const prefix = `${sign}${amountMatch[1]}`;
-  const number = amountMatch[2];
+  const parts = amountParts(formatDecimal(Math.abs(spentValue)));
+  const prefix = `${sign}${parts.prefix}`;
   return {
     direction,
-    number,
+    number: parts.number,
     prefix,
-    text: `${prefix}${number}`,
+    text: `${prefix}${parts.number}`,
   };
 }
 
@@ -1432,7 +1450,7 @@ function formatDecimal(amount: number): string {
                 class="envelope-label"
                 :data-envelope-id="node.key"
               >
-                <strong>{{ node.data.name }}</strong>
+                {{ node.data.name }}
                 <BaseButton
                   v-if="node.data.goalStatus"
                   size="sm"
@@ -1450,7 +1468,7 @@ function formatDecimal(amount: number): string {
                 data-level="subcategory"
                 :data-subcategory-id="node.key"
               >
-                <strong>{{ node.data.name }}</strong>
+                {{ node.data.name }}
               </span>
               <span
                 v-else
@@ -1574,10 +1592,24 @@ function formatDecimal(amount: number): string {
               :aria-label="`Editar asignado para ${node.data.name}`"
               @click="editAssignedAmount(node.key)"
             >
-              {{ formatMoney(node.data.assignedAmount, currency) }}
+              <span class="numeric__prefix">
+                {{ amountParts(node.data.assignedAmount).prefix }}
+              </span>
+              <span class="numeric__amount">
+                {{ amountParts(node.data.assignedAmount).number }}
+              </span>
             </button>
-            <span v-else class="numeric">
-              {{ formatMoney(node.data.assignedAmount, currency) }}
+            <span
+              v-else
+              class="numeric"
+              :aria-label="amountParts(node.data.assignedAmount).text"
+            >
+              <span class="numeric__prefix">
+                {{ amountParts(node.data.assignedAmount).prefix }}
+              </span>
+              <span class="numeric__amount">
+                {{ amountParts(node.data.assignedAmount).number }}
+              </span>
             </span>
           </template>
         </BaseColumn>
@@ -1609,9 +1641,15 @@ function formatDecimal(amount: number): string {
           <template #body="{ node }">
             <span
               class="numeric"
+              :aria-label="amountParts(node.data.remainingAmount).text"
               :data-tone="amountTone(node.data.remainingAmount)"
             >
-              {{ formatMoney(node.data.remainingAmount, currency) }}
+              <span class="numeric__prefix">
+                {{ amountParts(node.data.remainingAmount).prefix }}
+              </span>
+              <span class="numeric__amount">
+                {{ amountParts(node.data.remainingAmount).number }}
+              </span>
             </span>
           </template>
         </BaseColumn>
@@ -1708,114 +1746,131 @@ function formatDecimal(amount: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   margin-block-end: 0;
 }
 
 .budget-heading h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--lu-font-size-md);
 }
 
 .budget-heading span {
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-sm);
 }
 
 .budget-heading__actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
 }
 
 .zero-budget-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 6px;
-  background: var(--p-content-hover-background);
-  margin-block-end: 1rem;
-  padding: 1rem;
+  gap: var(--lu-space-4);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-md);
+  background: var(--lu-color-surface-muted);
+  margin-block-end: var(--lu-space-4);
+  padding: var(--lu-space-4);
 }
 
 .zero-budget-banner .eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  margin: 0 0 var(--lu-space-1);
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .zero-budget-banner strong {
-  color: var(--p-text-color);
-  font-size: 1rem;
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-md);
 }
 
 .zero-budget-banner__amount {
-  color: var(--p-text-color);
-  font-size: 1.5rem;
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-2xl);
   font-weight: 900;
   white-space: nowrap;
 }
 
 .zero-budget-banner__amount[data-tone="negative"] {
-  color: var(--p-red-500);
+  color: var(--lu-color-danger);
+}
+
+.budget-tree-table {
+  font-size: var(--lu-font-size-md);
+  font-weight: 400;
+}
+
+.budget-tree-table :deep(.p-treetable-thead > tr > th),
+.budget-tree-table :deep(.p-treetable-tbody > tr > td) {
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .node-name-cell {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
   max-inline-size: 100%;
 }
 
 .name-column-header {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
 }
 
 .group-label,
 .envelope-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-}
-
-.group-label {
-  font-weight: 800;
+  gap: var(--lu-space-2);
 }
 
 .group-label[data-level="subcategory"] {
-  color: var(--p-text-muted-color);
+  color: var(--lu-color-text-muted);
 }
 
 .node-name-input {
   min-inline-size: 10rem;
   max-inline-size: 16rem;
-  min-block-size: 2.25rem;
+  min-block-size: var(--lu-size-control-sm);
 }
 
 .numeric {
-  color: var(--p-text-color);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 700;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--lu-space-1);
+  color: var(--lu-color-text);
+  inline-size: 100%;
   white-space: nowrap;
 }
 
+.numeric__prefix {
+  justify-self: start;
+}
+
+.numeric__amount {
+  justify-self: end;
+}
+
 .numeric[data-tone="negative"] {
-  color: var(--p-red-600);
+  color: var(--lu-color-danger);
 }
 
 .numeric[data-direction="in"] {
-  color: var(--p-primary-700);
+  color: var(--lu-color-positive);
 }
 
 .numeric[data-direction="out"] {
-  color: var(--p-red-600);
+  color: var(--lu-color-danger);
 }
 
 .assigned-display {
@@ -1823,12 +1878,11 @@ function formatDecimal(amount: number): string {
   background: transparent;
   cursor: text;
   padding: 0;
-  text-align: end;
 }
 
 .assigned-display:hover,
 .assigned-display:focus-visible {
-  color: var(--p-primary-color);
+  color: var(--lu-color-primary);
   outline: 0;
 }
 
@@ -1839,7 +1893,7 @@ function formatDecimal(amount: number): string {
 
 .assigned-input {
   max-inline-size: 10rem;
-  min-block-size: 2.25rem;
+  min-block-size: var(--lu-size-control-sm);
   text-align: end;
 }
 
@@ -1852,11 +1906,11 @@ function formatDecimal(amount: number): string {
 }
 
 :deep(.budget-row--category > td) {
-  background: color-mix(in srgb, var(--p-primary-color) 9%, transparent);
+  background: var(--lu-color-primary-soft);
 }
 
 :deep(.budget-row--subcategory > td) {
-  background: var(--p-content-hover-background);
+  background: var(--lu-color-surface-muted);
 }
 
 :deep(.budget-row[data-dragging="true"] > td) {
@@ -1864,17 +1918,17 @@ function formatDecimal(amount: number): string {
 }
 
 :deep(.budget-row[data-drag-over="true"] > td) {
-  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
-  color: var(--p-text-color);
-  box-shadow: inset 0 0 0 1px var(--p-primary-color);
+  background: color-mix(in srgb, var(--lu-color-primary) 12%, transparent);
+  color: var(--lu-color-text);
+  box-shadow: inset 0 0 0 1px var(--lu-color-primary);
 }
 
 :deep(.budget-row[data-drag-edge="before"] > td) {
-  box-shadow: inset 0 2px 0 var(--p-primary-color);
+  box-shadow: inset 0 2px 0 var(--lu-color-primary);
 }
 
 :deep(.budget-row[data-drag-edge="after"] > td) {
-  box-shadow: inset 0 -2px 0 var(--p-primary-color);
+  box-shadow: inset 0 -2px 0 var(--lu-color-primary);
 }
 
 :deep(.budget-row button),
@@ -1902,54 +1956,54 @@ function formatDecimal(amount: number): string {
 <style>
 .goal-drawer-backdrop {
   position: fixed;
-  z-index: 40;
+  z-index: var(--lu-z-drawer);
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(0 0 0 / 0.32);
+  background: var(--lu-color-backdrop);
 }
 
 .goal-drawer {
   display: grid;
   align-content: start;
-  gap: 1.25rem;
-  inline-size: min(28rem, 100%);
+  gap: var(--lu-space-5);
+  inline-size: min(var(--lu-size-drawer), 100%);
   block-size: 100dvh;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--p-content-border-color);
-  background: var(--p-content-background);
-  padding: 1.25rem;
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.16);
+  border-inline-start: 1px solid var(--lu-color-border);
+  background: var(--lu-color-surface);
+  padding: var(--lu-space-5);
+  box-shadow: var(--lu-shadow-lg);
 }
 
 .goal-drawer__header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--lu-space-4);
 }
 
 .goal-drawer__header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--lu-font-size-xl);
 }
 
 .goal-drawer .eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  margin: 0 0 var(--lu-space-1);
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .goal-form {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 
 .goal-summary {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
   margin: 0;
 }
 
@@ -1957,20 +2011,20 @@ function formatDecimal(amount: number): string {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
-  border-block-end: 1px solid var(--p-content-border-color);
-  padding-block-end: 0.5rem;
+  gap: var(--lu-space-3);
+  border-block-end: 1px solid var(--lu-color-border);
+  padding-block-end: var(--lu-space-2);
 }
 
 .goal-summary dt {
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-sm);
   font-weight: 700;
 }
 
 .goal-summary dd {
   margin: 0;
-  color: var(--p-text-color);
+  color: var(--lu-color-text);
   font-weight: 800;
   text-align: end;
 }
@@ -1979,8 +2033,8 @@ function formatDecimal(amount: number): string {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding-block-start: 0.5rem;
+  gap: var(--lu-space-2);
+  padding-block-start: var(--lu-space-2);
 }
 
 @media (max-width: 680px) {

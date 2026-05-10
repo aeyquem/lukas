@@ -7,7 +7,7 @@ defineOptions({
 </script>
 
 <template>
-  <DataTable v-bind="$attrs">
+  <DataTable class="base-data-table" v-bind="$attrs">
     <template
       v-for="(_, slotName) in $slots"
       #[slotName]="slotProps"
@@ -17,3 +17,14 @@ defineOptions({
     </template>
   </DataTable>
 </template>
+
+<style scoped>
+.base-data-table {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.base-data-table :deep(.p-datatable-table-container) {
+  overflow-x: auto;
+}
+</style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import BaseBadge from "@/components/base/BaseBadge.vue";
 import BaseField from "@/components/base/BaseField.vue";
-import BaseTextInput from "@/components/base/BaseTextInput.vue";
+import PeriodPicker from "@/components/layout/PeriodPicker.vue";
 
 const props = defineProps<{
   period: string;
@@ -28,10 +28,9 @@ function updatePeriod(value: string) {
     <div class="header-context">
       <BaseBadge tone="success">CLP</BaseBadge>
       <BaseField input-id="period" label="Periodo">
-        <BaseTextInput
-          id="period"
+        <PeriodPicker
+          input-id="period"
           :model-value="props.period"
-          type="month"
           @update:model-value="updatePeriod"
         />
       </BaseField>
@@ -42,20 +41,20 @@ function updatePeriod(value: string) {
 <style scoped>
 .app-header {
   position: sticky;
-  z-index: 8;
+  z-index: var(--lu-z-sticky);
   inset-block-start: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--lu-space-4);
   min-block-size: 4.75rem;
-  border-block-end: 1px solid var(--p-content-border-color);
+  border-block-end: 1px solid var(--lu-color-border);
   background: color-mix(
     in srgb,
-    var(--p-content-background) 92%,
+    var(--lu-color-surface) 92%,
     transparent
   );
-  padding: 0.75rem 1.5rem;
+  padding: var(--lu-space-3) var(--lu-space-6);
 }
 
 .header-title {
@@ -66,13 +65,13 @@ function updatePeriod(value: string) {
   margin: 0;
   font-size: clamp(1.75rem, 3vw, 2.35rem);
   font-weight: 700;
-  line-height: 1;
+  line-height: var(--lu-line-tight);
 }
 
 .header-context {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 
 .header-context :deep(.base-field) {
@@ -80,9 +79,9 @@ function updatePeriod(value: string) {
 }
 
 .eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  margin: 0 0 var(--lu-space-1);
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -106,7 +105,7 @@ function updatePeriod(value: string) {
 
 @media (max-width: 680px) {
   .app-header {
-    padding: 1rem;
+    padding: var(--lu-space-4);
   }
 }
 </style>

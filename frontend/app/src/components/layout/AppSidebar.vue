@@ -64,24 +64,24 @@ function selectSection(section: WorkspaceSection) {
   inset-block-start: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--lu-space-6);
   block-size: 100dvh;
-  border-inline-end: 1px solid var(--p-content-border-color);
-  background: var(--p-content-background);
-  padding: 1.25rem;
+  border-inline-end: 1px solid var(--lu-color-border);
+  background: var(--lu-color-surface);
+  padding: var(--lu-space-5);
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 
 .sidebar-brand__logo {
-  inline-size: 2.4rem;
-  block-size: 2.4rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--lu-radius-lg);
+  box-shadow: var(--lu-shadow-sm);
   object-fit: cover;
 }
 
@@ -91,54 +91,54 @@ function selectSection(section: WorkspaceSection) {
 }
 
 .sidebar-brand strong {
-  font-size: 1.05rem;
-  line-height: 1.1;
+  font-size: var(--lu-font-size-md);
+  line-height: var(--lu-line-tight);
 }
 
 .sidebar-brand span {
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
   font-weight: 700;
 }
 
 .sidebar-nav {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
 }
 
 .sidebar-option {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
+  grid-template-columns: var(--lu-size-icon) minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   min-block-size: 2.75rem;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--lu-radius-lg);
   background: transparent;
-  color: var(--p-text-muted-color);
-  padding: 0.5rem;
+  color: var(--lu-color-text-muted);
+  padding: var(--lu-space-2);
   text-align: start;
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease;
+    background-color var(--lu-transition-fast),
+    border-color var(--lu-transition-fast),
+    color var(--lu-transition-fast);
 }
 
 .sidebar-option span {
   display: inline-grid;
   place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  border-radius: 6px;
-  background: var(--p-content-hover-background);
-  color: var(--p-primary-color);
-  font-size: 0.75rem;
+  inline-size: var(--lu-size-icon);
+  block-size: var(--lu-size-icon);
+  border-radius: var(--lu-radius-md);
+  background: var(--lu-color-surface-muted);
+  color: var(--lu-color-primary);
+  font-size: var(--lu-font-size-xs);
   font-weight: 800;
 }
 
 .sidebar-option strong {
   overflow: hidden;
-  font-size: 0.875rem;
+  font-size: var(--lu-font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -146,21 +146,21 @@ function selectSection(section: WorkspaceSection) {
 .sidebar-option:hover,
 .sidebar-option:focus-visible,
 .sidebar-option[aria-pressed="true"] {
-  border-color: var(--p-content-border-color);
-  background: var(--p-content-hover-background);
-  color: var(--p-text-color);
+  border-color: var(--lu-color-border);
+  background: var(--lu-color-surface-muted);
+  color: var(--lu-color-text);
 }
 
 .sidebar-option[aria-pressed="true"] span {
-  background: var(--p-primary-color);
-  color: var(--p-primary-contrast-color);
+  background: var(--lu-color-primary);
+  color: var(--lu-color-primary-contrast);
 }
 
 @media (max-width: 900px) {
   .app-sidebar {
     position: static;
     block-size: auto;
-    border-block-end: 1px solid var(--p-content-border-color);
+    border-block-end: 1px solid var(--lu-color-border);
     border-inline-end: 0;
   }
 
@@ -171,7 +171,7 @@ function selectSection(section: WorkspaceSection) {
 
 @media (max-width: 680px) {
   .app-sidebar {
-    padding: 1rem;
+    padding: var(--lu-space-4);
   }
 
   .sidebar-nav {

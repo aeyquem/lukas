@@ -7,7 +7,7 @@ defineOptions({
 </script>
 
 <template>
-  <TreeTable v-bind="$attrs">
+  <TreeTable class="base-tree-table" v-bind="$attrs">
     <template
       v-for="(_, slotName) in $slots"
       #[slotName]="slotProps"
@@ -17,3 +17,14 @@ defineOptions({
     </template>
   </TreeTable>
 </template>
+
+<style scoped>
+.base-tree-table {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.base-tree-table :deep(.p-treetable-table-container) {
+  overflow-x: auto;
+}
+</style>

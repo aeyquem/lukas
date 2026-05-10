@@ -22,8 +22,8 @@ import BaseCard from "@/components/base/BaseCard.vue";
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: var(--lu-space-3);
+  padding: var(--lu-space-4);
 }
 
 .story-heading h2,

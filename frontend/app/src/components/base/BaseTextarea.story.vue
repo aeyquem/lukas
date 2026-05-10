@@ -25,7 +25,7 @@ const notes = ref("Notas internas del movimiento.");
 <style scoped>
 .story-stack {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   max-inline-size: 28rem;
 }
 </style>

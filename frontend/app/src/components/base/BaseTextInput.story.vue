@@ -41,7 +41,7 @@ const month = ref("2026-05");
 <style scoped>
 .story-stack {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   max-inline-size: 24rem;
 }
 </style>

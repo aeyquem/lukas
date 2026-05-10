@@ -505,19 +505,19 @@ function destinationAccountId(movement: LedgerMovement): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   margin-block-end: 0;
 }
 
 .movements-heading h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--lu-font-size-md);
 }
 
 .movements-heading span,
 .currency-note {
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-sm);
 }
 
 .movements-actions {
@@ -525,31 +525,31 @@ function destinationAccountId(movement: LedgerMovement): string {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 
 .currency-note {
-  margin-block-end: 1rem;
+  margin-block-end: var(--lu-space-4);
 }
 
 .currency-note strong {
-  color: var(--p-text-color);
+  color: var(--lu-color-text);
 }
 
 .movements-alert {
-  margin-block-end: 1rem;
+  margin-block-end: var(--lu-space-4);
 }
 
 .movement-form {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 
 .movement-form__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding-block-start: 0.5rem;
+  gap: var(--lu-space-2);
+  padding-block-start: var(--lu-space-2);
 }
 
 @media (max-width: 680px) {
@@ -567,42 +567,42 @@ function destinationAccountId(movement: LedgerMovement): string {
 <style>
 .movement-drawer-backdrop {
   position: fixed;
-  z-index: 40;
+  z-index: var(--lu-z-drawer);
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(0 0 0 / 0.32);
+  background: var(--lu-color-backdrop);
 }
 
 .movement-drawer {
   display: grid;
   align-content: start;
-  gap: 1.25rem;
-  inline-size: min(28rem, 100%);
+  gap: var(--lu-space-5);
+  inline-size: min(var(--lu-size-drawer), 100%);
   block-size: 100dvh;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--p-content-border-color);
-  background: var(--p-content-background);
-  padding: 1.25rem;
-  box-shadow: 0 24px 60px rgb(0 0 0 / 0.16);
+  border-inline-start: 1px solid var(--lu-color-border);
+  background: var(--lu-color-surface);
+  padding: var(--lu-space-5);
+  box-shadow: var(--lu-shadow-lg);
 }
 
 .movement-drawer__header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--lu-space-4);
 }
 
 .movement-drawer__header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--lu-font-size-xl);
 }
 
 .movement-drawer .eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  margin: 0 0 var(--lu-space-1);
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
   font-weight: 800;
   text-transform: uppercase;
 }

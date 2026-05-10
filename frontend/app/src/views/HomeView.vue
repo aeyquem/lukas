@@ -93,9 +93,9 @@ function selectSection(section: WorkspaceSection) {
 <style scoped>
 .app-layout {
   display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr);
+  grid-template-columns: var(--lu-size-sidebar) minmax(0, 1fr);
   min-block-size: 100dvh;
-  background: var(--p-surface-50);
+  background: var(--lu-color-background);
 }
 
 .app-workspace {
@@ -104,9 +104,15 @@ function selectSection(section: WorkspaceSection) {
 
 .app-main {
   display: grid;
-  gap: 1rem;
-  max-inline-size: 76rem;
-  padding: 1.5rem;
+  gap: var(--lu-space-4);
+  inline-size: 100%;
+  max-inline-size: var(--lu-size-main);
+  min-inline-size: 0;
+  padding: var(--lu-space-6);
+}
+
+.app-main > * {
+  min-inline-size: 0;
 }
 
 @media (max-width: 900px) {
@@ -117,7 +123,7 @@ function selectSection(section: WorkspaceSection) {
 
 @media (max-width: 680px) {
   .app-main {
-    padding: 1rem;
+    padding: var(--lu-space-4);
   }
 }
 </style>

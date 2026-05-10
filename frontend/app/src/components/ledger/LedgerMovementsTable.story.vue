@@ -105,15 +105,15 @@ const sampleLedgerMovements: LedgerMovement[] = [
 .story-controls {
   display: flex;
   justify-content: flex-end;
-  margin-block-end: 0.75rem;
+  margin-block-end: var(--lu-space-3);
 }
 
 .story-controls label {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--p-text-color);
-  font-size: 0.875rem;
+  gap: var(--lu-space-2);
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-sm);
   font-weight: 700;
 }
 </style>

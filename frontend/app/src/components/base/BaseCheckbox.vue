@@ -40,3 +40,17 @@ function updateChecked(value: boolean) {
     <strong>{{ label }}</strong>
   </label>
 </template>
+
+<style scoped>
+.base-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-sm);
+}
+
+.base-checkbox strong {
+  font-weight: 700;
+}
+</style>

@@ -33,27 +33,27 @@ withDefaults(
 <style scoped>
 .base-field {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--lu-space-2);
 }
 
 .base-field__label {
-  color: var(--p-text-muted-color);
-  font-size: 0.875rem;
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-sm);
   font-weight: 700;
 }
 
 .base-field__hint,
 .base-field__error {
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--lu-font-size-xs);
+  line-height: var(--lu-line-normal);
 }
 
 .base-field__hint {
-  color: var(--p-text-muted-color);
+  color: var(--lu-color-text-muted);
 }
 
 .base-field__error {
-  color: var(--p-red-500);
+  color: var(--lu-color-danger);
   font-weight: 700;
 }
 </style>

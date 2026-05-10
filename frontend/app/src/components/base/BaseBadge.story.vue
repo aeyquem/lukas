@@ -17,6 +17,6 @@ import BaseBadge from "@/components/base/BaseBadge.vue";
 .story-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
 }
 </style>

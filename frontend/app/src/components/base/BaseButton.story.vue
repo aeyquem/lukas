@@ -21,7 +21,7 @@ import BaseButton from "@/components/base/BaseButton.vue";
 .story-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--lu-space-3);
   align-items: center;
 }
 </style>
