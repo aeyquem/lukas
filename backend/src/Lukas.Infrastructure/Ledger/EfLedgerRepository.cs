@@ -57,6 +57,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 null,
                 null,
                 null,
+                null,
                 now);
         }
 
@@ -81,6 +82,19 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         }
 
         return result;
+    }
+
+    public async Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var tags = await dbContext.Tags
+            .AsNoTracking()
+            .Where(tag => tag.WorkspaceId == workspace.Id)
+            .OrderBy(tag => tag.Name)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return tags.Select(ToTagReadModel).ToList();
     }
 
     public async Task<TransactionReadModel> CreateManualTransactionAsync(
@@ -128,7 +142,14 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             envelopeId,
             categoryName,
             string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim(),
+            command.Tags,
             DateTimeOffset.UtcNow);
+        await ReplaceTransactionTagsAsync(
+            workspace.Id,
+            transaction,
+            command.Tags,
+            DateTimeOffset.UtcNow,
+            cancellationToken).ConfigureAwait(false);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return ToTransactionReadModel(transaction);
@@ -142,6 +163,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         await EnsureIncomeBudgetNodesAsync(workspace.Id, cancellationToken).ConfigureAwait(false);
         var transaction = await dbContext.LedgerTransactions
             .Include(candidate => candidate.Entries)
+            .Include(candidate => candidate.Tags)
             .SingleOrDefaultAsync(
                 candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == command.Id,
                 cancellationToken)
@@ -187,9 +209,15 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         dbContext.LedgerEntries.RemoveRange(transaction.Entries);
         transaction.Entries.Clear();
         AddManualEntries(transaction, account.Id, destinationAccount?.Id, amount, command.Currency, command.AccountEffect);
+        await ReplaceTransactionTagsAsync(
+            workspace.Id,
+            transaction,
+            command.Tags,
+            DateTimeOffset.UtcNow,
+            cancellationToken).ConfigureAwait(false);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return ToTransactionReadModel(transaction);
+        return await ReadTransactionAsync(workspace.Id, transaction.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<MovementReadModel>> GetMovementsAsync(CancellationToken cancellationToken)
@@ -228,6 +256,11 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     ? "Transferencia"
                     : entry.LedgerTransaction.CategoryName,
                 entry.LedgerTransaction.Notes,
+                Tags = entry.LedgerTransaction.Tags
+                    .Select(transactionTag => transactionTag.Tag!)
+                    .OrderBy(tag => tag.Name)
+                    .Select(tag => new TagReadModel(tag.Id, tag.Name, tag.NormalizedName))
+                    .ToList(),
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -254,7 +287,8 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                     entry.EnvelopeId,
                     entry.EnvelopeName,
                     entry.CategoryName,
-                    entry.Notes);
+                    entry.Notes,
+                    entry.Tags);
             })
             .ToList();
     }
@@ -299,6 +333,8 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         var transactions = await dbContext.LedgerTransactions
             .AsNoTracking()
             .Include(transaction => transaction.Entries)
+            .Include(transaction => transaction.Tags)
+                .ThenInclude(transactionTag => transactionTag.Tag)
             .Where(transaction =>
                 transaction.WorkspaceId == workspace.Id
                 && transaction.TransactionDate >= period.StartDate
@@ -338,6 +374,52 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             expenses,
             income - expenses,
             accounts);
+    }
+
+    public async Task<MonthlyTagReportReadModel> GetMonthlyTagReportAsync(
+        MonthlyPeriod period,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var transactions = await dbContext.LedgerTransactions
+            .AsNoTracking()
+            .Include(transaction => transaction.Entries)
+            .Include(transaction => transaction.Tags)
+                .ThenInclude(transactionTag => transactionTag.Tag)
+            .Where(transaction =>
+                transaction.WorkspaceId == workspace.Id
+                && transaction.TransactionDate >= period.StartDate
+                && transaction.TransactionDate < period.EndDate
+                && (transaction.Kind == "income" || transaction.Kind == "expense"))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var rows = transactions
+            .SelectMany(transaction => transaction.Tags.Select(transactionTag => new { Transaction = transaction, Tag = transactionTag.Tag! }))
+            .Where(row => row.Tag is not null && TransactionReportAmount(row.Transaction) > 0)
+            .GroupBy(row => row.Tag.Id)
+            .Select(group =>
+            {
+                var tag = group.First().Tag;
+                var income = group
+                    .Where(row => row.Transaction.Kind == "income")
+                    .Sum(row => TransactionReportAmount(row.Transaction));
+                var expenses = group
+                    .Where(row => row.Transaction.Kind == "expense")
+                    .Sum(row => TransactionReportAmount(row.Transaction));
+
+                return new TagReportRowReadModel(
+                    ToTagReadModel(tag),
+                    income,
+                    expenses,
+                    income - expenses,
+                    group.Select(row => row.Transaction.Id).Distinct().Count());
+            })
+            .OrderByDescending(row => row.ExpenseTotal)
+            .ThenBy(row => row.Tag.Name)
+            .ToList();
+
+        return new MonthlyTagReportReadModel(period.Key, workspace.BaseCurrency, rows);
     }
 
     private async Task EnsureBudgetTreeAsync(Guid workspaceId, CancellationToken cancellationToken)
@@ -1076,6 +1158,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         Guid? envelopeId,
         string? categoryName,
         string? notes,
+        IReadOnlyList<string>? tags,
         DateTimeOffset now)
     {
         var transaction = new LedgerTransactionEntity
@@ -1104,6 +1187,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             envelopeId,
             categoryName,
             notes,
+            tags,
         });
 
         var sourceRecord = new SourceRecordEntity
@@ -1126,6 +1210,56 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         });
 
         return transaction;
+    }
+
+    private async Task ReplaceTransactionTagsAsync(
+        Guid workspaceId,
+        LedgerTransactionEntity transaction,
+        IReadOnlyList<string>? tagNames,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        dbContext.TransactionTags.RemoveRange(transaction.Tags);
+        transaction.Tags.Clear();
+        if (tagNames is null || tagNames.Count == 0)
+        {
+            return;
+        }
+
+        var normalizedNames = tagNames.Select(TransactionTagNames.Normalize).ToList();
+        var tags = await dbContext.Tags
+            .Where(tag => tag.WorkspaceId == workspaceId && normalizedNames.Contains(tag.NormalizedName))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var tagName in tagNames)
+        {
+            var normalizedName = TransactionTagNames.Normalize(tagName);
+            var tag = tags.SingleOrDefault(candidate => candidate.NormalizedName == normalizedName);
+            if (tag is null)
+            {
+                tag = new TagEntity
+                {
+                    Id = Guid.CreateVersion7(),
+                    WorkspaceId = workspaceId,
+                    Name = TransactionTagNames.DisplayName(tagName),
+                    NormalizedName = normalizedName,
+                    CreatedAt = now,
+                };
+                tags.Add(tag);
+                dbContext.Tags.Add(tag);
+            }
+
+            var transactionTag = new TransactionTagEntity
+            {
+                LedgerTransactionId = transaction.Id,
+                TagId = tag.Id,
+                LedgerTransaction = transaction,
+                Tag = tag,
+            };
+            transaction.Tags.Add(transactionTag);
+            dbContext.TransactionTags.Add(transactionTag);
+        }
     }
 
     private void AddManualEntries(
@@ -1209,7 +1343,36 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             transaction.EnvelopeId,
             transaction.Envelope?.Name,
             EffectiveCategoryName(transaction.Kind, transaction.CategoryName),
-            transaction.Notes);
+            transaction.Notes,
+            transaction.Tags
+                .Where(transactionTag => transactionTag.Tag is not null)
+                .Select(transactionTag => ToTagReadModel(transactionTag.Tag!))
+                .OrderBy(tag => tag.Name)
+                .ToList());
+    }
+
+    private async Task<TransactionReadModel> ReadTransactionAsync(
+        Guid workspaceId,
+        Guid transactionId,
+        CancellationToken cancellationToken)
+    {
+        var transaction = await dbContext.LedgerTransactions
+            .AsNoTracking()
+            .Include(candidate => candidate.Entries)
+            .Include(candidate => candidate.Envelope)
+            .Include(candidate => candidate.Tags)
+                .ThenInclude(transactionTag => transactionTag.Tag)
+            .SingleAsync(
+                candidate => candidate.WorkspaceId == workspaceId && candidate.Id == transactionId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return ToTransactionReadModel(transaction);
+    }
+
+    private static TagReadModel ToTagReadModel(TagEntity tag)
+    {
+        return new TagReadModel(tag.Id, tag.Name, tag.NormalizedName);
     }
 
     private static LedgerEntryEntity PrimaryEntry(LedgerTransactionEntity transaction)
@@ -1288,6 +1451,27 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             .Select(transaction => transaction.Entries.Single())
             .Where(entry => entry.Currency == "CLP" && entry.AccountEffect == accountEffect)
             .Sum(entry => decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture));
+    }
+
+    private static decimal TransactionReportAmount(LedgerTransactionEntity transaction)
+    {
+        var entry = PrimaryEntry(transaction);
+        if (entry.Currency != "CLP")
+        {
+            return 0;
+        }
+
+        if (transaction.Kind == "income" && entry.AccountEffect == "increase")
+        {
+            return decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture);
+        }
+
+        if (transaction.Kind == "expense" && entry.AccountEffect == "decrease")
+        {
+            return decimal.Parse(entry.AmountValue, CultureInfo.InvariantCulture);
+        }
+
+        return 0;
     }
 
     private static decimal BudgetActivityAmount(LedgerTransactionEntity transaction)

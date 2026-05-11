@@ -34,6 +34,8 @@ export function useLedgerWorkspace() {
       await invalidateAccounts();
       await invalidateMovements();
       await invalidateBudget();
+      await invalidateTags();
+      await invalidateReports();
     },
   });
 
@@ -43,6 +45,8 @@ export function useLedgerWorkspace() {
       await invalidateAccounts();
       await invalidateMovements();
       await invalidateBudget();
+      await invalidateTags();
+      await invalidateReports();
     },
   });
 
@@ -58,6 +62,14 @@ export function useLedgerWorkspace() {
 
   async function invalidateBudget() {
     await queryCache.invalidateQueries({ key: ["budget-tree"] });
+  }
+
+  async function invalidateTags() {
+    await queryCache.invalidateQueries({ key: ["tags"] });
+  }
+
+  async function invalidateReports() {
+    await queryCache.invalidateQueries({ key: ["tag-report"] });
   }
 
   function submitAccount(request: CreateAccountRequest) {

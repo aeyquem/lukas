@@ -13,6 +13,12 @@ export interface AccountDto {
   currentBalance: string;
 }
 
+export interface TagDto {
+  id: string;
+  name: string;
+  normalizedName: string;
+}
+
 export interface CreateAccountRequest {
   displayName: string;
   type: AccountType;
@@ -34,6 +40,7 @@ export interface TransactionDto {
   envelopeName?: string | null;
   categoryName?: string | null;
   notes?: string | null;
+  tags: TagDto[];
 }
 
 export interface MovementDto {
@@ -55,6 +62,7 @@ export interface MovementDto {
   envelopeName?: string | null;
   categoryName?: string | null;
   notes?: string | null;
+  tags: TagDto[];
 }
 
 export type LedgerMovement = {
@@ -71,6 +79,7 @@ export type LedgerMovement = {
   categoryName?: string;
   description: string;
   notes?: string;
+  tags: TagDto[];
   direction: MovementDirection;
   originalAmount: string;
   originalCurrency: string;
@@ -90,6 +99,7 @@ export interface CreateManualTransactionRequest {
   envelopeId?: string | null;
   categoryName?: string | null;
   notes?: string | null;
+  tags?: string[] | null;
 }
 
 export interface UpdateManualTransactionRequest {
@@ -105,6 +115,7 @@ export interface UpdateManualTransactionRequest {
   envelopeId?: string | null;
   categoryName?: string | null;
   notes?: string | null;
+  tags?: string[] | null;
 }
 
 export interface MonthlyCashflowDto {
@@ -114,6 +125,20 @@ export interface MonthlyCashflowDto {
   expenseTotal: string;
   netCashflow: string;
   accounts: AccountDto[];
+}
+
+export interface MonthlyTagReportDto {
+  period: string;
+  currency: string;
+  tags: TagReportRowDto[];
+}
+
+export interface TagReportRowDto {
+  tag: TagDto;
+  incomeTotal: string;
+  expenseTotal: string;
+  netTotal: string;
+  transactionCount: number;
 }
 
 export interface BudgetTreeDto {
@@ -159,6 +184,15 @@ export interface BudgetGoalDto {
 
 export async function getAccounts(): Promise<AccountDto[]> {
   const result = await getJson<AccountDto[]>("/api/accounts");
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function getTags(): Promise<TagDto[]> {
+  const result = await getJson<TagDto[]>("/api/tags");
   if (!result.ok) {
     throw new Error(result.error.title);
   }
@@ -249,6 +283,7 @@ export async function getMovements(): Promise<LedgerMovement[]> {
     ...(movement.envelopeName ? { envelopeName: movement.envelopeName } : {}),
     ...(movement.categoryName ? { categoryName: movement.categoryName } : {}),
     ...(movement.notes ? { notes: movement.notes } : {}),
+    tags: movement.tags ?? [],
   }));
 }
 
@@ -283,6 +318,19 @@ export async function getMonthlyCashflow(
 ): Promise<MonthlyCashflowDto> {
   const result = await getJson<MonthlyCashflowDto>(
     `/api/cashflow/monthly?period=${encodeURIComponent(period)}`,
+  );
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function getMonthlyTagReport(
+  period: string,
+): Promise<MonthlyTagReportDto> {
+  const result = await getJson<MonthlyTagReportDto>(
+    `/api/reports/tags?period=${encodeURIComponent(period)}`,
   );
   if (!result.ok) {
     throw new Error(result.error.title);

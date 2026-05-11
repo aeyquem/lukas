@@ -4,6 +4,9 @@ namespace Lukas.Application.Ledger;
 
 public sealed class LedgerService(ILedgerRepository repository)
 {
+    private const int MaxTagsPerTransaction = 10;
+    private const int MaxTagLength = 60;
+
     public Task<Result<AccountReadModel>> CreateAccountAsync(
         CreateAccountCommand command,
         CancellationToken cancellationToken)
@@ -36,6 +39,11 @@ public sealed class LedgerService(ILedgerRepository repository)
         return repository.GetAccountsAsync(cancellationToken);
     }
 
+    public Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken)
+    {
+        return repository.GetTagsAsync(cancellationToken);
+    }
+
     public Task<Result<TransactionReadModel>> CreateManualTransactionAsync(
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken)
@@ -47,7 +55,8 @@ public sealed class LedgerService(ILedgerRepository repository)
             command.Amount,
             command.Currency,
             command.AccountEffect,
-            command.Description);
+            command.Description,
+            command.Tags);
         if (error is not null)
         {
             return Failure<TransactionReadModel>(error.Code, error.Message);
@@ -67,7 +76,8 @@ public sealed class LedgerService(ILedgerRepository repository)
             command.Amount,
             command.Currency,
             command.AccountEffect,
-            command.Description);
+            command.Description,
+            command.Tags);
         if (error is not null)
         {
             return Failure<TransactionReadModel>(error.Code, error.Message);
@@ -136,6 +146,18 @@ public sealed class LedgerService(ILedgerRepository repository)
         return Success(repository.GetMonthlyCashflowAsync(monthlyPeriod, cancellationToken));
     }
 
+    public Task<Result<MonthlyTagReportReadModel>> GetMonthlyTagReportAsync(
+        string period,
+        CancellationToken cancellationToken)
+    {
+        if (!MonthlyPeriod.TryParse(period, out var monthlyPeriod))
+        {
+            return Failure<MonthlyTagReportReadModel>("period.invalid", "Period must use YYYY-MM.");
+        }
+
+        return Success(repository.GetMonthlyTagReportAsync(monthlyPeriod, cancellationToken));
+    }
+
     private static async Task<Result<T>> Success<T>(Task<T> task)
     {
         try
@@ -170,7 +192,8 @@ public sealed class LedgerService(ILedgerRepository repository)
         string amountValue,
         string currency,
         string accountEffect,
-        string description)
+        string description,
+        IReadOnlyList<string>? tags)
     {
         if (!IsTransactionKind(kind))
         {
@@ -210,6 +233,36 @@ public sealed class LedgerService(ILedgerRepository repository)
         if (string.IsNullOrWhiteSpace(description))
         {
             return new LedgerError("transaction.description_required", "Transaction description is required.");
+        }
+
+        return ValidateTags(tags);
+    }
+
+    private static LedgerError? ValidateTags(IReadOnlyList<string>? tags)
+    {
+        if (tags is null)
+        {
+            return null;
+        }
+
+        if (tags.Count > MaxTagsPerTransaction)
+        {
+            return new LedgerError("tag.too_many", "A transaction cannot have more than 10 tags.");
+        }
+
+        if (tags.Any(string.IsNullOrWhiteSpace))
+        {
+            return new LedgerError("tag.name_required", "Tag names are required.");
+        }
+
+        if (tags.Any(tag => TransactionTagNames.DisplayName(tag).Length > MaxTagLength))
+        {
+            return new LedgerError("tag.name_too_long", "Tag names cannot be longer than 60 characters.");
+        }
+
+        if (tags.Select(TransactionTagNames.Normalize).ToHashSet().Count != tags.Count)
+        {
+            return new LedgerError("tag.duplicate", "Transaction tags must be unique.");
         }
 
         return null;

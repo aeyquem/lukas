@@ -1,4 +1,5 @@
 using Lukas.Application.Ledger;
+using Lukas.Contracts.Tags;
 using Lukas.Contracts.Transactions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,7 +42,8 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     request.Description,
                     request.EnvelopeId,
                     request.CategoryName,
-                    request.Notes),
+                    request.Notes,
+                    request.Tags),
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -74,7 +76,8 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
                     request.Description,
                     request.EnvelopeId,
                     request.CategoryName,
-                    request.Notes),
+                    request.Notes,
+                    request.Tags),
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -101,7 +104,13 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
             transaction.EnvelopeId,
             transaction.EnvelopeName,
             transaction.CategoryName,
-            transaction.Notes);
+            transaction.Notes,
+            transaction.Tags.Select(ToTagDto).ToList());
+    }
+
+    private static TagDto ToTagDto(TagReadModel tag)
+    {
+        return new TagDto(tag.Id, tag.Name, tag.NormalizedName);
     }
 
     private static string FormatAmount(decimal amount)

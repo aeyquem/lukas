@@ -17,6 +17,8 @@ type DisplayMovement = LedgerMovement & {
   displayCurrency: string;
   categoryDisplay: string;
   isUncategorized: boolean;
+  tagNames: string[];
+  tagsDisplay: string;
   signedDisplayAmount: string;
   displayAmountNumber: string;
   displayAmountPrefix: string;
@@ -51,6 +53,7 @@ const emit = defineEmits<{
 }>();
 
 const selectedAccountNames = ref<string[]>([]);
+const selectedTagNames = ref<string[]>([]);
 const selectedGroupBy = ref<GroupField>(props.groupBy);
 const filters = ref<DataTableFilterMeta>({
   notes: {
@@ -74,6 +77,20 @@ const accountOptions = computed<AccountOption[]>(() =>
       value: accountName,
     })),
 );
+const tagOptions = computed<AccountOption[]>(() =>
+  Array.from(
+    new Set(
+      props.movements.flatMap((movement) =>
+        movement.tags.map((tag) => tag.name),
+      ),
+    ),
+  )
+    .sort((firstTag, secondTag) => firstTag.localeCompare(secondTag, "es-CL"))
+    .map((tagName) => ({
+      label: tagName,
+      value: tagName,
+    })),
+);
 
 watch(
   accountOptions,
@@ -91,8 +108,27 @@ watch(
   { immediate: true },
 );
 
+watch(
+  tagOptions,
+  (options) => {
+    const tagNames = options.map((tag) => tag.value);
+    const stillAvailable = selectedTagNames.value.filter((tagName) =>
+      tagNames.includes(tagName),
+    );
+    const newlyAvailable = tagNames.filter(
+      (tagName) => !stillAvailable.includes(tagName),
+    );
+
+    selectedTagNames.value = [...stillAvailable, ...newlyAvailable];
+  },
+  { immediate: true },
+);
+
 const selectedAccounts = computed<string[]>(() => {
   return selectedAccountNames.value;
+});
+const selectedTags = computed<string[]>(() => {
+  return selectedTagNames.value;
 });
 
 const activeGroupBy = computed(() =>
@@ -124,6 +160,8 @@ const displayMovements = computed<DisplayMovement[]>(() =>
         categoryDisplay:
           movement.envelopeName ?? movement.categoryName ?? "Sin categoría",
         isUncategorized: !movement.envelopeName && !movement.categoryName,
+        tagNames: movement.tags.map((tag) => tag.name),
+        tagsDisplay: movement.tags.map((tag) => tag.name).join(", "),
         signedDisplayAmount: `${amountParts.prefix}${amountParts.number}`,
         displayAmountNumber: amountParts.number,
         displayAmountPrefix: amountParts.prefix,
@@ -131,6 +169,11 @@ const displayMovements = computed<DisplayMovement[]>(() =>
     })
     .filter((movement) =>
       selectedAccounts.value.includes(movement.accountName),
+    )
+    .filter(
+      (movement) =>
+        selectedTags.value.length === tagOptions.value.length ||
+        movement.tagNames.some((tagName) => selectedTags.value.includes(tagName)),
     ),
 );
 
@@ -203,6 +246,20 @@ function editMovement(movement: DisplayMovement) {
             :options="accountOptions"
             placeholder="Seleccionar"
             selected-items-label="Todas las cuentas"
+          />
+        </div>
+
+        <div class="table-filter table-filter--group">
+          <label for="movement-table-tags">Etiquetas</label>
+          <BaseMultiSelect
+            id="movement-table-tags"
+            v-model="selectedTagNames"
+            display="chip"
+            :max-selected-labels="tagOptions.length - 1"
+            filter
+            :options="tagOptions"
+            placeholder="Seleccionar"
+            selected-items-label="Todas las etiquetas"
           />
         </div>
 
@@ -286,6 +343,22 @@ function editMovement(movement: DisplayMovement) {
     </BaseColumn>
 
     <BaseColumn
+      field="tagsDisplay"
+      header="Etiquetas"
+      sortable
+      style="min-width: 14rem"
+    >
+      <template #body="{ data }">
+        <div v-if="data.tags.length > 0" class="tags">
+          <span v-for="tag in data.tags" :key="tag.id" class="tag">
+            {{ tag.name }}
+          </span>
+        </div>
+        <span v-else class="notes">Sin etiquetas</span>
+      </template>
+    </BaseColumn>
+
+    <BaseColumn
       field="displayCurrency"
       header="Moneda"
       sortable
@@ -330,7 +403,9 @@ function editMovement(movement: DisplayMovement) {
 <style scoped>
 .table-toolbar {
   display: grid;
-  grid-template-columns: minmax(14rem, 1.2fr) minmax(11rem, 0.65fr);
+  grid-template-columns:
+    minmax(14rem, 1.2fr) minmax(14rem, 1fr)
+    minmax(11rem, 0.65fr);
   gap: var(--lu-space-2);
 }
 
@@ -401,6 +476,24 @@ function editMovement(movement: DisplayMovement) {
   border-color: color-mix(in srgb, var(--lu-color-primary) 28%, transparent);
   background: var(--lu-color-primary-soft);
   color: var(--lu-color-text);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-1);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.45rem;
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-pill);
+  padding-inline: var(--lu-space-2);
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-xs);
+  font-weight: 800;
 }
 
 .notes-filter {

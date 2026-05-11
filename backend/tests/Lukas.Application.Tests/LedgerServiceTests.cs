@@ -65,6 +65,31 @@ public sealed class LedgerServiceTests
         result.Error.Code.ShouldBe("money.invalid_amount");
     }
 
+    [Fact]
+    public async Task CreateTransactionRejectsDuplicateNormalizedTags()
+    {
+        var service = new LedgerService(new ThrowingLedgerRepository());
+
+        var result = await service.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand(
+                "expense",
+                Guid.CreateVersion7(),
+                null,
+                new DateOnly(2026, 5, 2),
+                "1000",
+                "CLP",
+                "decrease",
+                "Micros",
+                null,
+                null,
+                null,
+                ["Transport", "tranSPort "]),
+            TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("tag.duplicate");
+    }
+
     private sealed class ThrowingLedgerRepository : ILedgerRepository
     {
         public Task<AccountReadModel> CreateAccountAsync(
@@ -75,6 +100,11 @@ public sealed class LedgerServiceTests
         }
 
         public Task<IReadOnlyList<AccountReadModel>> GetAccountsAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");
         }
@@ -121,6 +151,13 @@ public sealed class LedgerServiceTests
         }
 
         public Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(
+            MonthlyPeriod period,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<MonthlyTagReportReadModel> GetMonthlyTagReportAsync(
             MonthlyPeriod period,
             CancellationToken cancellationToken)
         {

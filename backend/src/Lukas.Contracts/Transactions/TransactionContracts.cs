@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Lukas.Contracts.Tags;
 
 namespace Lukas.Contracts.Transactions;
 
@@ -13,7 +14,8 @@ public sealed record CreateManualTransactionRequest(
     [Required, MinLength(1), MaxLength(240)] string Description,
     Guid? EnvelopeId,
     [MaxLength(120)] string? CategoryName,
-    [MaxLength(1000)] string? Notes);
+    [MaxLength(1000)] string? Notes,
+    [MaxLength(10)] IReadOnlyList<string>? Tags);
 
 public sealed record UpdateManualTransactionRequest(
     [Required, RegularExpression("^(income|expense|adjustment|transfer)$")] string Kind,
@@ -26,7 +28,8 @@ public sealed record UpdateManualTransactionRequest(
     [Required, MinLength(1), MaxLength(240)] string Description,
     Guid? EnvelopeId,
     [MaxLength(120)] string? CategoryName,
-    [MaxLength(1000)] string? Notes);
+    [MaxLength(1000)] string? Notes,
+    [MaxLength(10)] IReadOnlyList<string>? Tags);
 
 public sealed record TransactionDto(
     Guid Id,
@@ -41,4 +44,5 @@ public sealed record TransactionDto(
     Guid? EnvelopeId,
     string? EnvelopeName,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<TagDto> Tags);

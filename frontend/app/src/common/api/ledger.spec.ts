@@ -5,7 +5,9 @@ import {
   createManualTransaction,
   getBudgetTree,
   getMonthlyCashflow,
+  getMonthlyTagReport,
   getMovements,
+  getTags,
   saveBudgetTree,
   updateManualTransaction,
 } from "@/common/api/ledger";
@@ -64,6 +66,7 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo",
           categoryName: "Casa",
+          tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -78,6 +81,7 @@ describe("ledger api", () => {
       accountEffect: "decrease",
       description: "Arriendo",
       categoryName: "Casa",
+      tags: ["Casa"],
     });
 
     expect(transaction.description).toBe("Arriendo");
@@ -94,6 +98,7 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo",
           categoryName: "Casa",
+          tags: ["Casa"],
         }),
       }),
     );
@@ -112,6 +117,7 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo actualizado",
           categoryName: "Casa",
+          tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -127,6 +133,7 @@ describe("ledger api", () => {
       accountEffect: "decrease",
       description: "Arriendo actualizado",
       categoryName: "Casa",
+      tags: ["Casa"],
     });
 
     expect(transaction.amount).toBe("130000");
@@ -143,6 +150,7 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo actualizado",
           categoryName: "Casa",
+          tags: ["Casa"],
         }),
       }),
     );
@@ -168,6 +176,48 @@ describe("ledger api", () => {
     expect(cashflow.netCashflow).toBe("400000");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/cashflow/monthly?period=2026-05",
+    );
+  });
+
+  it("requests tags", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify([{ id: "tag-id", name: "Transport", normalizedName: "transport" }]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const tags = await getTags();
+
+    expect(tags[0]?.normalizedName).toBe("transport");
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/tags");
+  });
+
+  it("requests monthly tag reports for the selected period", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          period: "2026-05",
+          currency: "CLP",
+          tags: [
+            {
+              tag: { id: "tag-id", name: "Transport", normalizedName: "transport" },
+              incomeTotal: "0",
+              expenseTotal: "12000",
+              netTotal: "-12000",
+              transactionCount: 1,
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const report = await getMonthlyTagReport("2026-05");
+
+    expect(report.tags[0]?.expenseTotal).toBe("12000");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/reports/tags?period=2026-05",
     );
   });
 
@@ -240,6 +290,7 @@ describe("ledger api", () => {
             description: "Arriendo",
             categoryName: "Casa",
             notes: "Contrato anual",
+            tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
           },
         ]),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -254,6 +305,7 @@ describe("ledger api", () => {
     expect(movements[0]?.date).toBe("2026-05-02");
     expect(movements[0]?.categoryName).toBe("Casa");
     expect(movements[0]?.notes).toBe("Contrato anual");
+    expect(movements[0]?.tags[0]?.normalizedName).toBe("casa");
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:5000/api/movements",
     );

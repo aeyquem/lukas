@@ -1,5 +1,6 @@
 using Lukas.Application.Ledger;
 using Lukas.Contracts.Movements;
+using Lukas.Contracts.Tags;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lukas.Api.Controllers;
@@ -35,7 +36,13 @@ public sealed class MovementsController(LedgerService ledgerService) : Controlle
             movement.EnvelopeId,
             movement.EnvelopeName,
             movement.CategoryName,
-            movement.Notes);
+            movement.Notes,
+            movement.Tags.Select(ToTagDto).ToList());
+    }
+
+    private static TagDto ToTagDto(TagReadModel tag)
+    {
+        return new TagDto(tag.Id, tag.Name, tag.NormalizedName);
     }
 
     private static string FormatAmount(decimal amount)

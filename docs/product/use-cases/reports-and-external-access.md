@@ -8,6 +8,7 @@ Priority reports for the PoC:
 
 - Monthly budget and cashflow.
 - Spending by category.
+- Spending by tag.
 - Account balances.
 - Goals and reserves.
 - Import/review status.
@@ -33,4 +34,3 @@ external access should start read-only and use scoped permissions.
 External tools must not receive bank credentials, provider tokens or raw
 integration secrets. Any future write workflow must be explicit, auditable and
 reversible at the product level.
-

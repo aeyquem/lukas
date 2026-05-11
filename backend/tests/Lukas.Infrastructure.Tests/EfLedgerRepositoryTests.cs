@@ -142,6 +142,64 @@ public sealed class EfLedgerRepositoryTests
     }
 
     [Fact]
+    public async Task TransactionTagsAreCreatedNormalizedAndReturnedWithMovements()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var account = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Banco", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 2), "1500", "CLP", "decrease", "Micro", null, null, null, ["Transport", "Home-Party"]),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", account.Id, null, new DateOnly(2026, 5, 3), "2000", "CLP", "decrease", "Metro", null, null, null, ["tranSPort "]),
+            TestContext.Current.CancellationToken);
+
+        var tags = await repository.GetTagsAsync(TestContext.Current.CancellationToken);
+        var movements = await repository.GetMovementsAsync(TestContext.Current.CancellationToken);
+
+        tags.Count.ShouldBe(2);
+        tags.ShouldContain(tag => tag.Name == "Transport" && tag.NormalizedName == "transport");
+        tags.ShouldContain(tag => tag.Name == "Home Party" && tag.NormalizedName == "home party");
+        movements.ShouldContain(movement => movement.Description == "Micro" && movement.Tags.Count == 2);
+        movements.ShouldContain(movement => movement.Description == "Metro" && movement.Tags.Single().NormalizedName == "transport");
+    }
+
+    [Fact]
+    public async Task TagReportAggregatesIncomeAndExpenseWithoutTransfers()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+        var checking = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Cuenta corriente", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+        var savings = await repository.CreateAccountAsync(
+            new CreateAccountCommand("Ahorro", "bank", "CLP", null),
+            TestContext.Current.CancellationToken);
+
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("income", checking.Id, null, new DateOnly(2026, 5, 1), "500000", "CLP", "increase", "Sueldo", null, null, null, ["Trabajo"]),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("expense", checking.Id, null, new DateOnly(2026, 5, 2), "12000", "CLP", "decrease", "Bus", null, null, null, ["Transport"]),
+            TestContext.Current.CancellationToken);
+        await repository.CreateManualTransactionAsync(
+            new CreateManualTransactionCommand("transfer", checking.Id, savings.Id, new DateOnly(2026, 5, 3), "30000", "CLP", "decrease", "Ahorro", null, null, null, ["Transport"]),
+            TestContext.Current.CancellationToken);
+
+        var report = await repository.GetMonthlyTagReportAsync(Period("2026-05"), TestContext.Current.CancellationToken);
+        var transport = report.Tags.Single(row => row.Tag.NormalizedName == "transport");
+        var work = report.Tags.Single(row => row.Tag.NormalizedName == "trabajo");
+
+        transport.ExpenseTotal.ShouldBe(12000m);
+        transport.IncomeTotal.ShouldBe(0m);
+        transport.TransactionCount.ShouldBe(1);
+        work.IncomeTotal.ShouldBe(500000m);
+    }
+
+    [Fact]
     public async Task TransferCreatesOutAndInMovementsWithoutCashflowImpact()
     {
         await using var database = await CreateDatabaseAsync();

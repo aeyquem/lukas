@@ -83,7 +83,10 @@ function selectSection(section: WorkspaceSection) {
           :period="selectedPeriod"
           @open-budget="selectSection('budget')"
         />
-        <ReportsWorkspace v-else-if="activeSection === 'reports'" />
+        <ReportsWorkspace
+          v-else-if="activeSection === 'reports'"
+          :period="selectedPeriod"
+        />
         <ProjectionsWorkspace v-else :period="selectedPeriod" />
       </main>
     </div>

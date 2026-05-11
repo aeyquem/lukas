@@ -6,6 +6,8 @@ public interface ILedgerRepository
 
     Task<IReadOnlyList<AccountReadModel>> GetAccountsAsync(CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken);
+
     Task<TransactionReadModel> CreateManualTransactionAsync(
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken);
@@ -26,4 +28,6 @@ public interface ILedgerRepository
     Task<IReadOnlyList<TransactionReadModel>> GetTransactionsAsync(MonthlyPeriod period, CancellationToken cancellationToken);
 
     Task<MonthlyCashflowReadModel> GetMonthlyCashflowAsync(MonthlyPeriod period, CancellationToken cancellationToken);
+
+    Task<MonthlyTagReportReadModel> GetMonthlyTagReportAsync(MonthlyPeriod period, CancellationToken cancellationToken);
 }

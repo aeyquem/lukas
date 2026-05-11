@@ -22,6 +22,7 @@ const sampleLedgerMovements: LedgerMovement[] = [
     originalCurrency: "CLP",
     baseAmount: "1850000",
     baseCurrency: "CLP",
+    tags: [{ id: "tag-income", name: "Trabajo", normalizedName: "trabajo" }],
   },
   {
     id: "movement-002",
@@ -37,6 +38,7 @@ const sampleLedgerMovements: LedgerMovement[] = [
     originalCurrency: "USD",
     baseAmount: "24.99",
     baseCurrency: "USD",
+    tags: [],
   },
   {
     id: "movement-003",
@@ -53,6 +55,7 @@ const sampleLedgerMovements: LedgerMovement[] = [
     originalCurrency: "CLP",
     baseAmount: "8500",
     baseCurrency: "CLP",
+    tags: [{ id: "tag-food", name: "Comida", normalizedName: "comida" }],
   },
   {
     id: "movement-004",
@@ -69,6 +72,7 @@ const sampleLedgerMovements: LedgerMovement[] = [
     originalCurrency: "USD",
     baseAmount: "110.5",
     baseCurrency: "USD",
+    tags: [{ id: "tag-work", name: "Trabajo", normalizedName: "trabajo" }],
   },
 ];
 </script>

@@ -25,4 +25,6 @@ public sealed class LedgerTransactionEntity
     public BudgetEnvelopeEntity? Envelope { get; set; }
 
     public ICollection<LedgerEntryEntity> Entries { get; } = new List<LedgerEntryEntity>();
+
+    public ICollection<TransactionTagEntity> Tags { get; } = new List<TransactionTagEntity>();
 }

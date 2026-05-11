@@ -23,6 +23,10 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
 
     public DbSet<BudgetPeriodAllocationEntity> BudgetPeriodAllocations => Set<BudgetPeriodAllocationEntity>();
 
+    public DbSet<TagEntity> Tags => Set<TagEntity>();
+
+    public DbSet<TransactionTagEntity> TransactionTags => Set<TransactionTagEntity>();
+
     public DbSet<SourceRecordEntity> SourceRecords => Set<SourceRecordEntity>();
 
     public DbSet<TransactionSourceLinkEntity> TransactionSourceLinks => Set<TransactionSourceLinkEntity>();
@@ -71,6 +75,30 @@ public sealed class LukasDbContext(DbContextOptions<LukasDbContext> options) : D
             entity.Property(transaction => transaction.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.HasOne(transaction => transaction.Workspace).WithMany().HasForeignKey(transaction => transaction.WorkspaceId);
             entity.HasOne(transaction => transaction.Envelope).WithMany().HasForeignKey(transaction => transaction.EnvelopeId);
+        });
+
+        modelBuilder.Entity<TagEntity>(entity =>
+        {
+            entity.ToTable("tags");
+            entity.HasKey(tag => tag.Id);
+            entity.Property(tag => tag.Id).HasColumnName("id");
+            entity.Property(tag => tag.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(tag => tag.Name).HasColumnName("name").HasMaxLength(60).IsRequired();
+            entity.Property(tag => tag.NormalizedName).HasColumnName("normalized_name").HasMaxLength(60).IsRequired();
+            entity.Property(tag => tag.CreatedAt).HasColumnName("created_at").IsRequired();
+            entity.HasOne(tag => tag.Workspace).WithMany().HasForeignKey(tag => tag.WorkspaceId);
+            entity.HasIndex(tag => new { tag.WorkspaceId, tag.NormalizedName }).IsUnique();
+        });
+
+        modelBuilder.Entity<TransactionTagEntity>(entity =>
+        {
+            entity.ToTable("transaction_tags");
+            entity.HasKey(transactionTag => new { transactionTag.LedgerTransactionId, transactionTag.TagId });
+            entity.Property(transactionTag => transactionTag.LedgerTransactionId).HasColumnName("ledger_transaction_id");
+            entity.Property(transactionTag => transactionTag.TagId).HasColumnName("tag_id");
+            entity.HasOne(transactionTag => transactionTag.LedgerTransaction).WithMany(transaction => transaction.Tags).HasForeignKey(transactionTag => transactionTag.LedgerTransactionId);
+            entity.HasOne(transactionTag => transactionTag.Tag).WithMany().HasForeignKey(transactionTag => transactionTag.TagId);
+            entity.HasIndex(transactionTag => transactionTag.TagId);
         });
 
         modelBuilder.Entity<LedgerEntryEntity>(entity =>

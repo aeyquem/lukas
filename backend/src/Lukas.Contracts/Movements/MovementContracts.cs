@@ -1,3 +1,5 @@
+using Lukas.Contracts.Tags;
+
 namespace Lukas.Contracts.Movements;
 
 public sealed record MovementDto(
@@ -18,4 +20,5 @@ public sealed record MovementDto(
     Guid? EnvelopeId,
     string? EnvelopeName,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<TagDto> Tags);

@@ -19,6 +19,12 @@ and business meaning without losing the original source context.
 Corrections that affect reviewed or locked periods require explicit user intent
 and must remain traceable.
 
+Transactions can also carry optional tags. Tags are workspace-managed labels
+that can be added while editing a transaction. Tag matching is normalized so
+case, extra spaces and word separators do not create duplicate meanings.
+Categories remain budget-oriented; tags support cross-cutting review and
+reporting.
+
 ## UC-013: Register transfers between owned accounts
 
 The user records movement between their own accounts as one logical transfer
@@ -51,4 +57,3 @@ or statements. Differences must be explainable through missing transactions,
 duplicates, pending activity, conversion changes or explicit adjustments.
 
 Reconciliation should not hide mismatches by silently rewriting history.
-

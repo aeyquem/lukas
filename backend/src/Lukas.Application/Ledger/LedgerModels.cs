@@ -24,7 +24,8 @@ public sealed record CreateManualTransactionCommand(
     string Description,
     Guid? EnvelopeId,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<string>? Tags = null);
 
 public sealed record UpdateManualTransactionCommand(
     Guid Id,
@@ -38,7 +39,13 @@ public sealed record UpdateManualTransactionCommand(
     string Description,
     Guid? EnvelopeId,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<string>? Tags = null);
+
+public sealed record TagReadModel(
+    Guid Id,
+    string Name,
+    string NormalizedName);
 
 public sealed record TransactionReadModel(
     Guid Id,
@@ -53,7 +60,8 @@ public sealed record TransactionReadModel(
     Guid? EnvelopeId,
     string? EnvelopeName,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<TagReadModel> Tags);
 
 public sealed record MovementReadModel(
     Guid Id,
@@ -73,7 +81,20 @@ public sealed record MovementReadModel(
     Guid? EnvelopeId,
     string? EnvelopeName,
     string? CategoryName,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<TagReadModel> Tags);
+
+public sealed record MonthlyTagReportReadModel(
+    string Period,
+    string Currency,
+    IReadOnlyList<TagReportRowReadModel> Tags);
+
+public sealed record TagReportRowReadModel(
+    TagReadModel Tag,
+    decimal IncomeTotal,
+    decimal ExpenseTotal,
+    decimal NetTotal,
+    int TransactionCount);
 
 public sealed record MonthlyCashflowReadModel(
     string Period,

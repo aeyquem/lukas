@@ -5,9 +5,11 @@ import { computed, reactive, ref, watch } from "vue";
 import {
   getBudgetTree,
   getMovements,
+  getTags,
   type AccountDto,
   type AccountEffect,
   type CreateManualTransactionRequest,
+  type TagDto,
   type TransactionKind,
   type UpdateManualTransactionRequest,
 } from "@/common/api/ledger";
@@ -22,6 +24,7 @@ import BaseButton from "@/common/components/base/BaseButton.vue";
 import BaseCard from "@/common/components/base/BaseCard.vue";
 import BaseCheckbox from "@/common/components/base/BaseCheckbox.vue";
 import BaseField from "@/common/components/base/BaseField.vue";
+import BaseMultiSelect from "@/common/components/base/BaseMultiSelect.vue";
 import BaseSelect from "@/common/components/base/BaseSelect.vue";
 import type { BaseSelectOption } from "@/common/components/base/BaseSelect.vue";
 import BaseTextarea from "@/common/components/base/BaseTextarea.vue";
@@ -59,6 +62,8 @@ const transactionForm = reactive({
   description: "",
   envelopeId: "",
   notes: "",
+  tagIds: [] as string[],
+  newTags: "",
 });
 const transactionKindOptions: BaseSelectOption[] = [
   { label: "Gasto", value: "expense" },
@@ -74,6 +79,10 @@ const movementsQuery = useQuery({
 const budgetTreeQuery = useQuery({
   key: () => ["budget-tree", props.period],
   query: () => getBudgetTree(props.period),
+});
+const tagsQuery = useQuery({
+  key: ["tags"],
+  query: getTags,
 });
 
 const movements = computed(() => movementsQuery.data.value ?? []);
@@ -119,6 +128,48 @@ const movementEnvelopeOptions = computed<BaseSelectOption[]>(() => [
     value: envelope.id,
   })),
 ]);
+const knownTags = computed<TagDto[]>(() => {
+  const byId = new Map<string, TagDto>();
+  for (const tag of tagsQuery.data.value ?? []) {
+    byId.set(tag.id, tag);
+  }
+
+  for (const movement of movements.value) {
+    for (const tag of movement.tags) {
+      byId.set(tag.id, tag);
+    }
+  }
+
+  return [...byId.values()].sort((firstTag, secondTag) =>
+    firstTag.name.localeCompare(secondTag.name, "es-CL"),
+  );
+});
+const tagOptions = computed<BaseSelectOption[]>(() =>
+  knownTags.value.map((tag) => ({
+    label: tag.name,
+    value: tag.id,
+  })),
+);
+const selectedTags = computed(() =>
+  knownTags.value.filter((tag) => transactionForm.tagIds.includes(tag.id)),
+);
+const newTagNames = computed(() => parseTagNames(transactionForm.newTags));
+const newTagsToCreate = computed(() => {
+  const knownNormalizedNames = new Set(
+    knownTags.value.map((tag) => tag.normalizedName),
+  );
+  const selectedNormalizedNames = new Set(
+    selectedTags.value.map((tag) => tag.normalizedName),
+  );
+
+  return newTagNames.value.filter((tagName) => {
+    const normalizedName = normalizeTagName(tagName);
+    return (
+      !knownNormalizedNames.has(normalizedName) &&
+      !selectedNormalizedNames.has(normalizedName)
+    );
+  });
+});
 
 watch(
   () => budgetTreeQuery.data.value,
@@ -201,6 +252,8 @@ function openEditPanel(movement: LedgerMovement) {
   transactionForm.description = movement.description;
   transactionForm.envelopeId = movement.envelopeId ?? "";
   transactionForm.notes = movement.notes ?? "";
+  transactionForm.tagIds = movement.tags.map((tag) => tag.id);
+  transactionForm.newTags = "";
   editingTransactionId.value = movement.transactionId;
   drawerMode.value = "edit";
 }
@@ -255,7 +308,31 @@ function buildTransactionRequest(
     request.notes = notes;
   }
 
+  const tags = buildTagNames();
+  if (tags.length > 0) {
+    request.tags = tags;
+  }
+
   return request;
+}
+
+function buildTagNames(): string[] {
+  const names = [
+    ...selectedTags.value.map((tag) => tag.name),
+    ...newTagNames.value,
+  ];
+  const normalizedNames = new Set<string>();
+  const result: string[] = [];
+
+  for (const name of names) {
+    const normalizedName = normalizeTagName(name);
+    if (normalizedName !== "" && !normalizedNames.has(normalizedName)) {
+      normalizedNames.add(normalizedName);
+      result.push(name.trim());
+    }
+  }
+
+  return result;
 }
 
 function resetForm() {
@@ -271,6 +348,8 @@ function resetForm() {
   transactionForm.description = "";
   transactionForm.envelopeId = "";
   transactionForm.notes = "";
+  transactionForm.tagIds = [];
+  transactionForm.newTags = "";
 }
 
 function defaultAccountEffect(kind: TransactionKind): AccountEffect {
@@ -295,6 +374,17 @@ function destinationAccountId(movement: LedgerMovement): string {
   }
 
   return movement.destinationAccountId ?? "";
+}
+
+function parseTagNames(value: string): string[] {
+  return value
+    .split(",")
+    .map((tagName) => tagName.trim())
+    .filter((tagName) => tagName !== "");
+}
+
+function normalizeTagName(value: string): string {
+  return value.trim().toLowerCase().split(/[\s_-]+/u).filter(Boolean).join(" ");
 }
 </script>
 
@@ -486,6 +576,37 @@ function destinationAccountId(movement: LedgerMovement): string {
             />
           </BaseField>
 
+          <BaseField input-id="movement-tags" label="Etiquetas existentes">
+            <BaseMultiSelect
+              id="movement-tags"
+              v-model="transactionForm.tagIds"
+              display="chip"
+              filter
+              :options="tagOptions"
+              placeholder="Seleccionar etiquetas"
+            />
+          </BaseField>
+
+          <BaseField input-id="movement-new-tags" label="Nuevas etiquetas">
+            <BaseTextInput
+              id="movement-new-tags"
+              v-model="transactionForm.newTags"
+              maxlength="240"
+              placeholder="home party, transporte"
+            />
+          </BaseField>
+
+          <div v-if="newTagsToCreate.length > 0" class="new-tags-preview">
+            <span
+              v-for="tagName in newTagsToCreate"
+              :key="normalizeTagName(tagName)"
+              class="new-tags-preview__item"
+            >
+              {{ tagName.trim() }}
+              <small>Se creará al guardar</small>
+            </span>
+          </div>
+
           <div class="movement-form__actions">
             <BaseButton type="button" variant="secondary" @click="closePanel">
               Cancelar
@@ -550,6 +671,30 @@ function destinationAccountId(movement: LedgerMovement): string {
   justify-content: flex-end;
   gap: var(--lu-space-2);
   padding-block-start: var(--lu-space-2);
+}
+
+.new-tags-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-2);
+}
+
+.new-tags-preview__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-pill);
+  padding: var(--lu-space-1) var(--lu-space-3);
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-xs);
+  font-weight: 800;
+}
+
+.new-tags-preview__item small {
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
+  font-weight: 700;
 }
 
 @media (max-width: 680px) {
