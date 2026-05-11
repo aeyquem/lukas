@@ -31,7 +31,7 @@ public sealed class ReportsController(LedgerService ledgerService) : ControllerB
     private static TagReportRowDto ToDto(TagReportRowReadModel row)
     {
         return new TagReportRowDto(
-            new TagDto(row.Tag.Id, row.Tag.Name, row.Tag.NormalizedName),
+            new TagDto(row.Tag.Id, row.Tag.Name, row.Tag.NormalizedName, row.Tag.Color),
             FormatAmount(row.IncomeTotal),
             FormatAmount(row.ExpenseTotal),
             FormatAmount(row.NetTotal),

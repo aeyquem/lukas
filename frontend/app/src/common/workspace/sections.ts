@@ -1,6 +1,7 @@
 export type WorkspaceSection =
   | "accounts"
   | "movements"
+  | "tags"
   | "budget"
   | "goals"
   | "reports"
@@ -9,6 +10,7 @@ export type WorkspaceSection =
 const sectionTitles: Record<WorkspaceSection, string> = {
   accounts: "Cuentas",
   movements: "Movimientos",
+  tags: "Etiquetas",
   budget: "Presupuesto",
   goals: "Metas",
   reports: "Reportes",
@@ -18,6 +20,7 @@ const sectionTitles: Record<WorkspaceSection, string> = {
 const sectionEyebrows: Record<WorkspaceSection, string> = {
   accounts: "Libro manual y saldos",
   movements: "Registro de actividad",
+  tags: "Clasificación transversal",
   budget: "Plan mensual",
   goals: "Objetivos financieros",
   reports: "Resumen financiero",

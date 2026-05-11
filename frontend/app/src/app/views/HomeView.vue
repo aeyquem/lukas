@@ -9,6 +9,7 @@ import GoalsWorkspace from "@/features/goals/views/GoalsWorkspace.vue";
 import MovementsWorkspace from "@/features/ledger/views/MovementsWorkspace.vue";
 import ProjectionsWorkspace from "@/features/projections/views/ProjectionsWorkspace.vue";
 import ReportsWorkspace from "@/features/reports/views/ReportsWorkspace.vue";
+import TagsWorkspace from "@/features/tags/views/TagsWorkspace.vue";
 import { useLedgerWorkspace } from "@/features/ledger/composables/useLedgerWorkspace";
 import {
   workspaceSectionEyebrow,
@@ -74,6 +75,7 @@ function selectSection(section: WorkspaceSection) {
           :update-error="updateTransactionMutation.error.value?.message"
           :update-transaction="updateTransaction"
         />
+        <TagsWorkspace v-else-if="activeSection === 'tags'" />
         <BudgetWorkspace
           v-else-if="activeSection === 'budget'"
           :period="selectedPeriod"

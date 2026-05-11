@@ -68,6 +68,7 @@ public sealed class LukasDbContextModelSnapshot : ModelSnapshot
             entity.Property(tag => tag.WorkspaceId).HasColumnName("workspace_id");
             entity.Property(tag => tag.Name).HasColumnName("name").HasMaxLength(60).IsRequired();
             entity.Property(tag => tag.NormalizedName).HasColumnName("normalized_name").HasMaxLength(60).IsRequired();
+            entity.Property(tag => tag.Color).HasColumnName("color").HasMaxLength(7).HasDefaultValue("#64748B").IsRequired();
             entity.Property(tag => tag.CreatedAt).HasColumnName("created_at").IsRequired();
             entity.HasOne(tag => tag.Workspace).WithMany().HasForeignKey(tag => tag.WorkspaceId);
             entity.HasIndex(tag => new { tag.WorkspaceId, tag.NormalizedName }).IsUnique();

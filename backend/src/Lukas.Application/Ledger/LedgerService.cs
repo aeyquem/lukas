@@ -6,6 +6,7 @@ public sealed class LedgerService(ILedgerRepository repository)
 {
     private const int MaxTagsPerTransaction = 10;
     private const int MaxTagLength = 60;
+    private const string HexColorPattern = "#0123456789ABCDEFabcdef";
 
     public Task<Result<AccountReadModel>> CreateAccountAsync(
         CreateAccountCommand command,
@@ -42,6 +43,45 @@ public sealed class LedgerService(ILedgerRepository repository)
     public Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken)
     {
         return repository.GetTagsAsync(cancellationToken);
+    }
+
+    public Task<Result<TagReadModel>> CreateTagAsync(
+        CreateTagCommand command,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidateTag(command.Name, command.Color);
+        if (error is not null)
+        {
+            return Failure<TagReadModel>(error.Code, error.Message);
+        }
+
+        return Success(repository.CreateTagAsync(command, cancellationToken));
+    }
+
+    public Task<Result<TagReadModel>> UpdateTagAsync(
+        UpdateTagCommand command,
+        CancellationToken cancellationToken)
+    {
+        var error = ValidateTag(command.Name, command.Color);
+        if (error is not null)
+        {
+            return Failure<TagReadModel>(error.Code, error.Message);
+        }
+
+        return Success(repository.UpdateTagAsync(command, cancellationToken));
+    }
+
+    public async Task<Result<bool>> DeleteTagAsync(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await repository.DeleteTagAsync(id, cancellationToken).ConfigureAwait(false);
+            return Result<bool>.Success(true);
+        }
+        catch (LedgerRuleException exception)
+        {
+            return Result<bool>.Failure(new LedgerError(exception.Code, exception.Message));
+        }
     }
 
     public Task<Result<TransactionReadModel>> CreateManualTransactionAsync(
@@ -266,6 +306,33 @@ public sealed class LedgerService(ILedgerRepository repository)
         }
 
         return null;
+    }
+
+    private static LedgerError? ValidateTag(string name, string color)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return new LedgerError("tag.name_required", "Tag name is required.");
+        }
+
+        if (TransactionTagNames.DisplayName(name).Length > MaxTagLength)
+        {
+            return new LedgerError("tag.name_too_long", "Tag names cannot be longer than 60 characters.");
+        }
+
+        if (!IsHexColor(color))
+        {
+            return new LedgerError("tag.invalid_color", "Tag color must use #RRGGBB.");
+        }
+
+        return null;
+    }
+
+    private static bool IsHexColor(string value)
+    {
+        return value.Length == 7
+            && value[0] == '#'
+            && value.Skip(1).All(character => HexColorPattern.Contains(character));
     }
 
     private static LedgerError? ValidateBudgetTree(SaveBudgetTreeCommand command)

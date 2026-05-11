@@ -1,4 +1,4 @@
-import { getJson, postJson, putJson } from "@/common/api/client";
+import { deleteJson, getJson, postJson, putJson } from "@/common/api/client";
 
 export type AccountType = "cash" | "bank" | "credit_card";
 export type TransactionKind = "income" | "expense" | "adjustment" | "transfer";
@@ -17,6 +17,18 @@ export interface TagDto {
   id: string;
   name: string;
   normalizedName: string;
+  color: string;
+}
+
+export interface CreateTagRequest {
+  name: string;
+  color: string;
+}
+
+export interface UpdateTagRequest {
+  id: string;
+  name: string;
+  color: string;
 }
 
 export interface CreateAccountRequest {
@@ -193,6 +205,37 @@ export async function getAccounts(): Promise<AccountDto[]> {
 
 export async function getTags(): Promise<TagDto[]> {
   const result = await getJson<TagDto[]>("/api/tags");
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function createTag(request: CreateTagRequest): Promise<TagDto> {
+  const result = await postJson<TagDto, CreateTagRequest>("/api/tags", request);
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function updateTag(request: UpdateTagRequest): Promise<TagDto> {
+  const { id, ...body } = request;
+  const result = await putJson<TagDto, typeof body>(
+    `/api/tags/${encodeURIComponent(id)}`,
+    body,
+  );
+  if (!result.ok) {
+    throw new Error(result.error.title);
+  }
+
+  return result.value;
+}
+
+export async function deleteTag(id: string): Promise<true> {
+  const result = await deleteJson(`/api/tags/${encodeURIComponent(id)}`);
   if (!result.ok) {
     throw new Error(result.error.title);
   }

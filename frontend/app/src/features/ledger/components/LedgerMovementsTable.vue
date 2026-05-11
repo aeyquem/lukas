@@ -350,7 +350,12 @@ function editMovement(movement: DisplayMovement) {
     >
       <template #body="{ data }">
         <div v-if="data.tags.length > 0" class="tags">
-          <span v-for="tag in data.tags" :key="tag.id" class="tag">
+          <span
+            v-for="tag in data.tags"
+            :key="tag.id"
+            class="tag"
+            :style="{ '--tag-color': tag.color }"
+          >
             {{ tag.name }}
           </span>
         </div>
@@ -485,11 +490,13 @@ function editMovement(movement: DisplayMovement) {
 }
 
 .tag {
+  --tag-color: #64748b;
   display: inline-flex;
   align-items: center;
   min-block-size: 1.45rem;
-  border: 1px solid var(--lu-color-border);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 42%, transparent);
   border-radius: var(--lu-radius-pill);
+  background: color-mix(in srgb, var(--tag-color) 12%, transparent);
   padding-inline: var(--lu-space-2);
   color: var(--lu-color-text);
   font-size: var(--lu-font-size-xs);

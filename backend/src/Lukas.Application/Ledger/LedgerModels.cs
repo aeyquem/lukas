@@ -45,7 +45,17 @@ public sealed record UpdateManualTransactionCommand(
 public sealed record TagReadModel(
     Guid Id,
     string Name,
-    string NormalizedName);
+    string NormalizedName,
+    string Color);
+
+public sealed record CreateTagCommand(
+    string Name,
+    string Color);
+
+public sealed record UpdateTagCommand(
+    Guid Id,
+    string Name,
+    string Color);
 
 public sealed record TransactionReadModel(
     Guid Id,

@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import {
+  ArrowUpIcon,
+  BarsIcon,
+  FilterIcon,
+  SortAltIcon,
+  SortAmountDownIcon,
+  StarIcon,
+  ThLargeIcon,
+} from "@primevue/icons";
+import { markRaw, type Component } from "vue";
+
 import type { WorkspaceSection } from "@/common/workspace/sections";
 
 const props = defineProps<{
@@ -11,15 +22,16 @@ const emit = defineEmits<{
 
 const sections: Array<{
   key: WorkspaceSection;
-  marker: string;
+  icon: Component;
   label: string;
 }> = [
-  { key: "accounts", marker: "C", label: "Cuentas" },
-  { key: "movements", marker: "M", label: "Movimientos" },
-  { key: "budget", marker: "P", label: "Presupuesto" },
-  { key: "goals", marker: "G", label: "Metas" },
-  { key: "reports", marker: "R", label: "Reportes" },
-  { key: "projections", marker: "Y", label: "Proyecciones" },
+  { key: "budget", icon: markRaw(ThLargeIcon), label: "Presupuesto" },
+  { key: "movements", icon: markRaw(SortAmountDownIcon), label: "Movimientos" },
+  { key: "accounts", icon: markRaw(BarsIcon), label: "Cuentas" },
+  { key: "projections", icon: markRaw(ArrowUpIcon), label: "Proyecciones" },
+  { key: "goals", icon: markRaw(StarIcon), label: "Metas" },
+  { key: "tags", icon: markRaw(FilterIcon), label: "Etiquetas" },
+  { key: "reports", icon: markRaw(SortAltIcon), label: "Reportes" },
 ];
 
 function selectSection(section: WorkspaceSection) {
@@ -51,7 +63,9 @@ function selectSection(section: WorkspaceSection) {
         type="button"
         @click="selectSection(section.key)"
       >
-        <span aria-hidden="true">{{ section.marker }}</span>
+        <span aria-hidden="true">
+          <component :is="section.icon" />
+        </span>
         <strong>{{ section.label }}</strong>
       </button>
     </nav>
@@ -134,6 +148,11 @@ function selectSection(section: WorkspaceSection) {
   color: var(--lu-color-primary);
   font-size: var(--lu-font-size-xs);
   font-weight: 800;
+}
+
+.sidebar-option span :deep(svg) {
+  inline-size: 1rem;
+  block-size: 1rem;
 }
 
 .sidebar-option strong {

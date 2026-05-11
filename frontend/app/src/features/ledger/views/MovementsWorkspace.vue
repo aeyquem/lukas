@@ -669,6 +669,8 @@ function selectTagSuggestion(tag: TagDto) {
                 <button
                   v-for="tag in tagSuggestions.slice(0, 5)"
                   :key="tag.id"
+                  :style="{ '--tag-color': tag.color }"
+                  class="tag-picker__suggestion"
                   type="button"
                   @mousedown.prevent="selectTagSuggestion(tag)"
                 >
@@ -831,6 +833,7 @@ function selectTagSuggestion(tag: TagDto) {
 }
 
 .tag-picker__suggestions button {
+  --tag-color: #64748b;
   border: 0;
   background: transparent;
   color: var(--lu-color-text);
@@ -840,7 +843,7 @@ function selectTagSuggestion(tag: TagDto) {
 }
 
 .tag-picker__suggestions button:hover {
-  background: var(--lu-color-surface-muted);
+  background: color-mix(in srgb, var(--tag-color) 12%, transparent);
 }
 
 .tag-picker__create {

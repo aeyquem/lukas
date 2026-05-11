@@ -90,6 +90,19 @@ public sealed class LedgerServiceTests
         result.Error.Code.ShouldBe("tag.duplicate");
     }
 
+    [Fact]
+    public async Task CreateTagRejectsInvalidColor()
+    {
+        var service = new LedgerService(new ThrowingLedgerRepository());
+
+        var result = await service.CreateTagAsync(
+            new CreateTagCommand("Transporte", "blue"),
+            TestContext.Current.CancellationToken);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("tag.invalid_color");
+    }
+
     private sealed class ThrowingLedgerRepository : ILedgerRepository
     {
         public Task<AccountReadModel> CreateAccountAsync(
@@ -105,6 +118,25 @@ public sealed class LedgerServiceTests
         }
 
         public Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<TagReadModel> CreateTagAsync(
+            CreateTagCommand command,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task<TagReadModel> UpdateTagAsync(
+            UpdateTagCommand command,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("Repository should not be called.");
+        }
+
+        public Task DeleteTagAsync(Guid id, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Repository should not be called.");
         }

@@ -10,6 +10,8 @@ public sealed class TagEntity
 
     public string NormalizedName { get; set; } = string.Empty;
 
+    public string Color { get; set; } = string.Empty;
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public WorkspaceEntity? Workspace { get; set; }

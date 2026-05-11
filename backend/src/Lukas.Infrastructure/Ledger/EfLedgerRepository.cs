@@ -97,6 +97,91 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
         return tags.Select(ToTagReadModel).ToList();
     }
 
+    public async Task<TagReadModel> CreateTagAsync(
+        CreateTagCommand command,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var normalizedName = TransactionTagNames.Normalize(command.Name);
+        var exists = await dbContext.Tags
+            .AnyAsync(
+                tag => tag.WorkspaceId == workspace.Id && tag.NormalizedName == normalizedName,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (exists)
+        {
+            throw new LedgerRuleException("tag.duplicate", "Tag already exists.");
+        }
+
+        var tag = new TagEntity
+        {
+            Id = Guid.CreateVersion7(),
+            WorkspaceId = workspace.Id,
+            Name = TransactionTagNames.DisplayName(command.Name),
+            NormalizedName = normalizedName,
+            Color = command.Color.ToUpperInvariant(),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        dbContext.Tags.Add(tag);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return ToTagReadModel(tag);
+    }
+
+    public async Task<TagReadModel> UpdateTagAsync(
+        UpdateTagCommand command,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var tag = await dbContext.Tags
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == command.Id,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (tag is null)
+        {
+            throw new LedgerRuleException("tag.not_found", "Tag was not found.");
+        }
+
+        var normalizedName = TransactionTagNames.Normalize(command.Name);
+        var duplicateExists = await dbContext.Tags
+            .AnyAsync(
+                candidate =>
+                    candidate.WorkspaceId == workspace.Id
+                    && candidate.Id != command.Id
+                    && candidate.NormalizedName == normalizedName,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (duplicateExists)
+        {
+            throw new LedgerRuleException("tag.duplicate", "Tag already exists.");
+        }
+
+        tag.Name = TransactionTagNames.DisplayName(command.Name);
+        tag.NormalizedName = normalizedName;
+        tag.Color = command.Color.ToUpperInvariant();
+
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return ToTagReadModel(tag);
+    }
+
+    public async Task DeleteTagAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var workspace = await GetOrCreateDefaultWorkspaceAsync(cancellationToken).ConfigureAwait(false);
+        var tag = await dbContext.Tags
+            .SingleOrDefaultAsync(
+                candidate => candidate.WorkspaceId == workspace.Id && candidate.Id == id,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (tag is null)
+        {
+            throw new LedgerRuleException("tag.not_found", "Tag was not found.");
+        }
+
+        dbContext.Tags.Remove(tag);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<TransactionReadModel> CreateManualTransactionAsync(
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken)
@@ -259,7 +344,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
                 Tags = entry.LedgerTransaction.Tags
                     .Select(transactionTag => transactionTag.Tag!)
                     .OrderBy(tag => tag.Name)
-                    .Select(tag => new TagReadModel(tag.Id, tag.Name, tag.NormalizedName))
+                    .Select(tag => new TagReadModel(tag.Id, tag.Name, tag.NormalizedName, tag.Color))
                     .ToList(),
             })
             .ToListAsync(cancellationToken)
@@ -1238,14 +1323,15 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
             var tag = tags.SingleOrDefault(candidate => candidate.NormalizedName == normalizedName);
             if (tag is null)
             {
-                tag = new TagEntity
-                {
-                    Id = Guid.CreateVersion7(),
-                    WorkspaceId = workspaceId,
-                    Name = TransactionTagNames.DisplayName(tagName),
-                    NormalizedName = normalizedName,
-                    CreatedAt = now,
-                };
+                    tag = new TagEntity
+                    {
+                        Id = Guid.CreateVersion7(),
+                        WorkspaceId = workspaceId,
+                        Name = TransactionTagNames.DisplayName(tagName),
+                        NormalizedName = normalizedName,
+                        Color = "#64748B",
+                        CreatedAt = now,
+                    };
                 tags.Add(tag);
                 dbContext.Tags.Add(tag);
             }
@@ -1372,7 +1458,7 @@ public sealed class EfLedgerRepository(LukasDbContext dbContext) : ILedgerReposi
 
     private static TagReadModel ToTagReadModel(TagEntity tag)
     {
-        return new TagReadModel(tag.Id, tag.Name, tag.NormalizedName);
+        return new TagReadModel(tag.Id, tag.Name, tag.NormalizedName, tag.Color);
     }
 
     private static LedgerEntryEntity PrimaryEntry(LedgerTransactionEntity transaction)

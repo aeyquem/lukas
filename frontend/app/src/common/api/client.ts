@@ -77,6 +77,26 @@ export async function putJson<TResponse, TRequest>(
   return { ok: true, value: (await response.json()) as TResponse };
 }
 
+export async function deleteJson(path: string): Promise<Result<true, ApiError>> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const problem = await readProblem(response);
+    return {
+      ok: false,
+      error: {
+        status: response.status,
+        title: problem?.title ?? response.statusText,
+        detail: problem?.detail,
+      },
+    };
+  }
+
+  return { ok: true, value: true };
+}
+
 async function readProblem(
   response: Response,
 ): Promise<{ title?: string; detail?: string } | null> {

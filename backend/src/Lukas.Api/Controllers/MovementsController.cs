@@ -42,7 +42,7 @@ public sealed class MovementsController(LedgerService ledgerService) : Controlle
 
     private static TagDto ToTagDto(TagReadModel tag)
     {
-        return new TagDto(tag.Id, tag.Name, tag.NormalizedName);
+        return new TagDto(tag.Id, tag.Name, tag.NormalizedName, tag.Color);
     }
 
     private static string FormatAmount(decimal amount)

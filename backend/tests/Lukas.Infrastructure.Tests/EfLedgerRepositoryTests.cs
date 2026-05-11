@@ -200,6 +200,30 @@ public sealed class EfLedgerRepositoryTests
     }
 
     [Fact]
+    public async Task TagsCanBeCreatedUpdatedAndDeleted()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var repository = new EfLedgerRepository(database.Context);
+
+        var tag = await repository.CreateTagAsync(
+            new CreateTagCommand("Home-Party", "#2563eb"),
+            TestContext.Current.CancellationToken);
+        var updated = await repository.UpdateTagAsync(
+            new UpdateTagCommand(tag.Id, "Casa fiesta", "#16a34a"),
+            TestContext.Current.CancellationToken);
+        await repository.DeleteTagAsync(tag.Id, TestContext.Current.CancellationToken);
+
+        var tags = await repository.GetTagsAsync(TestContext.Current.CancellationToken);
+
+        tag.Name.ShouldBe("Home Party");
+        tag.NormalizedName.ShouldBe("home party");
+        tag.Color.ShouldBe("#2563EB");
+        updated.Name.ShouldBe("Casa Fiesta");
+        updated.Color.ShouldBe("#16A34A");
+        tags.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task TransferCreatesOutAndInMovementsWithoutCashflowImpact()
     {
         await using var database = await CreateDatabaseAsync();

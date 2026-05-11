@@ -3,12 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAccount,
   createManualTransaction,
+  createTag,
+  deleteTag,
   getBudgetTree,
   getMonthlyCashflow,
   getMonthlyTagReport,
   getMovements,
   getTags,
   saveBudgetTree,
+  updateTag,
   updateManualTransaction,
 } from "@/common/api/ledger";
 
@@ -66,7 +69,14 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo",
           categoryName: "Casa",
-          tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
+          tags: [
+            {
+              id: "tag-id",
+              name: "Casa",
+              normalizedName: "casa",
+              color: "#64748B",
+            },
+          ],
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -117,7 +127,14 @@ describe("ledger api", () => {
           accountEffect: "decrease",
           description: "Arriendo actualizado",
           categoryName: "Casa",
-          tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
+          tags: [
+            {
+              id: "tag-id",
+              name: "Casa",
+              normalizedName: "casa",
+              color: "#64748B",
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -182,7 +199,14 @@ describe("ledger api", () => {
   it("requests tags", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
-        JSON.stringify([{ id: "tag-id", name: "Transport", normalizedName: "transport" }]),
+        JSON.stringify([
+          {
+            id: "tag-id",
+            name: "Transport",
+            normalizedName: "transport",
+            color: "#64748B",
+          },
+        ]),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );
@@ -193,6 +217,73 @@ describe("ledger api", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/tags");
   });
 
+  it("creates tags with the expected endpoint and body", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "tag-id",
+          name: "Transport",
+          normalizedName: "transport",
+          color: "#2563EB",
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const tag = await createTag({ name: "Transport", color: "#2563EB" });
+
+    expect(tag.color).toBe("#2563EB");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/tags",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "Transport", color: "#2563EB" }),
+      }),
+    );
+  });
+
+  it("updates tags with the expected endpoint and body", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "tag-id",
+          name: "Metro",
+          normalizedName: "metro",
+          color: "#16A34A",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const tag = await updateTag({
+      id: "tag-id",
+      name: "Metro",
+      color: "#16A34A",
+    });
+
+    expect(tag.name).toBe("Metro");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/tags/tag-id",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ name: "Metro", color: "#16A34A" }),
+      }),
+    );
+  });
+
+  it("deletes tags with the expected endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    await deleteTag("tag-id");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5000/api/tags/tag-id",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("requests monthly tag reports for the selected period", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -201,7 +292,12 @@ describe("ledger api", () => {
           currency: "CLP",
           tags: [
             {
-              tag: { id: "tag-id", name: "Transport", normalizedName: "transport" },
+              tag: {
+                id: "tag-id",
+                name: "Transport",
+                normalizedName: "transport",
+                color: "#64748B",
+              },
               incomeTotal: "0",
               expenseTotal: "12000",
               netTotal: "-12000",
@@ -290,7 +386,14 @@ describe("ledger api", () => {
             description: "Arriendo",
             categoryName: "Casa",
             notes: "Contrato anual",
-            tags: [{ id: "tag-id", name: "Casa", normalizedName: "casa" }],
+            tags: [
+              {
+                id: "tag-id",
+                name: "Casa",
+                normalizedName: "casa",
+                color: "#64748B",
+              },
+            ],
           },
         ]),
         { status: 200, headers: { "Content-Type": "application/json" } },

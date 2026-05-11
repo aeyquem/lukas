@@ -110,7 +110,7 @@ public sealed class TransactionsController(LedgerService ledgerService) : Contro
 
     private static TagDto ToTagDto(TagReadModel tag)
     {
-        return new TagDto(tag.Id, tag.Name, tag.NormalizedName);
+        return new TagDto(tag.Id, tag.Name, tag.NormalizedName, tag.Color);
     }
 
     private static string FormatAmount(decimal amount)

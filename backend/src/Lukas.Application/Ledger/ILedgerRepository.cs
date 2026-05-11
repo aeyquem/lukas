@@ -8,6 +8,12 @@ public interface ILedgerRepository
 
     Task<IReadOnlyList<TagReadModel>> GetTagsAsync(CancellationToken cancellationToken);
 
+    Task<TagReadModel> CreateTagAsync(CreateTagCommand command, CancellationToken cancellationToken);
+
+    Task<TagReadModel> UpdateTagAsync(UpdateTagCommand command, CancellationToken cancellationToken);
+
+    Task DeleteTagAsync(Guid id, CancellationToken cancellationToken);
+
     Task<TransactionReadModel> CreateManualTransactionAsync(
         CreateManualTransactionCommand command,
         CancellationToken cancellationToken);

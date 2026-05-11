@@ -54,7 +54,9 @@ const tagRows = computed(() => report.value?.tags ?? []);
           :key="row.tag.id"
           class="tag-report-table__row"
         >
-          <strong>{{ row.tag.name }}</strong>
+          <strong class="report-tag" :style="{ '--tag-color': row.tag.color }">
+            {{ row.tag.name }}
+          </strong>
           <span>{{ formatMoney(row.incomeTotal, report?.currency ?? "CLP") }}</span>
           <span>{{ formatMoney(row.expenseTotal, report?.currency ?? "CLP") }}</span>
           <span>{{ formatMoney(row.netTotal, report?.currency ?? "CLP") }}</span>
@@ -115,5 +117,18 @@ const tagRows = computed(() => report.value?.tags ?? []);
 
 .tag-report-table__row span {
   font-variant-numeric: tabular-nums;
+}
+
+.report-tag {
+  --tag-color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-block-size: 1.65rem;
+  border: 1px solid color-mix(in srgb, var(--tag-color) 42%, transparent);
+  border-radius: var(--lu-radius-pill);
+  background: color-mix(in srgb, var(--tag-color) 14%, transparent);
+  padding-inline: var(--lu-space-3);
+  font-size: var(--lu-font-size-xs);
 }
 </style>
