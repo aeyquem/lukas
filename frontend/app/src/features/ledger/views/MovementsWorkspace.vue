@@ -24,7 +24,6 @@ import BaseButton from "@/common/components/base/BaseButton.vue";
 import BaseCard from "@/common/components/base/BaseCard.vue";
 import BaseCheckbox from "@/common/components/base/BaseCheckbox.vue";
 import BaseField from "@/common/components/base/BaseField.vue";
-import BaseMultiSelect from "@/common/components/base/BaseMultiSelect.vue";
 import BaseSelect from "@/common/components/base/BaseSelect.vue";
 import type { BaseSelectOption } from "@/common/components/base/BaseSelect.vue";
 import BaseTextarea from "@/common/components/base/BaseTextarea.vue";
@@ -62,8 +61,8 @@ const transactionForm = reactive({
   description: "",
   envelopeId: "",
   notes: "",
-  tagIds: [] as string[],
-  newTags: "",
+  tagNames: [] as string[],
+  tagInput: "",
 });
 const transactionKindOptions: BaseSelectOption[] = [
   { label: "Gasto", value: "expense" },
@@ -144,31 +143,43 @@ const knownTags = computed<TagDto[]>(() => {
     firstTag.name.localeCompare(secondTag.name, "es-CL"),
   );
 });
-const tagOptions = computed<BaseSelectOption[]>(() =>
-  knownTags.value.map((tag) => ({
-    label: tag.name,
-    value: tag.id,
-  })),
+const selectedNormalizedTags = computed(() =>
+  new Set(transactionForm.tagNames.map(normalizeTagName)),
 );
-const selectedTags = computed(() =>
-  knownTags.value.filter((tag) => transactionForm.tagIds.includes(tag.id)),
+const tagSuggestions = computed(() => {
+  const input = normalizeTagName(transactionForm.tagInput);
+  if (input === "") {
+    return knownTags.value.filter(
+      (tag) => !selectedNormalizedTags.value.has(tag.normalizedName),
+    );
+  }
+
+  return knownTags.value.filter(
+    (tag) =>
+      !selectedNormalizedTags.value.has(tag.normalizedName) &&
+      tag.normalizedName.includes(input),
+  );
+});
+const tagInputNormalized = computed(() =>
+  normalizeTagName(transactionForm.tagInput),
 );
-const newTagNames = computed(() => parseTagNames(transactionForm.newTags));
+const matchingInputTag = computed(() =>
+  knownTags.value.find((tag) => tag.normalizedName === tagInputNormalized.value),
+);
+const shouldCreateInputTag = computed(
+  () =>
+    tagInputNormalized.value !== "" &&
+    matchingInputTag.value === undefined &&
+    !selectedNormalizedTags.value.has(tagInputNormalized.value),
+);
 const newTagsToCreate = computed(() => {
   const knownNormalizedNames = new Set(
     knownTags.value.map((tag) => tag.normalizedName),
   );
-  const selectedNormalizedNames = new Set(
-    selectedTags.value.map((tag) => tag.normalizedName),
-  );
 
-  return newTagNames.value.filter((tagName) => {
-    const normalizedName = normalizeTagName(tagName);
-    return (
-      !knownNormalizedNames.has(normalizedName) &&
-      !selectedNormalizedNames.has(normalizedName)
-    );
-  });
+  return transactionForm.tagNames.filter(
+    (tagName) => !knownNormalizedNames.has(normalizeTagName(tagName)),
+  );
 });
 
 watch(
@@ -252,8 +263,8 @@ function openEditPanel(movement: LedgerMovement) {
   transactionForm.description = movement.description;
   transactionForm.envelopeId = movement.envelopeId ?? "";
   transactionForm.notes = movement.notes ?? "";
-  transactionForm.tagIds = movement.tags.map((tag) => tag.id);
-  transactionForm.newTags = "";
+  transactionForm.tagNames = movement.tags.map((tag) => tag.name);
+  transactionForm.tagInput = "";
   editingTransactionId.value = movement.transactionId;
   drawerMode.value = "edit";
 }
@@ -263,6 +274,7 @@ function closePanel() {
 }
 
 async function submitTransaction() {
+  commitTagInput();
   const notes = transactionForm.notes.trim();
   const request = buildTransactionRequest(notes);
 
@@ -317,10 +329,7 @@ function buildTransactionRequest(
 }
 
 function buildTagNames(): string[] {
-  const names = [
-    ...selectedTags.value.map((tag) => tag.name),
-    ...newTagNames.value,
-  ];
+  const names = transactionForm.tagNames;
   const normalizedNames = new Set<string>();
   const result: string[] = [];
 
@@ -348,8 +357,8 @@ function resetForm() {
   transactionForm.description = "";
   transactionForm.envelopeId = "";
   transactionForm.notes = "";
-  transactionForm.tagIds = [];
-  transactionForm.newTags = "";
+  transactionForm.tagNames = [];
+  transactionForm.tagInput = "";
 }
 
 function defaultAccountEffect(kind: TransactionKind): AccountEffect {
@@ -376,15 +385,54 @@ function destinationAccountId(movement: LedgerMovement): string {
   return movement.destinationAccountId ?? "";
 }
 
-function parseTagNames(value: string): string[] {
-  return value
-    .split(",")
-    .map((tagName) => tagName.trim())
-    .filter((tagName) => tagName !== "");
-}
-
 function normalizeTagName(value: string): string {
   return value.trim().toLowerCase().split(/[\s_-]+/u).filter(Boolean).join(" ");
+}
+
+function displayTagName(value: string): string {
+  return normalizeTagName(value)
+    .split(" ")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function addTagName(value: string) {
+  const normalizedName = normalizeTagName(value);
+  if (normalizedName === "" || selectedNormalizedTags.value.has(normalizedName)) {
+    transactionForm.tagInput = "";
+    return;
+  }
+
+  const existingTag = knownTags.value.find(
+    (tag) => tag.normalizedName === normalizedName,
+  );
+  transactionForm.tagNames = [
+    ...transactionForm.tagNames,
+    existingTag?.name ?? displayTagName(value),
+  ];
+  transactionForm.tagInput = "";
+}
+
+function removeTagName(tagName: string) {
+  const normalizedName = normalizeTagName(tagName);
+  transactionForm.tagNames = transactionForm.tagNames.filter(
+    (candidate) => normalizeTagName(candidate) !== normalizedName,
+  );
+}
+
+function commitTagInput() {
+  addTagName(transactionForm.tagInput);
+}
+
+function handleTagInputKeydown(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === ",") {
+    event.preventDefault();
+    commitTagInput();
+  }
+}
+
+function selectTagSuggestion(tag: TagDto) {
+  addTagName(tag.name);
 }
 </script>
 
@@ -576,36 +624,67 @@ function normalizeTagName(value: string): string {
             />
           </BaseField>
 
-          <BaseField input-id="movement-tags" label="Etiquetas existentes">
-            <BaseMultiSelect
-              id="movement-tags"
-              v-model="transactionForm.tagIds"
-              display="chip"
-              filter
-              :options="tagOptions"
-              placeholder="Seleccionar etiquetas"
-            />
-          </BaseField>
+          <BaseField input-id="movement-tags" label="Etiquetas">
+            <div class="tag-picker">
+              <div
+                v-if="transactionForm.tagNames.length > 0"
+                class="tag-picker__chips"
+              >
+                <span
+                  v-for="tagName in transactionForm.tagNames"
+                  :key="normalizeTagName(tagName)"
+                  class="tag-picker__chip"
+                  :data-state="
+                    newTagsToCreate.includes(tagName) ? 'new' : 'existing'
+                  "
+                >
+                  {{ tagName }}
+                  <small v-if="newTagsToCreate.includes(tagName)">
+                    Se creará al guardar
+                  </small>
+                  <button
+                    :aria-label="`Quitar etiqueta ${tagName}`"
+                    type="button"
+                    @click="removeTagName(tagName)"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
 
-          <BaseField input-id="movement-new-tags" label="Nuevas etiquetas">
-            <BaseTextInput
-              id="movement-new-tags"
-              v-model="transactionForm.newTags"
-              maxlength="240"
-              placeholder="home party, transporte"
-            />
-          </BaseField>
+              <BaseTextInput
+                id="movement-tags"
+                v-model="transactionForm.tagInput"
+                autocomplete="off"
+                maxlength="60"
+                placeholder="Buscar o crear etiqueta"
+                @blur="commitTagInput"
+                @keydown="handleTagInputKeydown"
+              />
 
-          <div v-if="newTagsToCreate.length > 0" class="new-tags-preview">
-            <span
-              v-for="tagName in newTagsToCreate"
-              :key="normalizeTagName(tagName)"
-              class="new-tags-preview__item"
-            >
-              {{ tagName.trim() }}
-              <small>Se creará al guardar</small>
-            </span>
-          </div>
+              <div
+                v-if="transactionForm.tagInput.trim() !== ''"
+                class="tag-picker__suggestions"
+              >
+                <button
+                  v-for="tag in tagSuggestions.slice(0, 5)"
+                  :key="tag.id"
+                  type="button"
+                  @mousedown.prevent="selectTagSuggestion(tag)"
+                >
+                  {{ tag.name }}
+                </button>
+                <button
+                  v-if="shouldCreateInputTag"
+                  class="tag-picker__create"
+                  type="button"
+                  @mousedown.prevent="commitTagInput"
+                >
+                  Crear {{ displayTagName(transactionForm.tagInput) }}
+                </button>
+              </div>
+            </div>
+          </BaseField>
 
           <div class="movement-form__actions">
             <BaseButton type="button" variant="secondary" @click="closePanel">
@@ -673,30 +752,6 @@ function normalizeTagName(value: string): string {
   padding-block-start: var(--lu-space-2);
 }
 
-.new-tags-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--lu-space-2);
-}
-
-.new-tags-preview__item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--lu-space-2);
-  border: 1px solid var(--lu-color-border);
-  border-radius: var(--lu-radius-pill);
-  padding: var(--lu-space-1) var(--lu-space-3);
-  color: var(--lu-color-text);
-  font-size: var(--lu-font-size-xs);
-  font-weight: 800;
-}
-
-.new-tags-preview__item small {
-  color: var(--lu-color-text-muted);
-  font-size: var(--lu-font-size-xs);
-  font-weight: 700;
-}
-
 @media (max-width: 680px) {
   .movements-heading {
     align-items: stretch;
@@ -706,6 +761,90 @@ function normalizeTagName(value: string): string {
   .movements-actions {
     justify-content: space-between;
   }
+}
+
+.tag-picker {
+  position: relative;
+  display: grid;
+  gap: var(--lu-space-2);
+}
+
+.tag-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-2);
+}
+
+.tag-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  min-block-size: 1.75rem;
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-pill);
+  padding-inline: var(--lu-space-3) var(--lu-space-1);
+  color: var(--lu-color-text);
+  font-size: var(--lu-font-size-xs);
+  font-weight: 800;
+}
+
+.tag-picker__chip[data-state="new"] {
+  border-color: color-mix(in srgb, var(--lu-color-warning) 36%, transparent);
+  background: var(--lu-color-warning-soft);
+}
+
+.tag-picker__chip small {
+  color: var(--lu-color-text-muted);
+  font-size: var(--lu-font-size-xs);
+  font-weight: 700;
+}
+
+.tag-picker__chip button {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  border: 0;
+  border-radius: var(--lu-radius-pill);
+  background: transparent;
+  color: var(--lu-color-text-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.tag-picker__chip button:hover {
+  background: var(--lu-color-surface-muted);
+  color: var(--lu-color-text);
+}
+
+.tag-picker__suggestions {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(100% + var(--lu-space-1));
+  inset-inline: 0;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-md);
+  background: var(--lu-color-surface);
+  box-shadow: var(--lu-shadow-md);
+}
+
+.tag-picker__suggestions button {
+  border: 0;
+  background: transparent;
+  color: var(--lu-color-text);
+  cursor: pointer;
+  padding: var(--lu-space-2) var(--lu-space-3);
+  text-align: start;
+}
+
+.tag-picker__suggestions button:hover {
+  background: var(--lu-color-surface-muted);
+}
+
+.tag-picker__create {
+  font-weight: 800;
 }
 </style>
 
