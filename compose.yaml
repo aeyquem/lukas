@@ -1,0 +1,73 @@
+name: lukas
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lukas}
+      POSTGRES_USER: ${POSTGRES_USER:-lukas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      API_BIND_ADDR: 0.0.0.0:8080
+      CANONICAL_ORIGIN: http://localhost:4173
+      DATABASE_URL: postgres://${POSTGRES_USER:-lukas}:${POSTGRES_PASSWORD:-local-dev-only}@postgres:5432/${POSTGRES_DB:-lukas}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  vite:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    working_dir: /workspace
+    command:
+      - npm
+      - run
+      - dev
+      - --
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5173"
+      - --strictPort
+    volumes:
+      - ./frontend/app/src:/workspace/src:ro
+      - ./frontend/app/index.html:/workspace/index.html:ro
+      - ./frontend/app/vite.config.ts:/workspace/vite.config.ts:ro
+      - ./frontend/app/tsconfig.json:/workspace/tsconfig.json:ro
+    depends_on:
+      api:
+        condition: service_started
+    expose:
+      - "5173"
+
+  dev-proxy:
+    image: nginx:1.30.6-alpine
+    depends_on:
+      vite:
+        condition: service_started
+    ports:
+      - "127.0.0.1:4173:80"
+    volumes:
+      - ./docker/dev-proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres-data:

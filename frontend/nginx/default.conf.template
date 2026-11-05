@@ -1,0 +1,31 @@
+server {
+    listen 8080 default_server;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /runtime-config.js {
+        add_header Cache-Control "no-store" always;
+        try_files $uri =404;
+    }
+
+    location = /api {
+        proxy_pass ${API_UPSTREAM};
+        include /etc/nginx/snippets/api-proxy.conf;
+    }
+
+    location ^~ /api/ {
+        proxy_pass ${API_UPSTREAM};
+        include /etc/nginx/snippets/api-proxy.conf;
+    }
+
+    location ^~ /health/ {
+        proxy_pass ${API_UPSTREAM};
+        include /etc/nginx/snippets/api-proxy.conf;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
