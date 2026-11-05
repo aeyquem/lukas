@@ -86,6 +86,8 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
 `b765807`. Work is isolated on `feature/dev-foundation`.
 
 - OpenSpec change: `bootstrap-rust-postgres-dev-foundation`
+- Latest feature checkpoint: `feature/dev-foundation` is pushed to GitHub at
+  commit `4887fee` (`Implement development foundation`).
 - Planning artifacts: proposal, `backend-runtime` and `container-deployment`
   specs, design, and 11 implementation/evidence tasks are under
   `openspec/changes/bootstrap-rust-postgres-dev-foundation/`.
@@ -95,33 +97,31 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
   approved by the reviewer. The reviewer has now passed the integrated backend
   and frontend/container code review. The independent tester is rerunning the
   latest integrated checks.
-- OpenSpec tracked progress remains 0/11 tasks until each complete task's
-  required evidence is available. Backend, frontend, and Compose/proxy writers
-  have completed their assigned implementation. The reviewer passed the
-  backend and frontend/container implementation. Tester verification
-  previously passed frontend/build, static Compose, Rust
-  formatting/checking/compilation, and ten library tests; the tester is
-  repeating the suite after the latest backend coverage was added.
+- OpenSpec tracked progress: 2/11 tasks complete (1.1 backend/config unit
+  coverage and 2.1 frontend shell/build). Backend, frontend, and Compose/proxy
+  writers completed their assigned implementation. The reviewer passed backend
+  and frontend/container implementation. The tester passed OpenSpec strict
+  validation, frontend build/runtime-config checks, static Compose validation,
+  Rust formatting/checking/test compilation, and all 13 library tests.
 - Current source state: backend modules/migrations, the Vue/Vite shell and
   frontend image scripts, root Compose/proxy files, and setup documentation are
   present. Do not mark task checkboxes complete until their recorded checks
   pass.
-- Checks to date: OpenSpec strict validation passes. Compose configuration
-  resolves with only
-  `127.0.0.1:4173` published; runtime-config safety script and production
-  frontend build pass; `cargo fmt --check`, `cargo check --all-targets --offline`,
-  `cargo test --all-targets --no-run --offline`, and the library suite pass (10
-  tests, including shutdown tests, with ignored tests explicitly included).
-  PostgreSQL integration tests compile but have not run against a live server.
+- Checks to date: `openspec validate --strict` passes. Compose configuration
+  resolves with only `127.0.0.1:4173` published; frontend runtime-config script
+  and production build pass; `cargo fmt --check`,
+  `cargo check --all-targets --offline`,
+  `cargo test --all-targets --no-run --offline`, and
+  `cargo test --offline --lib -- --include-ignored` pass (13/13). PostgreSQL
+  integration tests compile but have not run against a live server.
 - Environment note: Cargo, Node, npm, and Docker Compose are installed. Docker
   Engine access is denied for
   `/var/run/docker.sock`, including elevated execution. A prolonged escalated
   Cargo dependency request was aborted by the user. Do not retry Docker access
   or network dependency resolution without a new request.
-- Next: collect the tester's final report, then mark only tasks whose complete
-  evidence passes. Real PostgreSQL,
-  Docker image, Compose health, HMR/browser, and integrated runtime evidence
-  remain unavailable until Docker Engine/PostgreSQL access changes. Keep
+- Next: resume at task 1.2. Real PostgreSQL, Docker image, Compose health,
+  HMR/browser, and integrated runtime evidence remain unavailable until Docker
+  Engine/PostgreSQL access changes. Keep
   financial API/browser workflows and remaining first-slice checklist evidence
   for their later vertical-slice branches.
 
