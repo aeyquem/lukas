@@ -1,33 +1,34 @@
-.codex
-.agents
-.env.local
-.env.*.local
-node_modules
+# JavaScript dependencies and Vite outputs
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
 
-# Frontend
-dist
-coverage
-playwright-report
-test-results
+# Rust build output (Cargo.lock remains tracked for executable projects)
+**/target/
 
-# .NET
-bin
-obj
-TestResults
+# Browser test output
+playwright-report/
+test-results/
 
-# Tauri / Rust
-target
-src-tauri/target
-*.msi
-*.deb
-*.AppImage
-*.rpm
+# Local environment files. Keep committed examples visible.
+.env
+.env.*
+!.env.example
+!.env.*.example
 
-# Local app data
+# Machine-local Codex configuration and OpenSpec target selection
+.codex/
+.agents/skills/.openspec-target
+
+# Local databases, runtime logs, and PostgreSQL data directories
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
-logs
 *.log
+logs/
+postgres-data/
+pgdata/

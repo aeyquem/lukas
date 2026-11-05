@@ -1,61 +1,45 @@
-# Repository Guidelines
+# Repository guidance
 
-Never break any of the following rules on your own. if you need to add or modify something that breaks them ask for permission first and explain why you need to break them.
+This repository is being rewritten from a clean implementation state.
 
-Remember to refer to the docs folder for more guidelines on how and what to develop.
+## Current direction
 
-## Project Structure & Module Organization
+- Build a Rust backend and a web application.
+- Make self-hosting the initial deployment model; keep a later SaaS option
+  possible.
+- Give the backend and frontend separate Dockerfiles for independent deployment;
+  production must not require Compose. Use Docker Compose with the local Docker
+  Engine for development. Use PostgreSQL for the first slice and the initial
+  self-hosted deployment. SQLite is deferred as a possible later local desktop
+  option; PostgreSQL provisioning and operating details remain open.
+- The first self-hosted instance is owner-only; the owner may manage personal
+  or household finances. Separate member identities are later scope.
+- Provide a CLI for both human and agent use to query and add data.
+- MCP is deprecated for now.
 
-This is a PNPM workspace for Lukas, a personal finance PoC. The Vue 3 frontend lives in `frontend/app`, with source under `frontend/app/src`, app bootstrapping in `src/app`, shared UI/API/styling in `src/common`, and product workflows in `src/features`. The ASP.NET backend is in `backend`, with production projects under `backend/src/Lukas.*` and xUnit tests under `backend/tests/Lukas.*.Tests`. The Tauri desktop shell is in `apps/desktop`, and Playwright end-to-end tests are in `tests/e2e/specs`. Planning and requirements documents live in `docs`.
+The agreed context and known domain constraints are in
+`desc/00-rewrite-context.md`. Read it before making product or architecture
+decisions. The owner delegated backend technical decisions with readability for
+a Rust beginner as the primary constraint; use `desc/10-backend-architecture.md`
+for the selected backend architecture and remaining open items. Read
+`desc/09-technical-stack-proposal.md` for the broader technical proposal.
+Direct owner discussions and accepted decisions in the rewrite context,
+acceptance criteria and orchestrator take precedence. Other recommendations
+remain proposals unless selected or accepted. The remaining files under `docs/` describe
+the previous PoC and are obsolete for current rewrite work. Do not use them as
+product or implementation requirements unless the user explicitly asks. Their
+Tauri/.NET/Vue/pnpm guidance is not current.
 
-## Build, Test, and Development Commands
+Keep financial provenance, reviewability, auditable corrections, decimal-safe
+money, real transaction dates, period context and explainable projections in
+view when shaping the new design. The rewrite context lists unresolved choices;
+do not present those as already decided.
 
-Run commands from the repository root unless noted.
+## Aentic work
 
-- `pnpm install`: install workspace dependencies.
-- `pnpm dev`: run the ASP.NET API and Vite frontend together.
-- `pnpm dev:desktop`: run the API and Tauri desktop app together.
-- `pnpm check`: build the .NET solution, lint the frontend, and run Vue type checks.
-- `pnpm test`: run backend xUnit tests and frontend Vitest tests.
-- `pnpm test:e2e`: run Playwright specs from `tests/e2e`.
-- `pnpm format`: apply `dotnet format` and Prettier formatting.
-- `pnpm api:check`: regenerate OpenAPI TypeScript output and fail if generated files changed.
+All processes should have a writer and a reviewer.
+Thehe writer has the full context and proposes the changes
+The reviewer take the changes and finds reasons on why they fail and pass them to the writer.
+The cycle shold keep going until the writer passes the audit of the reviewer.
 
-## Coding rules
-
-- Restrict all code to very simple control flow constructs – do not use goto
-statements, setjmp or longjmp constructs, and direct or indirect recursion.
-- All loops must have a fixed upper-bound. It must be trivially possible for a
-checking tool to prove statically that a preset upper-bound on the number of iterations
-of a loop cannot be exceeded. If the loop-bound cannot be proven statically, the rule
-is considered violated. This rule does not, of course, apply to iterations that are meant to be
-non-terminating (e.g., in a process scheduler). In those special cases, the reverse rule
-is applied: it should be statically provable that the iteration cannot terminate.
-- No function should be longer than what can be printed on a single sheet of
-paper in a standard reference format with one line per statement and one line per
-declaration. Typically, this means no more than about 60 lines of code per function.
-- Data objects must be declared at the smallest possible level of scope.
-- All code must be compiled, from the first day of development, with all
-compiler warnings enabled at the compiler’s most pedantic setting. All code must
-compile with these setting without any warnings.
-- Exceptions should be caught at the level they orignate and handeled accordingly using the Result/Maybe pattern for expected errors or crashing the program for critical errors.
-- Avoid null/undefined and use Maybe for data that may or not exist. nulls are a liability and should not exist in the program.
-- All edits should be done one layer at a time, and use tests to validate that the layer works before coding the next layer. the program might not compile at first but must do so, without warnings, when the last layer is added.
-
-## Coding Style & Naming Conventions
-
-C# uses nullable-enabled SDK-style projects with warnings treated as errors via `backend/Directory.Build.props`. Use four-space indentation, `PascalCase` for types and methods, and project namespaces such as `Lukas.Domain.Tests`. Vue and TypeScript use ESLint flat config plus Prettier; keep Vue components in `PascalCase.vue`, tests as `*.spec.ts`, and generated API files under `frontend/app/src/common/api/generated` untouched except through generation commands.
-
-Vue uses scoped styles when a CODE implementation is not enough. the css should mimic the html structure.
-
-## Testing Guidelines
-
-Backend tests use xUnit with Shouldly and live beside their target layer in `backend/tests`. Prefer focused test names that describe behavior, for example `SuccessResultExposesValue`. Frontend unit tests use Vitest and Vue Test Utils next to components, for example `BaseButton.spec.ts`. E2E coverage uses Playwright specs in `tests/e2e/specs`. Run `pnpm test` before opening a PR; run `pnpm test:e2e` when changing routing, app startup, or user-facing flows.
-
-## Commit & Pull Request Guidelines
-
-The current Git history uses short imperative or descriptive messages, for example `Update README.md` and `finished technical details`. Keep commits concise and scoped to one change. Pull requests should include a brief summary, test results (`pnpm check`, `pnpm test`, and e2e when relevant), linked issues or docs, and screenshots for visible UI changes.
-
-## Security & Configuration Tips
-
-Do not commit secrets, bank credentials, or local database files. Keep environment-specific API settings in `backend/src/Lukas.Api/appsettings.Development.json` or local overrides, and document any new required configuration in `README.md`.
+each agent has to be specialized in their area of expertice

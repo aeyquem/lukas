@@ -1,48 +1,25 @@
 # Lukas
 
-Este proyecto es un PoC que tiene por objetivo auydar con las finanzas personales,
-especialmente de las personas en Chile. ya que busca conectarse con la banca del país mientras no exista otra opción.
+Lukas is a personal-finance project focused initially on Chile. The rewrite is
+starting from a clean implementation state with a Rust backend and a web app.
+The backend and frontend have separate Dockerfiles for independent deployment
+to Docker-compatible environments; production does not require Compose. Local
+development uses Docker Compose and the local Docker Engine. The initial
+instance is owner-only, with a possible SaaS path later; its owner may manage
+personal or household finances.
 
-## Ideas
+The product will also provide a CLI for people and agents to query and add
+data. MCP is deprecated for now.
 
-Dentro de las cosas que se quieren probar, están:
+The first slice and initial self-hosted setup use PostgreSQL. Local development
+runs the web frontend, Rust API and PostgreSQL in containers with Docker
+Compose. SQLite is deferred as a possible later local desktop option.
 
-- CRUD sobre transacciones
-- Conexión con splitwise para unir transacciones
-- Conexión con las plataformas bancarias chilenas
-- Importe automático de transacciones
-- Proyecciones en base a la historia
-- Proyecciones en base a estimados del usuario
-- Objetivos
-- Planificaciones para distintos escenarios
-
-## Especificacion
-
-- [Indice de documentacion](docs/README.md)
-- [Resumen de producto](docs/product/overview.md)
-- [Casos de uso](docs/product/use-cases.md)
-- [Arquitectura](docs/architecture/overview.md)
-- [Workflow de desarrollo](docs/engineering/dev-workflow.md)
-- [Preguntas abiertas](docs/planning/open-questions.md)
-
-## Stack
-
-### Aplicacion desktop
-
-- Tauri
-- Vue 3
-- CSS (scss?)
-- C#/.NET sidecar
-- SQLite local
-
-### Web/SaaS futuro
-
-- Vue o Nuxt
-- ASP.NET API
-- PostgreSQL
-- Object storage para importaciones, snapshots, exports y documentos
-
-### CI/CD
-
-- Planeado. Ver [workflow de desarrollo](docs/engineering/dev-workflow.md) y
-  [preguntas abiertas](docs/planning/open-questions.md).
+There is no implementation scaffold yet. The current product and domain
+context, rewrite direction, and unresolved design topics are in
+[`desc/00-rewrite-context.md`](desc/00-rewrite-context.md). Current product
+decisions, acceptance criteria, domain model, and planning notes are under
+`desc/`, including the [technical stack proposal](desc/09-technical-stack-proposal.md).
+Direct owner discussions and accepted decisions take precedence over proposals
+that have not been accepted. The obsolete PoC files under `docs/` do not define
+current product or implementation requirements.

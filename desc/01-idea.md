@@ -1,0 +1,1 @@
+a software that is thought for chilean finances, that can take advantage of the future openfinance (finanzas abiertas) apis to organize the money of a user. it should have multicurrency support, goals, transaction management, finance pools, and projections.
