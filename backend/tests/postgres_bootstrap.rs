@@ -68,8 +68,19 @@ async fn concurrent_workspace_bootstrap_keeps_one_workspace_and_category_set(poo
     assert_eq!(category_count, 15);
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = false)]
 async fn migration_runner_applies_in_order_and_is_safe_to_rerun(pool: PgPool) {
+    let migration_table_before: bool = sqlx::query_scalar(
+        "SELECT EXISTS (\
+            SELECT 1 FROM information_schema.tables \
+            WHERE table_schema = 'public' AND table_name = '_sqlx_migrations'\
+         )",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!migration_table_before);
+
     run_migrations(&pool).await.unwrap();
     run_migrations(&pool).await.unwrap();
 
@@ -189,4 +200,72 @@ async fn readiness_succeeds_when_database_is_available(pool: PgPool) {
         .unwrap();
 
     assert_eq!(response.status(), axum::http::StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn api_origin_middleware_checks_the_actual_request_headers(pool: PgPool) {
+    let config = Config {
+        database_url: "postgres://lukas:lukas@localhost/lukas".to_owned(),
+        canonical_origin: "http://localhost:4173".to_owned(),
+        bind_address: "127.0.0.1:8080".parse().unwrap(),
+        max_connections: 5,
+        connect_timeout: Duration::from_secs(5),
+        acquire_timeout: Duration::from_secs(1),
+        database_startup_timeout: Duration::from_secs(30),
+        shutdown_timeout: Duration::from_secs(10),
+    };
+    let app = router(pool, Uuid::nil(), config);
+
+    let canonical = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/not-a-route")
+                .header("Origin", "http://localhost:4173")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(canonical.status(), axum::http::StatusCode::NOT_FOUND);
+
+    let mismatched = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/not-a-route")
+                .header("Origin", "http://evil.example")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(mismatched.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let forwarded_only = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/not-a-route")
+                .header("X-Forwarded-Origin", "http://localhost:4173")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(forwarded_only.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let health_without_origin = app
+        .oneshot(
+            Request::builder()
+                .uri("/health/live")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(health_without_origin.status(), axum::http::StatusCode::OK);
 }

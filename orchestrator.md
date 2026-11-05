@@ -79,27 +79,30 @@ backend/frontend Dockerfiles. Use a specialist writer and independent reviewer,
 then have a tester validate the implementation and runtime evidence. Keep the
 task status and next action current here so work can resume from the pushed base.
 
-## Active implementation: development foundation
+## Completed implementation: development foundation
 
-Status: **implementation is underway; backend lifecycle fixes and integrated
-verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
-`b765807`. Work is isolated on `feature/dev-foundation`.
+Status: **implementation, integrated verification, independent reviewer/tester
+audits, spec sync, and archive complete** (2026-11-05). The pushed base is
+`origin/rewrite-base` at `b765807`. Work is isolated on `feature/dev-foundation`.
 
-- OpenSpec change: `bootstrap-rust-postgres-dev-foundation`
+- OpenSpec change: archived at
+  `openspec/changes/archive/2026-11-05-bootstrap-rust-postgres-dev-foundation/`
+- Synced main specs: `openspec/specs/backend-runtime/spec.md` and
+  `openspec/specs/container-deployment/spec.md`.
 - Latest feature checkpoint: `feature/dev-foundation` is pushed to GitHub;
   implementation commit `4887fee` is followed by OpenSpec/handoff progress
-  commits.
+  commits. The final integration test, spec sync, archive, and handoff edits are
+  currently uncommitted.
 - Planning artifacts: proposal, `backend-runtime` and `container-deployment`
-  specs, design, and 11 implementation/evidence tasks are under
-  `openspec/changes/bootstrap-rust-postgres-dev-foundation/`.
+  specs, design, and 11 completed implementation/evidence tasks are preserved
+  in the archived change directory above.
 - Plan review: independent backend/deployment reviewer passed; an additional
   task-level requirement for bounded startup/migration-lock, readiness,
   migrate-only, and shutdown-lifetime coverage was strictly validated and
   approved by the reviewer. The reviewer has now passed the integrated backend
   and frontend/container code review. The independent tester passed the latest
   offline and static checks.
-- OpenSpec tracked progress: 2/11 tasks complete (1.1 backend/config unit
-  coverage and 2.1 frontend shell/build). Backend, frontend, and Compose/proxy
+- OpenSpec tracked progress: 11/11 tasks complete and archived. Backend, frontend, and Compose/proxy
   writers completed their assigned implementation. The reviewer passed backend
   and frontend/container implementation. The tester passed OpenSpec strict
   validation, frontend build/runtime-config checks, static Compose validation,
@@ -108,24 +111,58 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
   frontend image scripts, root Compose/proxy files, and setup documentation are
   present. Do not mark task checkboxes complete until their recorded checks
   pass.
-- Checks to date: `openspec validate --strict` passes. Compose configuration
-  resolves with only `127.0.0.1:4173` published; frontend runtime-config script
-  and production build pass; `cargo fmt --check`,
+- Local verification (2026-11-05): `cargo fmt --check`,
   `cargo check --all-targets --offline`,
   `cargo test --all-targets --no-run --offline`, and
-  `cargo test --offline --lib -- --include-ignored` pass (13/13). PostgreSQL
-  integration tests compile but have not run against a live server.
-- Environment note: Cargo, Node, npm, and Docker Compose are installed. Docker
-  Engine access is denied for
-  `/var/run/docker.sock`, including elevated execution. A prolonged escalated
-  Cargo dependency request was aborted by the user. Do not retry Docker access
-  or network dependency resolution without a new request.
-- Next: resume at task 1.2. Real PostgreSQL, Docker image, Compose health,
-  HMR/browser, and integrated runtime evidence remain unavailable until Docker
-  Engine/PostgreSQL access changes. Keep
-  financial API/browser workflows and remaining first-slice checklist evidence
-  for their later vertical-slice branches.
+  `cargo test --offline --lib -- --include-ignored` pass (13/13). `npm run
+  build`, frontend runtime-config validation, and `openspec validate --all
+  --strict` pass. PostgreSQL integration tests compile and run against live
+  PostgreSQL below.
+- Live runtime evidence (2026-11-05): the Compose stack reached healthy
+  PostgreSQL/API status and exposed only `127.0.0.1:4173`. The PostgreSQL
+  integration executable ran inside the API container: 7/7 passed, covering
+  clean ordered migrations, repeat/concurrent workspace bootstrap, preservation
+  of category edits, upgrade from the prior migration, held migration-lock
+  deadline, readiness, and actual Origin middleware. The loader printed a
+  non-fatal weak `GLIBC_2.39` version warning before the tests; the test process
+  exited successfully. `--migrate-only` exited successfully while the normal
+  API already occupied its configured port 8080, confirming migration-only did
+  not bind a listener. Direct API POST checks returned 405 with canonical
+  Origin and 403 with mismatched, missing, and forwarded-only Origin.
 
-Resume commands: `git switch feature/dev-foundation`; inspect
-`openspec status --change bootstrap-rust-postgres-dev-foundation --json`; then
-continue with the OpenSpec apply workflow.
+  Both production images built. The backend image was launched with `docker
+  run` on a dedicated test network against a separate PostgreSQL container also
+  launched with `docker run`; its `/health/ready` returned ready. The production
+  frontend image was launched with `docker run` on the Compose private network;
+  runtime config contained only `apiBaseUrl=/api`, proxied readiness returned
+  ready, client routes returned 200 HTML, and `/api` plus unknown `/health`
+  paths returned 404 rather than SPA content. Frontend runtime-config checks
+  rejected injection-shaped values and confirmed secrets were not emitted.
+
+  Through the development proxy, readiness returned ready; an invalid Host
+  connection was closed; POST with canonical Origin reached the API (405),
+  while mismatched and forwarded-only origins received 403; `/api` and
+  `/health` remained outside SPA fallback; a client route returned 200 HTML;
+  and HMR returned 101 Switching Protocols. PostgreSQL workspace/category
+  counts stayed `1:15` across a container restart. Held-request server tests
+  passed graceful drain, refusal of new requests, continued server lifetime
+  beyond the shutdown timeout before signal, and forced exit at the deadline.
+  While PostgreSQL was stopped,
+  readiness returned HTTP 503 with `not_ready`; after restart it returned
+  `ready`. `docker compose down` followed by `docker compose up --build -d`
+  completed, the stack became healthy again, and persisted data remained. The
+  only published port remained loopback `127.0.0.1:4173`. The feature stops at
+  infrastructure; financial API/browser workflows remain later vertical-slice
+  work. The independent reviewer and tester passed all 11/11 tasks and the
+  verification record.
+- Earlier environment note: Cargo, Node, npm, and Docker Compose are installed.
+  The interactive sandbox lacked Docker Engine socket access, including its
+  prior escalation attempt. The owner later explicitly authorized sudo Docker
+  interaction and supplied live Compose output. A prolonged escalated Cargo
+  dependency request was aborted by the user; do not retry network dependency
+  resolution without a new request.
+- Next: begin a separate vertical-slice change for financial API/browser
+  workflows and keep the remaining first-slice checklist evidence in that scope.
+
+Resume with `git switch feature/dev-foundation` and `openspec list --json` to
+select or create the next implementation change.
