@@ -86,9 +86,9 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
 `b765807`. Work is isolated on `feature/dev-foundation`.
 
 - OpenSpec change: `bootstrap-rust-postgres-dev-foundation`
-- Latest feature checkpoint: `feature/dev-foundation` is pushed to GitHub at
-  commit `06a00d7` (`Record development foundation progress`); the implementation
-  commit is `4887fee`.
+- Latest feature checkpoint: `feature/dev-foundation` is pushed to GitHub;
+  implementation commit `4887fee` is followed by OpenSpec/handoff progress
+  commits.
 - Planning artifacts: proposal, `backend-runtime` and `container-deployment`
   specs, design, and 11 implementation/evidence tasks are under
   `openspec/changes/bootstrap-rust-postgres-dev-foundation/`.
