@@ -87,7 +87,8 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
 
 - OpenSpec change: `bootstrap-rust-postgres-dev-foundation`
 - Latest feature checkpoint: `feature/dev-foundation` is pushed to GitHub at
-  commit `4887fee` (`Implement development foundation`).
+  commit `06a00d7` (`Record development foundation progress`); the implementation
+  commit is `4887fee`.
 - Planning artifacts: proposal, `backend-runtime` and `container-deployment`
   specs, design, and 11 implementation/evidence tasks are under
   `openspec/changes/bootstrap-rust-postgres-dev-foundation/`.
@@ -95,8 +96,8 @@ verification remain** (2026-11-05). The pushed base is `origin/rewrite-base` at
   task-level requirement for bounded startup/migration-lock, readiness,
   migrate-only, and shutdown-lifetime coverage was strictly validated and
   approved by the reviewer. The reviewer has now passed the integrated backend
-  and frontend/container code review. The independent tester is rerunning the
-  latest integrated checks.
+  and frontend/container code review. The independent tester passed the latest
+  offline and static checks.
 - OpenSpec tracked progress: 2/11 tasks complete (1.1 backend/config unit
   coverage and 2.1 frontend shell/build). Backend, frontend, and Compose/proxy
   writers completed their assigned implementation. The reviewer passed backend
