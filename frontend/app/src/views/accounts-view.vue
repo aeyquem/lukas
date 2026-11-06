@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import AccountCard from '../components/accounts/account-card.vue'
+import AccountCard from '../features/accounts/components/account-card.vue'
 import AccountCreateForm from '../features/accounts/components/account-create-form.vue'
 import AccountEditPanel from '../features/accounts/components/account-edit-panel.vue'
 import PendingAccountCommands from '../features/accounts/components/pending-account-commands.vue'
