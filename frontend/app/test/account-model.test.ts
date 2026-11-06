@@ -1,12 +1,27 @@
 import { createSSRApp } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
 import { renderToString } from 'vue/server-renderer'
-import { describe, expect, it } from 'vitest'
-import AccountsView from '../src/views/AccountsView.vue'
+import { describe, expect, it, vi } from 'vitest'
+import AccountsView from '../src/views/accounts-view.vue'
 import {
   canAddCurrencyWallet,
   setDraftAccountType,
   walletCountError,
-} from '../src/components/accounts/account-model'
+} from '../src/features/accounts/account-model'
+
+vi.mock('../src/shared/api/client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/shared/api/client')>(),
+  apiRequest: vi.fn().mockResolvedValue([]),
+}))
+
+function accountApp() {
+  const app = createSSRApp(AccountsView)
+  const pinia = createPinia()
+  app.use(pinia)
+  app.use(PiniaColada, { pinia })
+  return app
+}
 
 describe('account currency wallet rules', () => {
   it('requires one currency for bank, savings, and investment accounts', () => {
@@ -44,14 +59,14 @@ describe('account currency wallet rules', () => {
   })
 
   it('hides the add-currency control for the default bank draft', async () => {
-    const markup = await renderToString(createSSRApp(AccountsView))
+    const markup = await renderToString(accountApp())
 
     expect(markup).toContain('Esta cuenta usa una moneda.')
     expect(markup).not.toContain('Añadir otra moneda')
   })
 
   it('renders the account form with associated labels and date-only opening control', async () => {
-    const markup = await renderToString(createSSRApp(AccountsView))
+    const markup = await renderToString(accountApp())
 
     expect(markup).toMatch(/<label for="account-name"[^>]*>Nombre<\/label>/)
     expect(markup).toContain('id="account-name"')

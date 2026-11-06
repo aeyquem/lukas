@@ -3,18 +3,21 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { TransactionView } from '../components/activity/transaction-model'
 import { budgetRoute, currentPeriodInSantiago, type BudgetSnapshot, type BudgetValue } from '../components/budget/budget-model'
+import { useAccountListQuery } from '../features/accounts/accounts-feature'
+import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
 import { apiRequest } from '../shared/api/client'
 import { formatBusinessDate } from '../shared/formatting/business-date'
 import { formatMoney } from '../shared/formatting/money'
 
 interface TransactionPage { items: TransactionView[]; next: { before_date: string; before_id: string } | null }
-interface DashboardAccount { id: string; name: string; wallets: Array<{ id: string; currency: string; balance: string }> }
+
 const route = useRoute()
 const period = computed(() => typeof route.query.dashboardPeriod === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.dashboardPeriod) ? route.query.dashboardPeriod : currentPeriodInSantiago())
-const accounts = ref<DashboardAccount[] | null>(null)
+const accountQuery = useAccountListQuery()
+const accounts = computed(() => accountQuery.data.value ?? null)
 const budget = ref<BudgetSnapshot | null>(null)
 const transactions = ref<TransactionView[] | null>(null)
-const accountError = ref('')
+const accountError = computed(() => accountQuery.error.value ? 'No fue posible cargar los saldos.' : '')
 const budgetError = ref('')
 const transactionError = ref('')
 const loading = ref(false)
@@ -32,24 +35,23 @@ const transactionLabel = (transaction: TransactionView) => transaction.payee || 
 async function loadDashboard(): Promise<void> {
   const requestId = ++latestRequest
   loading.value = true
-  accountError.value = ''; budgetError.value = ''; transactionError.value = ''
+  budgetError.value = ''; transactionError.value = ''
   const results = await Promise.allSettled([
-    apiRequest<DashboardAccount[]>('accounts'),
     apiRequest<BudgetSnapshot>(budgetRoute(period.value)),
     apiRequest<TransactionPage>('transactions?page_size=20'),
   ])
   if (requestId !== latestRequest) return
-  const [accountResult, budgetResult, transactionResult] = results
-  accounts.value = accountResult.status === 'fulfilled' ? accountResult.value : null
+  const [budgetResult, transactionResult] = results
   budget.value = budgetResult.status === 'fulfilled' ? budgetResult.value : null
   transactions.value = transactionResult.status === 'fulfilled' ? transactionResult.value.items : null
-  accountError.value = accountResult.status === 'rejected' ? 'No fue posible cargar los saldos.' : ''
   budgetError.value = budgetResult.status === 'rejected' ? 'No fue posible cargar el presupuesto de este período.' : ''
   transactionError.value = transactionResult.status === 'rejected' ? 'No fue posible cargar la actividad reciente.' : ''
   loading.value = false
 }
 
+onFinanceInvalidated(loadDashboard)
 onMounted(() => { void loadDashboard() })
+function refreshDashboard() { void accountQuery.refetch(); void loadDashboard() }
 watch(period, () => {
   budget.value = null
   void loadDashboard()
@@ -60,7 +62,7 @@ watch(period, () => {
   <main class="dashboard-page" aria-labelledby="home-title">
     <header class="dashboard-heading">
       <div><p class="eyebrow">Tu espacio, a tu ritmo</p><h1 id="home-title">Panel financiero</h1><p>Resumen de {{ period }} · CLP para el presupuesto.</p></div>
-      <button type="button" class="refresh-button" :disabled="loading" @click="loadDashboard">{{ loading ? 'Actualizando…' : 'Actualizar resumen' }}</button>
+      <button type="button" class="refresh-button" :disabled="loading" @click="refreshDashboard">{{ loading ? 'Actualizando…' : 'Actualizar resumen' }}</button>
     </header>
 
     <section class="dashboard-grid" aria-label="Resumen financiero">

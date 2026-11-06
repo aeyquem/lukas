@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import AccountsView from '../views/AccountsView.vue'
-import TransactionsView from '../views/TransactionsView.vue'
-import BudgetView from '../views/BudgetView.vue'
-import FeaturePlaceholderView from '../views/FeaturePlaceholderView.vue'
+import HomeView from '../views/home-view.vue'
+import AccountsView from '../views/accounts-view.vue'
+import TransactionsView from '../views/transactions-view.vue'
+import BudgetView from '../views/budget-view.vue'
+import FeaturePlaceholderView from '../views/feature-placeholder-view.vue'
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView },

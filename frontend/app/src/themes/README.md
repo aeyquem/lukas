@@ -11,7 +11,7 @@ To add a theme:
 1. Add a selector `:root[data-theme='name']` in an imported theme stylesheet.
    Override palette, font stacks, island/control radii, island gap/padding,
    shadows and glass settings as needed. Unspecified tokens inherit Bosque.
-2. Register its ID and visible label in `src/app/theme.ts`.
+2. Register its ID and visible label in `src/app/theme-store.ts`.
 3. Check the home, accounts, transactions and budget routes at desktop and
    mobile widths. Check normal, warning, error, focus and disabled states.
 
@@ -19,7 +19,7 @@ The appearance menu stores only its theme ID in `lukas.appearance.theme`.
 Storage restrictions leave switching usable for the session. Theme choice is
 applied before Vue mounts. Prose uses local/system stacks. Numerical values use bundled Fira Code
 WOFF2 subsets, with no font service or new UI dependency required. See
-`src/assets/fonts/README.md` for provenance and licensing.
+`src/assets/fonts/r-e-a-d-m-e.md` for provenance and licensing.
 
 Glass is progressive enhancement: islands have an opaque base surface,
 with a translucent surface and backdrop blur in supported browsers. The

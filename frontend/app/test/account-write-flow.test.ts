@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { listPendingAccountWrites, writeThenRead } from '../src/components/accounts/account-write-flow'
+import { listPendingAccountWrites, writeThenRead } from '../src/features/accounts/api/write-flow'
 import { PendingWriteStore, type PendingFinancialWrite } from '../src/shared/api/pending-commands'
 
 class MemoryStorage implements Storage {

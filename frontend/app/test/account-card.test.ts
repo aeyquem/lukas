@@ -1,7 +1,7 @@
 import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { describe, expect, it } from 'vitest'
-import AccountCard from '../src/components/accounts/AccountCard.vue'
+import AccountCard from '../src/components/accounts/account-card.vue'
 
 describe('AccountCard', () => {
   it('shows the authoritative account identity, eligibility, and exact currency balances', async () => {

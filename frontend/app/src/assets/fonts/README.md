@@ -2,7 +2,7 @@
 
 The bundled typeface is **Fira Code Nerd Font Mono**, sourced from this
 machine's `ttf-firacode-nerd` package (Regular and SemiBold). It is used under
-its SIL Open Font License; see `OFL.txt`. Upstream projects:
+its SIL Open Font License; see `o-f-l.txt`. Upstream projects:
 
 - https://github.com/tonsky/FiraCode
 - https://github.com/ryanoasis/nerd-fonts

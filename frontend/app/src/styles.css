@@ -3,7 +3,7 @@
 
 @font-face {
   font-family: 'Lukas Fira Code';
-  src: url('./assets/fonts/FiraCodeNerdFontMono-Regular.woff2') format('woff2');
+  src: url('./assets/fonts/fira-code-nerd-font-mono-regular.woff2') format('woff2');
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -11,7 +11,7 @@
 
 @font-face {
   font-family: 'Lukas Fira Code';
-  src: url('./assets/fonts/FiraCodeNerdFontMono-SemiBold.woff2') format('woff2');
+  src: url('./assets/fonts/fira-code-nerd-font-mono-semi-bold.woff2') format('woff2');
   font-style: normal;
   font-weight: 500 700;
   font-display: swap;

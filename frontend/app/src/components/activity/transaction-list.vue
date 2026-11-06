@@ -114,7 +114,7 @@ function ariaSort(field: typeof sortField.value): 'ascending' | 'descending' | '
 </template>
 
 <style scoped>
-.activity-list { display: grid; gap: 12px; min-width: 0; }
+.activity-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
 .list-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .list-heading h2 { margin: 0; font-size: 24px; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }

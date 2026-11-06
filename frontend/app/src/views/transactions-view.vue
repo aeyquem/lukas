@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import TransactionForm from '../components/activity/TransactionForm.vue'
-import TransactionList from '../components/activity/TransactionList.vue'
+import { computed, onMounted, ref } from 'vue'
+import { useAccountListQuery, useFinanceInvalidation } from '../features/accounts/accounts-feature'
+import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
+import TransactionForm from '../components/activity/transaction-form.vue'
+import TransactionList from '../components/activity/transaction-list.vue'
 import { ApiClientError, apiRequest } from '../shared/api/client'
 import {
   PendingWriteStore,
@@ -11,7 +13,6 @@ import {
   type PendingFinancialWrite,
 } from '../shared/api/pending-commands'
 import type {
-  AccountView,
   TransactionCategory,
   TransactionView,
 } from '../components/activity/transaction-model'
@@ -35,7 +36,9 @@ interface MutationReceipt {
   revision: number
 }
 
-const accounts = ref<AccountView[]>([])
+const accountQuery = useAccountListQuery()
+const accounts = computed(() => accountQuery.data.value ?? [])
+const invalidateFinance = useFinanceInvalidation()
 const categories = ref<TransactionCategory[]>([])
 const transactions = ref<TransactionView[]>([])
 const nextCursor = ref<TransactionCursor | null>(null)
@@ -69,6 +72,12 @@ function getPendingStore(): PendingWriteStore {
   return pendingStore
 }
 
+let skipOwnInvalidation = false
+let pageGeneration = 0
+onFinanceInvalidated(async () => {
+  if (skipOwnInvalidation) return
+  try { await loadFirstPage() } catch (error) { pageError.value = messageFor(error, 'No fue posible cargar los movimientos.') }
+})
 onMounted(() => {
   restorePendingCommands()
   void loadInitialData()
@@ -78,11 +87,10 @@ async function loadInitialData(): Promise<void> {
   isLoading.value = true
   pageError.value = ''
   try {
-    const [accountRows, bootstrap] = await Promise.all([
-      apiRequest<AccountView[]>('accounts'),
+    const [, bootstrap] = await Promise.all([
+      accountQuery.refresh(true),
       apiRequest<BootstrapResponse>('bootstrap'),
     ])
-    accounts.value = accountRows
     categories.value = bootstrap.categories
     await loadFirstPage()
     initialized.value = true
@@ -94,7 +102,9 @@ async function loadInitialData(): Promise<void> {
 }
 
 async function loadFirstPage(): Promise<void> {
+  const generation = ++pageGeneration
   const page = await fetchPage(null)
+  if (generation !== pageGeneration) return
   transactions.value = page.items
   nextCursor.value = page.next
 }
@@ -102,14 +112,16 @@ async function loadFirstPage(): Promise<void> {
 async function loadMore(): Promise<void> {
   const cursor = nextCursor.value
   if (!cursor || isLoadingMore.value) return
+  const generation = pageGeneration
   isLoadingMore.value = true
   pageError.value = ''
   try {
     const page = await fetchPage(cursor)
+    if (generation !== pageGeneration) return
     transactions.value = [...transactions.value, ...page.items]
     nextCursor.value = page.next
   } catch (error) {
-    pageError.value = messageFor(error, 'No fue posible cargar la página siguiente.')
+    if (generation === pageGeneration) pageError.value = messageFor(error, 'No fue posible cargar la página siguiente.')
   } finally {
     isLoadingMore.value = false
   }
@@ -131,6 +143,8 @@ async function submitWrite(command: { method: 'POST' | 'PUT'; route: string; bod
   isSaving.value = true
   try {
     const receipt = await sendFinancialWrite<MutationReceipt>(command)
+    skipOwnInvalidation = true
+    try { await invalidateFinance() } finally { skipOwnInvalidation = false }
     editingTransaction.value = null
     successMessage.value = `Movimiento guardado (revisión ${receipt.revision}).`
     restorePendingCommands()
@@ -156,6 +170,8 @@ async function retryCommand(command: PendingFinancialWrite): Promise<void> {
   isSaving.value = true
   try {
     const receipt = await retryPendingWrite<MutationReceipt>(command.idempotencyKey)
+    skipOwnInvalidation = true
+    try { await invalidateFinance() } finally { skipOwnInvalidation = false }
     editingTransaction.value = null
     successMessage.value = `El comando guardado se confirmó (revisión ${receipt.revision}).`
     restorePendingCommands()
@@ -330,7 +346,7 @@ h1 { margin: 0; font-size: clamp(34px, 5vw, 52px); letter-spacing: -.05em; line-
 .intro { max-width: 660px; margin: 14px 0 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
 .workspace-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.1fr); align-items: start; gap: var(--island-gap); margin-top: 20px; }
 .editor-panel, .list-panel, .pending-section { border: 1px solid var(--border); min-width: 0; border-radius: var(--island-radius); padding: var(--island-padding); background: var(--surface); box-shadow: var(--shadow-island); }
-.list-panel { display: grid; gap: 16px; }
+.list-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .pending-section { margin-bottom: 18px; border-color: var(--warning-border); background: var(--warning-bg); }
 .section-heading h2 { margin: 0; font-size: 21px; }
 .pending-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }

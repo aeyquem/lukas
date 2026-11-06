@@ -1,4 +1,4 @@
-import type { PendingFinancialWrite, PendingWriteStore } from '../../shared/api/pending-commands'
+import type { PendingFinancialWrite, PendingWriteStore } from '../../../shared/api/pending-commands'
 
 export function listPendingAccountWrites(store: Pick<PendingWriteStore, 'list'>): PendingFinancialWrite[] {
   return store.list().filter(

@@ -10,7 +10,7 @@ import {
   type TransactionDraft,
   type TransactionView,
 } from './transaction-model'
-import OpeningTreatmentField from './OpeningTreatmentField.vue'
+import OpeningTreatmentField from './opening-treatment-field.vue'
 
 const props = defineProps<{
   accounts: AccountView[]
@@ -30,6 +30,7 @@ const emit = defineEmits<{
 const moneyPattern = /^(0|[1-9][0-9]*)(?:\.[0-9]+)?$/
 const draft = reactive<TransactionDraft>(createTransactionDraft(props.today))
 const localErrors = reactive<Record<string, string>>({})
+const baselineRevision = ref<number | undefined>(undefined)
 const isHydrating = ref(false)
 const isEditing = computed(() => props.transaction !== null)
 const allWallets = computed(() =>
@@ -73,6 +74,7 @@ const showCategory = computed(() =>
 watch(
   () => props.transaction,
   (transaction) => {
+    baselineRevision.value = transaction?.revision
     isHydrating.value = true
     Object.assign(
       draft,
@@ -84,16 +86,6 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => props.accounts,
-  (currentAccounts) => {
-    if (props.transaction) {
-      isHydrating.value = true
-      Object.assign(draft, draftFromTransaction(props.transaction, currentAccounts))
-      isHydrating.value = false
-    }
-  },
-)
 
 watch(
   () => draft.businessDate,
@@ -212,7 +204,7 @@ function submit(): void {
     return
   }
   try {
-    const request = buildTransactionRequest(draft, props.transaction?.revision)
+    const request = buildTransactionRequest(draft, baselineRevision.value)
     if (!needsWalletOpeningChoice.value) delete request.opening_treatment
     if (!needsSourceOpeningChoice.value) delete request.source_opening_treatment
     if (!needsDestinationOpeningChoice.value) delete request.destination_opening_treatment

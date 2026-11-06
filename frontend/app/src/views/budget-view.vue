@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiClientError, apiRequest } from '../shared/api/client'
@@ -51,6 +52,7 @@ const visiblePending = computed(() => pending.value.filter((item) => !dismissedP
 let latestLoad = 0
 let latestPreview = 0
 
+onFinanceInvalidated(() => refresh())
 onMounted(() => { restorePending(); void refresh(); void refreshCategories() })
 watch(() => route.query.period, (queryPeriod) => {
   if (typeof queryPeriod !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(queryPeriod) || queryPeriod === period.value) return

@@ -47,11 +47,15 @@ try {
   await single('expense', '100', bankWallet, expenseNote)
   await b.set('#transaction-category', category)
   await submit()
-  const expense = await b.evaluate(`fetch('/api/transactions?page_size=100').then(r=>r.json()).then(p=>p.items.find(t=>t.note===${JSON.stringify(expenseNote)}))`)
+  const expense = await findTransactionByNote(expenseNote)
   assert.ok(expense)
 
   const refundNote = `Browser linked refund ${suffix}`
   await single('refund', '20', bankWallet, refundNote)
+  while (!await b.evaluate(`Array.from(document.querySelector('#refund-source').options).some(e=>e.value===${JSON.stringify(expense.id)})`)) {
+    await b.click('.pagination-actions button')
+    await b.waitFor(`!document.querySelector('.pagination-actions button')?.disabled`)
+  }
   await b.set('#refund-source', expense.id)
   await submit()
 
@@ -101,7 +105,11 @@ try {
   await submit()
 
   // Correct the categorized expense: a reason is required, then the revision advances once.
-  await b.evaluate(`(()=>{const article=Array.from(document.querySelectorAll('.transaction-card')).find(e=>e.innerText.includes(${JSON.stringify(expenseNote)}));article.querySelector('button[aria-label^="Corregir"]').click()})()`)
+  while (!await b.evaluate(`Array.from(document.querySelectorAll('.activity-list tbody tr')).some(e=>e.innerText.includes(${JSON.stringify(expenseNote)}))`)) {
+    await b.click('.pagination-actions button')
+    await b.waitFor(`!document.querySelector('.pagination-actions button')?.disabled`)
+  }
+  await b.evaluate(`(()=>{const article=Array.from(document.querySelectorAll('.activity-list tbody tr')).find(e=>e.innerText.includes(${JSON.stringify(expenseNote)}));article.querySelector('button[aria-label^="Editar"]').click()})()`)
   await b.waitFor(`Boolean(document.querySelector('#correction-reason'))`)
   await b.set('#transaction-amount', '110')
   await b.click('#transaction-editor form button[type="submit"]')
@@ -112,7 +120,7 @@ try {
   const corrected = await b.evaluate(`fetch('/api/transactions/${expense.id}').then(r=>r.json())`)
   assert.equal(corrected.effects[0].amount, '-110')
 
-  const linked = await b.evaluate(`fetch('/api/transactions?page_size=100').then(r=>r.json()).then(p=>p.items.find(t=>t.note===${JSON.stringify(refundNote)}))`)
+  const linked = await findTransactionByNote(refundNote)
   assert.equal(linked.source_expense_id, expense.id)
   assert.equal(linked.category_id, category)
 
@@ -120,7 +128,7 @@ try {
   await single('expense', '12.50', cashUsd, unvaluedForeignNote)
   await b.set('#transaction-category', category)
   await submit()
-  const unvaluedForeign = await b.evaluate(`fetch('/api/transactions?page_size=100').then(r=>r.json()).then(p=>p.items.find(t=>t.note===${JSON.stringify(unvaluedForeignNote)}))`)
+  const unvaluedForeign = await findTransactionByNote(unvaluedForeignNote)
   assert.equal(unvaluedForeign.effects[0].currency, 'USD')
   assert.equal(unvaluedForeign.effects[0].amount, '-12.50')
   assert.equal(unvaluedForeign.confirmed_clp_amount, null)
@@ -130,11 +138,11 @@ try {
   await b.set('#transaction-category', category)
   await b.set('#confirmed-clp', '12090')
   await submit()
-  const valuedForeign = await b.evaluate(`fetch('/api/transactions?page_size=100').then(r=>r.json()).then(p=>p.items.find(t=>t.note===${JSON.stringify(valuedForeignNote)}))`)
+  const valuedForeign = await findTransactionByNote(valuedForeignNote)
   assert.equal(valuedForeign.effects[0].currency, 'USD')
   assert.equal(valuedForeign.confirmed_clp_amount, '12090')
 
-  const cross = await b.evaluate(`fetch('/api/transactions?page_size=100').then(r=>r.json()).then(p=>p.items.find(t=>t.note===${JSON.stringify(crossTransferNote)}))`)
+  const cross = await findTransactionByNote(crossTransferNote)
   assert.equal(cross.kind, 'transfer')
   assert.deepEqual(cross.conversion_evidence, { source: 'browser statement', rate: '930' })
 
@@ -146,19 +154,22 @@ try {
       const response=await fetch('/api/transactions',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID(),'Installation-Generation':generation},body:JSON.stringify({kind:'transfer',business_date:today,source_wallet_id:from,source_amount:'1',destination_wallet_id:to,destination_amount:'1',note:tag+' '+String(i).padStart(3,'0')})})
       const receipt=await response.json();if(!response.ok)throw new Error(JSON.stringify(receipt));ids.push(receipt.resource_id)
     }
-    async function all(){let cursor=null,items=[];do{const q=new URLSearchParams({page_size:'100'});if(cursor){q.set('before_date',cursor.before_date);q.set('before_id',cursor.before_id)}const p=await (await fetch('/api/transactions?'+q)).json();items.push(...p.items);cursor=p.next}while(cursor);return items.map(t=>t.id)}
+    async function all(){let cursor=null,items=[];do{const q=new URLSearchParams({page_size:'100'});if(cursor){q.set('before_date',cursor.before_date);q.set('before_id',cursor.before_id)}const p=await (await fetch('/api/transactions?'+q)).json();items.push(...p.items);cursor=p.next}while(cursor);return items.map(t=>t.note || '—')}
     return {ids,all:await all(),tag}
   })()`)
   assert.equal(pageSeed.ids.length, 250)
+  await b.evaluate('window.__transactionBeforeReload = true')
   await b.command('Page.reload')
-  await b.waitFor(`document.querySelectorAll('[data-transaction-id]').length===50`)
+  await b.waitFor(`window.__transactionBeforeReload !== true && document.querySelectorAll('.activity-list tbody tr').length===50`)
   while (await b.evaluate(`Boolean(document.querySelector('.pagination-actions button'))`)) {
-    const previousCount = await b.evaluate(`document.querySelectorAll('[data-transaction-id]').length`)
+    const previousCount = await b.evaluate(`document.querySelectorAll('.activity-list tbody tr').length`)
     await b.click('.pagination-actions button')
-    await b.waitFor(`document.querySelectorAll('[data-transaction-id]').length>${previousCount}`)
+    await b.waitFor(`document.querySelectorAll('.activity-list tbody tr').length>${previousCount}`)
   }
-  const renderedIds = await b.evaluate(`Array.from(document.querySelectorAll('[data-transaction-id]')).map(e=>e.getAttribute('data-transaction-id'))`)
+  const renderedIds = await b.evaluate(`Array.from(document.querySelectorAll('.activity-list tbody tr')).map(e=>e.querySelector('.note-cell').textContent)`)
   assert.deepEqual(renderedIds, pageSeed.all)
+  assert.equal(renderedIds.filter(note => note.startsWith(pageSeed.tag)).length, 250)
+  assert.equal(new Set(renderedIds.filter(note => note.startsWith(pageSeed.tag))).size, 250)
 
   console.log(JSON.stringify({
     result: 'PASS',

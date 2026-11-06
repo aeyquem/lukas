@@ -1,15 +1,15 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
-import App from './App.vue'
+import App from './app.vue'
 import { router } from './app/router'
 import './styles.css'
-import { initializeTheme } from './app/theme'
-
-initializeTheme()
+import { useAppearanceStore } from './app/theme-store'
 
 const app = createApp(App)
 const pinia = createPinia()
+
+useAppearanceStore(pinia).initializeTheme()
 
 app.use(pinia)
 app.use(PiniaColada, { pinia })

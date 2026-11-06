@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { browser } from './chromium.mjs'
-const source=fileURLToPath(new URL('../app/src/App.vue',import.meta.url))
+const source=fileURLToPath(new URL('../app/src/app.vue',import.meta.url))
 const original=await readFile(source,'utf8')
 const b=await browser()
 try{
