@@ -1,0 +1,31 @@
+/* Nord: Polar Night surfaces, Snow Storm text, Frost accents.
+   Palette: https://www.nordtheme.com/docs/colors-and-palettes/ */
+:root[data-theme='nord'] {
+  color-scheme: dark;
+  --canvas: #2e3440;
+  --canvas-glow: #3b4252;
+  --canvas-cool: #2e3440;
+  --text: #eceff4;
+  --muted: #d8dee9;
+  --accent: #8fbcbb;
+  --accent-hover: #88c0d0;
+  --on-accent: #2e3440;
+  --accent-soft: #434c5e;
+  --surface: #3b4252;
+  --surface-glass: rgb(59 66 82 / 92%);
+  --surface-raised: #2e3440;
+  --surface-soft: #434c5e;
+  --border: #4c566a;
+  --border-strong: #71809a;
+  --edge-light: rgb(236 239 244 / 10%);
+  --shadow-island: 0 14px 40px rgb(0 0 0 / 16%), inset 0 1px 0 var(--edge-light);
+  --shadow-floating: 0 18px 48px rgb(0 0 0 / 32%);
+  --glass-saturation: 100%;
+  --danger: #f0b4bc;
+  --danger-bg: #493940;
+  --success: #a3be8c;
+  --success-bg: #35443e;
+  --warning: #ebcb8b;
+  --warning-bg: #494438;
+  --warning-border: #8c7955;
+}

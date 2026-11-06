@@ -209,6 +209,14 @@ function cancelEdit(): void {
   serverErrors.value = {}
 }
 
+function beginCreate(): void {
+  cancelEdit()
+  pageError.value = ''
+  successMessage.value = ''
+  document.getElementById('transaction-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  document.querySelector<HTMLFormElement>('#transaction-editor form input')?.focus({ preventScroll: true })
+}
+
 function hasPendingCommandKey(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'pendingCommandKey' in error
 }
@@ -244,6 +252,7 @@ function fieldMessage(code: string): string {
         <h1 id="transactions-title">Movimientos</h1>
         <p class="intro">Registra cada ingreso, gasto, reembolso o transferencia con su fecha y moneda reales.</p>
       </div>
+      <button type="button" class="primary-button" @click="beginCreate">Añadir transacción</button>
     </header>
 
     <p v-if="pageError" class="notice error-notice" role="alert">{{ pageError }}</p>
@@ -314,31 +323,31 @@ function fieldMessage(code: string): string {
 </template>
 
 <style scoped>
-.transactions-page { width: min(100% - 40px, 1240px); min-height: 100vh; margin-inline: auto; padding-block: 44px 60px; color: #272b27; }
+.transactions-page { width: 100%; min-height: 0; margin-inline: auto; padding-block: 8px 24px; color: var(--text); }
 .page-header { margin-bottom: 22px; }
-.eyebrow { margin: 0 0 10px; color: #52675b; font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 h1 { margin: 0; font-size: clamp(34px, 5vw, 52px); letter-spacing: -.05em; line-height: 1.05; }
-.intro { max-width: 660px; margin: 14px 0 0; color: #626b63; font-size: 16px; line-height: 1.5; }
-.workspace-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.1fr); align-items: start; gap: 22px; margin-top: 20px; }
-.editor-panel, .list-panel, .pending-section { border: 1px solid #dce1db; border-radius: 14px; padding: 20px; background: #fff; }
+.intro { max-width: 660px; margin: 14px 0 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
+.workspace-grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.1fr); align-items: start; gap: var(--island-gap); margin-top: 20px; }
+.editor-panel, .list-panel, .pending-section { border: 1px solid var(--border); min-width: 0; border-radius: var(--island-radius); padding: var(--island-padding); background: var(--surface); box-shadow: var(--shadow-island); }
 .list-panel { display: grid; gap: 16px; }
-.pending-section { margin-bottom: 18px; border-color: #d8b863; background: #fffdf6; }
+.pending-section { margin-bottom: 18px; border-color: var(--warning-border); background: var(--warning-bg); }
 .section-heading h2 { margin: 0; font-size: 21px; }
 .pending-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
-.pending-card { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 13px; border: 1px solid #e4d39f; border-radius: 10px; background: #fff; }
-.pending-card p { margin: 4px 0; color: #626b63; font-size: 13px; line-height: 1.4; }
-.pending-card small { color: #737a73; }
+.pending-card { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 13px; border: 1px solid var(--warning-border); border-radius: var(--control-radius); background: var(--surface-raised); }
+.pending-card p { margin: 4px 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.pending-card small { color: var(--muted); }
 .pending-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.notice { border-radius: 10px; padding: 12px 14px; line-height: 1.45; }
-.error-notice { color: #842f28; background: #fae8e5; }
-.success-notice { color: #25583e; background: #e8f2e9; }
-.primary-button, .secondary-button { min-height: 42px; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 650; cursor: pointer; }
-.primary-button { color: #fff; border: 1px solid #34765a; background: #34765a; }
-.secondary-button { color: #27352c; border: 1px solid #aab4ac; background: transparent; }
-.text-button { border: 0; padding: 4px 0; color: #286449; background: transparent; font: inherit; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.notice { border-radius: var(--control-radius); padding: 12px 14px; line-height: 1.45; }
+.error-notice { color: var(--danger); background: var(--danger-bg); }
+.success-notice { color: var(--success); background: var(--success-bg); }
+.primary-button, .secondary-button { min-height: 42px; border-radius: var(--control-radius); padding: 9px 14px; font: inherit; font-weight: 650; cursor: pointer; }
+.primary-button { color: var(--on-accent); border: 1px solid var(--accent); background: var(--accent); }
+.secondary-button { color: var(--text); border: 1px solid var(--border-strong); background: transparent; }
+.text-button { border: 0; padding: 4px 0; color: var(--accent); background: transparent; font: inherit; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .pagination-actions { display: flex; justify-content: center; }
-.end-of-list { margin: 0; color: #737a73; text-align: center; font-size: 13px; }
+.end-of-list { margin: 0; color: var(--muted); text-align: center; font-size: 13px; }
 button:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 900px) { .workspace-grid { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .transactions-page { width: min(100% - 28px, 1240px); padding-top: 28px; }.editor-panel, .list-panel, .pending-section { padding: 15px; } }
+@media (max-width: 640px) { .transactions-page { width: 100%; padding-top: 28px; }.editor-panel, .list-panel, .pending-section { padding: 15px; } }
 </style>

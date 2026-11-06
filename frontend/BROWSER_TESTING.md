@@ -94,3 +94,22 @@ Recorded on 2026-11-05, Arch Linux, Chromium 155.0.8059.84:
 
 Budget-close scenarios use the isolated `lukas_browser_verify_20261105`
 database; do not repeat them against the main development database.
+
+## Island appearance check
+
+On 2026-11-06, Chromium 155.0.8059.84 on Arch Linux passed the read-only
+`appearance.mjs` check against the live Compose development stack. Home,
+accounts, transactions and budget fit 1440, 1024, 768, 650, 390 and 320px
+viewports without document overflow. Theme switching updates the palette,
+survives reload, and the appearance menu fits the mobile viewport. Desktop
+and mobile screenshots were visually inspected. The budget table keeps its
+own horizontal scroll container on narrow screens. No financial records are
+created by this check. Firefox, Chrome and Zen have not been rerun for this
+appearance change.
+
+Nord and numeric-font follow-up: the read-only appearance script also checks
+Nord selection/persistence, native dark color scheme, both bundled webfonts,
+and numerical input styles on the mobile financial screens. These additions
+have not been executed: local privileged session access was blocked by an
+automatic approval-review usage limit. Build/type-check and static font and
+contrast validation are recorded separately; do not treat them as browser QA.

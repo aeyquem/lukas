@@ -424,17 +424,18 @@ function clearForm(): void {
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .field { display: grid; gap: 7px; margin: 0 0 16px; }
 .field label, .opening-choice legend { font-size: 14px; font-weight: 650; }
-.field input, .field select, .field textarea { width: 100%; min-height: 42px; border: 1px solid #c9cec8; border-radius: 8px; padding: 9px 11px; color: #272b27; background: #fff; font: inherit; }
+.field input, .field select, .field textarea { width: 100%; min-height: 42px; border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 9px 11px; color: var(--text); background: var(--surface-raised); font: inherit; }
 .field textarea { resize: vertical; }
-.field-error { margin: 0; color: #a4372d; font-size: 13px; }
-.field-hint { margin: 0; color: #626b63; font-size: 13px; line-height: 1.45; }
-.opening-choice { border: 1px solid #c9cec8; border-radius: 10px; padding: 12px 14px; }
+.field-error { margin: 0; color: var(--danger); font-size: 13px; }
+.field-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.opening-choice { border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 12px 14px; }
 .opening-choice label { display: flex; align-items: flex-start; gap: 8px; font-weight: 450; line-height: 1.4; }
 .opening-choice input { width: auto; min-height: auto; margin-top: 3px; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.primary-button, .secondary-button { min-height: 42px; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 650; cursor: pointer; }
-.primary-button { color: #fff; border: 1px solid #34765a; background: #34765a; }
-.secondary-button { color: #27352c; border: 1px solid #aab4ac; background: transparent; }
+.primary-button, .secondary-button { min-height: 42px; border-radius: var(--control-radius); padding: 9px 14px; font: inherit; font-weight: 650; cursor: pointer; }
+.primary-button { color: var(--on-accent); border: 1px solid var(--accent); background: var(--accent); }
+.secondary-button { color: var(--text); border: 1px solid var(--border-strong); background: transparent; }
 button:disabled { opacity: .6; cursor: not-allowed; }
 @media (max-width: 640px) { .field-grid { grid-template-columns: 1fr; gap: 0; } }
+input[inputmode="decimal"], input[type="date"] { font-family: var(--font-numeric); }
 </style>

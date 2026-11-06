@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AccountCard from '../components/accounts/AccountCard.vue'
+import type { TransactionView } from '../components/activity/transaction-model'
 import {
   canAddCurrencyWallet,
   setDraftAccountType,
@@ -66,6 +67,11 @@ interface MutationReceipt {
   revision: number
 }
 
+interface AccountTransactionPage {
+  items: TransactionView[]
+  next: { before_date: string; before_id: string } | null
+}
+
 const accountTypes: { value: AccountType; label: string }[] = [
   { value: 'bank', label: 'Banco' },
   { value: 'cash', label: 'Efectivo' },
@@ -127,6 +133,11 @@ function signOf(value: string): -1 | 0 | 1 {
 const accounts = ref<AccountView[]>([])
 const draft = reactive<AccountDraft>(newDraft())
 const selectedAccount = ref<AccountView | null>(null)
+const accountTransactions = ref<TransactionView[]>([])
+const accountTransactionsError = ref('')
+const accountTransactionsLoading = ref(false)
+let accountTransactionsRequest = 0
+let accountDetailRequest = 0
 const editName = ref('')
 const openingCorrection = ref<{ walletId: string; opening: OpeningView } | null>(null)
 const correctionAmount = ref('')
@@ -406,28 +417,56 @@ async function submitCreate(): Promise<void> {
 }
 
 function startCreate(): void {
+  accountDetailRequest += 1
+  isLoading.value = false
   selectedAccount.value = null
+  accountTransactions.value = []
+  accountTransactionsError.value = ''
   openingCorrection.value = null
   Object.assign(draft, newDraft())
   clearErrors()
 }
 
 async function startEdit(account: AccountView): Promise<void> {
+  const requestId = ++accountDetailRequest
   selectedAccount.value = account
+  accountTransactions.value = []
+  accountTransactionsError.value = ''
+  void loadAccountTransactions(account.id)
   editName.value = account.name
   openingCorrection.value = null
   clearErrors()
   isLoading.value = true
   try {
     const authoritative = await apiRequest<AccountView>(`accounts/${account.id}`)
+    if (requestId !== accountDetailRequest || selectedAccount.value?.id !== account.id) return
     accounts.value = accounts.value.map((item) => (item.id === account.id ? authoritative : item))
     selectedAccount.value = authoritative
     editName.value = authoritative.name
   } catch (error) {
-    pageError.value = errorMessage(error)
+    if (requestId === accountDetailRequest && selectedAccount.value?.id === account.id) pageError.value = errorMessage(error)
   } finally {
-    isLoading.value = false
+    if (requestId === accountDetailRequest) isLoading.value = false
   }
+}
+
+async function loadAccountTransactions(accountId: string): Promise<void> {
+  const requestId = ++accountTransactionsRequest
+  accountTransactionsLoading.value = true
+  accountTransactionsError.value = ''
+  try {
+    const page = await apiRequest<AccountTransactionPage>(`transactions?page_size=50&account_id=${encodeURIComponent(accountId)}`)
+    if (requestId === accountTransactionsRequest && selectedAccount.value?.id === accountId) accountTransactions.value = page.items
+  } catch (error) {
+    if (requestId === accountTransactionsRequest && selectedAccount.value?.id === accountId) accountTransactionsError.value = errorMessage(error)
+  } finally {
+    if (requestId === accountTransactionsRequest) accountTransactionsLoading.value = false
+  }
+}
+
+function accountNameForWallet(walletId: string): string {
+  const owner = accounts.value.find((account) => account.wallets.some((wallet) => wallet.id === walletId))
+  return owner?.name ?? 'Cuenta'
 }
 
 function addWallet(): void {
@@ -730,21 +769,45 @@ async function refreshSelectedAccount(): Promise<void> {
           </div>
           <article v-for="wallet in selectedAccount?.wallets ?? []" :key="wallet.id" class="wallet-readback">
             <div class="readback-heading">
-              <h4>{{ wallet.currency }} · {{ formatMoney(wallet.balance, wallet.currency) }}</h4>
+              <h4 class="numeric">{{ wallet.currency }} · {{ formatMoney(wallet.balance, wallet.currency) }}</h4>
             </div>
             <p v-if="wallet.openings.length === 0" class="muted">No hay saldos iniciales registrados.</p>
             <ul v-else class="opening-list">
               <li v-for="opening in wallet.openings" :key="opening.id" class="opening-row">
                 <div>
-                  <strong>{{ formatMoney(opening.amount, wallet.currency) }}</strong>
-                  <span class="opening-date">{{ formatBusinessDate(opening.business_date) }}</span>
+                  <strong class="numeric">{{ formatMoney(opening.amount, wallet.currency) }}</strong>
+                  <span class="opening-date numeric">{{ formatBusinessDate(opening.business_date) }}</span>
                   <small>Revisión {{ opening.revision }}<template v-if="opening.liability_basis_provenance"> · Base {{ opening.liability_basis_provenance }}</template></small>
-                  <small v-if="opening.liability_clp_basis">Base CLP: {{ formatMoney(opening.liability_clp_basis, 'CLP') }}</small>
+                  <small v-if="opening.liability_clp_basis" class="numeric">Base CLP: {{ formatMoney(opening.liability_clp_basis, 'CLP') }}</small>
                 </div>
                 <button type="button" class="text-button" @click="startOpeningCorrection(wallet.id, opening)">Corregir saldo</button>
               </li>
             </ul>
           </article>
+        </section>
+
+        <section class="account-activity" aria-labelledby="account-activity-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">Registro de esta cuenta</p><h3 id="account-activity-title">Transacciones</h3></div>
+            <button type="button" class="text-button" :disabled="accountTransactionsLoading || !selectedAccount" @click="selectedAccount && loadAccountTransactions(selectedAccount.id)">Actualizar actividad</button>
+          </div>
+          <p v-if="accountTransactionsLoading" role="status" class="muted">Cargando actividad…</p>
+          <p v-else-if="accountTransactionsError" role="alert" class="notice error-notice">{{ accountTransactionsError }}</p>
+          <p v-else-if="accountTransactions.length === 0" class="empty-state">Esta cuenta todavía no tiene transacciones.</p>
+          <div v-else class="account-activity-table-wrap">
+            <table class="account-activity-table">
+              <thead><tr><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Payee</th><th scope="col">Efectos</th></tr></thead>
+              <tbody>
+                <tr v-for="transaction in accountTransactions" :key="transaction.id">
+                  <td class="numeric">{{ formatBusinessDate(transaction.business_date) }}</td>
+                  <td>{{ transaction.kind === 'income' ? 'Ingreso' : transaction.kind === 'expense' ? 'Gasto' : transaction.kind === 'refund' ? 'Reembolso' : 'Transferencia' }}</td>
+                  <td>{{ transaction.payee || '—' }}<small v-if="transaction.note" class="activity-note">{{ transaction.note }}</small></td>
+                  <td><span v-for="effect in transaction.effects" :key="`${effect.wallet_id}-${effect.role}`" class="activity-effect"><small>{{ effect.role === 'source' ? 'Sale de' : effect.role === 'destination' ? 'Llega a' : 'Efecto en' }} {{ accountNameForWallet(effect.wallet_id) }} · {{ effect.currency }}</small><strong class="numeric">{{ formatMoney(effect.amount, effect.currency) }}</strong></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="help-copy">Se muestran hasta 50 transacciones recientes de esta cuenta.</p>
+          </div>
         </section>
 
         <form v-if="openingCorrection" class="correction-panel" @submit.prevent="submitOpeningCorrection" novalidate>
@@ -778,7 +841,7 @@ async function refreshSelectedAccount(): Promise<void> {
 
 <style scoped>
 .accounts-page {
-  padding-block: 42px 80px;
+  padding-block: 8px 24px;
 }
 
 .page-header,
@@ -835,7 +898,7 @@ h4 {
 .empty-state,
 .account-meta,
 .opening-row small {
-  color: #616760;
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -853,23 +916,25 @@ h4 {
   display: grid;
   grid-template-columns: minmax(250px, 0.78fr) minmax(0, 1.5fr);
   align-items: start;
-  gap: 24px;
+  gap: var(--island-gap);
 }
 
 .account-list,
 .editor-panel {
-  border: 1px solid #e1e2dc;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 12px 40px rgb(35 46 39 / 4%);
+  border: 1px solid var(--border);
+  border-radius: var(--island-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-island);
 }
 
 .account-list {
-  padding: 20px;
+  min-width: 0;
+  padding: var(--island-padding);
 }
 
 .editor-panel {
-  padding: 24px;
+  min-width: 0;
+  padding: var(--island-padding);
 }
 
 .section-heading {
@@ -888,8 +953,8 @@ h4 {
   height: 28px;
   place-items: center;
   border-radius: 999px;
-  color: #52675b;
-  background: #edf3ee;
+  color: var(--muted);
+  background: var(--accent-soft);
   font-size: 13px;
   font-weight: 700;
 }
@@ -939,22 +1004,22 @@ textarea {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid #cfd5cf;
-  border-radius: 10px;
-  color: #272b27;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--control-radius);
+  color: var(--text);
+  background: var(--surface-raised);
   font: inherit;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #34765a;
+  border-color: var(--accent);
 }
 
 input[aria-invalid='true'],
 textarea[aria-invalid='true'] {
-  border-color: #b4473f;
+  border-color: var(--danger);
 }
 
 .eligibility-field {
@@ -963,8 +1028,8 @@ textarea[aria-invalid='true'] {
   align-items: start;
   gap: 12px;
   padding: 14px;
-  border: 1px solid #e4e6e0;
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
   cursor: pointer;
 }
 
@@ -972,7 +1037,7 @@ textarea[aria-invalid='true'] {
   width: 18px;
   min-height: 18px;
   margin: 2px 0 0;
-  accent-color: #34765a;
+  accent-color: var(--accent);
 }
 
 .eligibility-field span {
@@ -985,7 +1050,7 @@ textarea[aria-invalid='true'] {
 }
 
 .eligibility-field small {
-  color: #616760;
+  color: var(--muted);
   line-height: 1.4;
 }
 
@@ -993,8 +1058,8 @@ textarea[aria-invalid='true'] {
   min-width: 0;
   margin: 22px 0 0;
   padding: 18px;
-  border: 1px solid #e2e5df;
-  border-radius: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
 }
 
 .wallet-fieldset legend {
@@ -1009,8 +1074,8 @@ textarea[aria-invalid='true'] {
 .wallet-draft {
   margin-bottom: 14px;
   padding: 16px;
-  border-radius: 12px;
-  background: #f7f8f5;
+  border-radius: var(--control-radius);
+  background: var(--surface-soft);
 }
 
 .wallet-draft-title {
@@ -1032,7 +1097,7 @@ textarea[aria-invalid='true'] {
 
 .field-error {
   margin: 0;
-  color: #a3332b;
+  color: var(--danger);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -1045,7 +1110,7 @@ textarea[aria-invalid='true'] {
   justify-content: center;
   padding: 10px 16px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -1053,18 +1118,18 @@ textarea[aria-invalid='true'] {
 }
 
 .primary-button {
-  color: #fff;
-  background: #34765a;
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #285c45;
+  background: var(--accent-hover);
 }
 
 .secondary-button {
-  border-color: #cfd8d0;
-  color: #315e46;
-  background: #f7faf7;
+  border-color: var(--border-strong);
+  color: var(--accent);
+  background: var(--surface-soft);
 }
 
 button:disabled {
@@ -1075,7 +1140,7 @@ button:disabled {
 .text-button {
   border: 0;
   padding: 7px 4px;
-  color: #315e46;
+  color: var(--accent);
   background: transparent;
   font: inherit;
   font-size: 12px;
@@ -1092,8 +1157,8 @@ button:disabled {
 
 .name-edit {
   padding: 18px;
-  border-radius: 12px;
-  background: #f7f8f5;
+  border-radius: var(--control-radius);
+  background: var(--surface-soft);
 }
 
 .wallet-readbacks {
@@ -1103,9 +1168,16 @@ button:disabled {
 .wallet-readback {
   margin-top: 12px;
   padding: 16px;
-  border: 1px solid #e4e6e0;
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
 }
+.account-activity { margin-top: 24px; padding: 18px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface-soft); }
+.account-activity h3 { margin: 0; }
+.account-activity-table-wrap { min-width: 0; overflow-x: auto; }
+.account-activity-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.account-activity-table th, .account-activity-table td { padding: 9px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.activity-effect { display: block; white-space: nowrap; }
+.activity-note { display: block; max-width: 230px; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
 
 .readback-heading {
   margin-bottom: 12px;
@@ -1118,7 +1190,7 @@ button:disabled {
 .opening-row {
   align-items: start;
   padding-top: 12px;
-  border-top: 1px solid #edf0ea;
+  border-top: 1px solid var(--border);
 }
 
 .opening-row > div {
@@ -1127,7 +1199,7 @@ button:disabled {
 }
 
 .opening-date {
-  color: #616760;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -1138,26 +1210,26 @@ button:disabled {
 .correction-panel {
   margin-top: 22px;
   padding: 20px;
-  border: 1px solid #dce7dd;
-  border-radius: 14px;
-  background: #f7faf7;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface-soft);
 }
 
 .notice {
   margin: 0 0 20px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   font-size: 14px;
 }
 
 .error-notice {
-  color: #8e2d27;
-  background: #fff0ee;
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .success-notice {
-  color: #285c45;
-  background: #eaf4ec;
+  color: var(--accent-hover);
+  background: var(--success-bg);
 }
 
 .empty-state {
@@ -1192,4 +1264,5 @@ button:disabled {
     padding: 18px;
   }
 }
+input[inputmode="decimal"], input[type="date"] { font-family: var(--font-numeric); }
 </style>

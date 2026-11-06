@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ApiClientError, apiRequest } from '../shared/api/client'
 import { formatMoney } from '../shared/formatting/money'
 import { sendFinancialWrite, retryPendingWrite, dismissPendingWrite, PendingWriteStore, type PendingFinancialWrite } from '../shared/api/pending-commands'
@@ -23,7 +24,10 @@ interface ExpenseCategory {
   archived: boolean
 }
 interface CategoryDraft { name: string; sort_order: string; archived: boolean }
-const period = ref(currentPeriodInSantiago())
+const route = useRoute()
+const router = useRouter()
+const initialPeriod = typeof route.query.period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.period) ? route.query.period : currentPeriodInSantiago()
+const period = ref(initialPeriod)
 const budget = ref<BudgetSnapshot | null>(null)
 const drafts = ref<Record<string, string>>({})
 const reasonDrafts = ref<Record<string, string>>({})
@@ -48,6 +52,14 @@ let latestLoad = 0
 let latestPreview = 0
 
 onMounted(() => { restorePending(); void refresh(); void refreshCategories() })
+watch(() => route.query.period, (queryPeriod) => {
+  if (typeof queryPeriod !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(queryPeriod) || queryPeriod === period.value) return
+  period.value = queryPeriod
+  latestPreview += 1
+  preview.value = null
+  budget.value = null
+  void refresh()
+})
 
 function getPendingStore(): PendingWriteStore {
   pendingStore ??= new PendingWriteStore()
@@ -78,11 +90,7 @@ function assignDraft(categoryId: string, value: string): void { drafts.value = {
 function assignReason(categoryId: string, value: string): void { reasonDrafts.value = { ...reasonDrafts.value, [draftKey(categoryId)]: value } }
 function periodChanged(value: string): void {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return
-  period.value = value
-  latestPreview += 1
-  preview.value = null
-  budget.value = null
-  void refresh()
+  void router.replace({ name: 'budget', query: { period: value } })
 }
 
 async function refreshCategories(): Promise<void> {
@@ -253,6 +261,7 @@ async function refreshAfterClose(closedPeriod: string): Promise<void> {
     if (period.value === closedPeriod) {
       period.value = nextPeriod
       budget.value = next
+      await router.replace({ name: 'budget', query: { period: nextPeriod } })
     }
   } catch (error) {
     pageError.value = `El período se cerró, pero no se pudo actualizar el resumen: ${message(error, 'error de lectura')}`
@@ -283,6 +292,28 @@ function explanation(value: BudgetValue): string[] {
 }
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
 function nextMonth(value: string): string { const [year, month] = value.split('-').map(Number); return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}` }
+
+function usagePercent(category: BudgetSnapshot['categories'][number]): number | null {
+  if (category.activity.state !== 'complete') return null
+  const assigned = category.assigned
+  const used = category.activity.amount ?? '0'
+  const decimalParts = [assigned, used].map((value) => value.replace(/^-/, '').split('.'))
+  const scale = Math.max(...decimalParts.map((parts) => parts[1]?.length ?? 0))
+  const coefficients = [assigned, used].map((value) => {
+    const negative = value.startsWith('-')
+    const [whole, fraction = ''] = value.replace(/^-/, '').split('.')
+    const coefficient = BigInt(`${whole}${fraction.padEnd(scale, '0')}`)
+    return negative ? -coefficient : coefficient
+  })
+  if (coefficients[0] === 0n) return coefficients[1] > 0n ? 100 : 0
+  if (coefficients[1] <= 0n) return 0
+  const basisPoints = (coefficients[1] * 10_000n) / coefficients[0]
+  return Number(basisPoints > 10_000n ? 10_000n : basisPoints) / 100
+}
+
+function categoryOverused(category: BudgetSnapshot['categories'][number]): boolean {
+  return category.remaining.state === 'complete' && (category.remaining.amount ?? '0').startsWith('-') && !/^-(?:0+)(?:\.0+)?$/.test(category.remaining.amount ?? '')
+}
 </script>
 
 <template>
@@ -322,15 +353,17 @@ function nextMonth(value: string): string { const [year, month] = value.split('-
     <p v-if="loading" role="status">Cargando presupuesto…</p>
     <template v-if="budget">
       <section class="summary-grid" aria-label="Resumen del período">
-        <article class="panel summary-card"><h2>Financiamiento</h2><strong>{{ valueText(budget.funding) }}</strong><ul v-if="explanation(budget.funding).length"><li v-for="detail in explanation(budget.funding)" :key="detail">{{ detail }}</li></ul></article>
-        <article class="panel summary-card"><h2>Listo para asignar</h2><strong>{{ valueText(budget.ready_to_assign) }}</strong><ul v-if="explanation(budget.ready_to_assign).length"><li v-for="detail in explanation(budget.ready_to_assign)" :key="detail">{{ detail }}</li></ul></article>
-        <article class="panel summary-card"><h2>Actividad</h2><strong>{{ valueText(budget.activity) }}</strong><ul v-if="explanation(budget.activity).length"><li v-for="detail in explanation(budget.activity)" :key="detail">{{ detail }}</li></ul></article>
+        <article class="panel summary-card"><h2>Financiamiento</h2><strong class="numeric">{{ valueText(budget.funding) }}</strong><ul v-if="explanation(budget.funding).length"><li v-for="detail in explanation(budget.funding)" :key="detail">{{ detail }}</li></ul></article>
+        <article class="panel summary-card"><h2>Listo para asignar</h2><strong class="numeric">{{ valueText(budget.ready_to_assign) }}</strong><ul v-if="explanation(budget.ready_to_assign).length"><li v-for="detail in explanation(budget.ready_to_assign)" :key="detail">{{ detail }}</li></ul></article>
+        <article class="panel summary-card"><h2>Actividad</h2><strong class="numeric">{{ valueText(budget.activity) }}</strong><ul v-if="explanation(budget.activity).length"><li v-for="detail in explanation(budget.activity)" :key="detail">{{ detail }}</li></ul></article>
+        <article class="panel summary-card unavailable-summary"><h2>Ingresos del período</h2><strong>No disponible</strong><p>El resumen del presupuesto todavía no devuelve este total.</p></article>
+        <article class="panel summary-card unavailable-summary"><h2>Saldos negativos sin arrastre</h2><strong>No disponible</strong><p>La política de arrastre por categoría aún no está definida.</p></article>
       </section>
       <section class="panel" aria-labelledby="categories-title"><h2 id="categories-title">Categorías</h2><p v-if="!budget.closed">Los saldos restantes conservan su signo; un valor negativo indica gasto por encima de lo asignado.</p><p v-else>Las asignaciones originales del cierre permanecen como referencia. Las correcciones guardan el objetivo vigente y su efecto neto por separado.</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">Categoría</th><th scope="col">Asignado</th><th scope="col">Actividad</th><th scope="col">Restante</th><th scope="col">Nueva asignación</th></tr></thead>
-          <tbody><tr v-for="category in sortedCategories" :key="category.id"><th scope="row">{{ category.name }}</th><td>{{ money(category.assigned) }}<small v-if="budget.closed" class="detail">Objetivo vigente: {{ money(category.assignment_intent ?? category.assigned) }}</small></td><td>{{ valueText(category.activity) }}<small v-for="detail in explanation(category.activity)" :key="detail" class="detail">{{ detail }}</small></td><td>{{ valueText(category.remaining) }}<small v-for="detail in explanation(category.remaining)" :key="detail" class="detail">{{ detail }}</small></td><td><form class="assignment-form" @submit.prevent="saveAssignment(category.id)"><label class="sr-only" :for="`assign-${category.id}`">{{ budget.closed ? 'Nuevo objetivo corregido' : 'Nueva asignación' }} para {{ category.name }} en CLP</label><input :id="`assign-${category.id}`" :value="drafts[draftKey(category.id)] ?? (budget.closed ? category.assignment_intent ?? category.assigned : category.assigned)" inputmode="decimal" autocomplete="off" @input="assignDraft(category.id, ($event.target as HTMLInputElement).value)"><label v-if="budget.closed" class="reason-field">Motivo de corrección<textarea :value="reasonDrafts[draftKey(category.id)] ?? ''" required @input="assignReason(category.id, ($event.target as HTMLTextAreaElement).value)"></textarea></label><button type="submit" :disabled="saving !== null">{{ budget.closed ? 'Guardar corrección' : 'Guardar' }}</button></form></td></tr></tbody>
+          <tbody><tr v-for="category in sortedCategories" :key="category.id"><th scope="row">{{ category.name }}<div class="usage-indicator" :class="{ 'is-overused': categoryOverused(category) }" role="img" :aria-label="usagePercent(category) === null ? `Uso de ${category.name} incompleto` : categoryOverused(category) ? `${category.name} sobrepasó su asignación` : `${category.name}: ${usagePercent(category)} por ciento utilizado`"><span v-if="usagePercent(category) !== null" :style="{ width: `${usagePercent(category)}%` }"></span></div><small v-if="categoryOverused(category)" class="overused-label">Sobrepasado</small><small v-else-if="usagePercent(category) === null" class="detail">Uso incompleto</small><small v-else class="detail">{{ usagePercent(category) }}% utilizado</small></th><td class="numeric">{{ money(category.assigned) }}<small v-if="budget.closed" class="detail">Objetivo vigente: {{ money(category.assignment_intent ?? category.assigned) }}</small></td><td class="numeric">{{ valueText(category.activity) }}<small v-for="detail in explanation(category.activity)" :key="detail" class="detail">{{ detail }}</small></td><td class="numeric">{{ valueText(category.remaining) }}<small v-for="detail in explanation(category.remaining)" :key="detail" class="detail">{{ detail }}</small></td><td><form class="assignment-form" @submit.prevent="saveAssignment(category.id)"><label class="sr-only" :for="`assign-${category.id}`">{{ budget.closed ? 'Nuevo objetivo corregido' : 'Nueva asignación' }} para {{ category.name }} en CLP</label><input :id="`assign-${category.id}`" :value="drafts[draftKey(category.id)] ?? (budget.closed ? category.assignment_intent ?? category.assigned : category.assigned)" inputmode="decimal" autocomplete="off" @input="assignDraft(category.id, ($event.target as HTMLInputElement).value)"><label v-if="budget.closed" class="reason-field">Motivo de corrección<textarea :value="reasonDrafts[draftKey(category.id)] ?? ''" required @input="assignReason(category.id, ($event.target as HTMLTextAreaElement).value)"></textarea></label><button type="submit" :disabled="saving !== null">{{ budget.closed ? 'Guardar corrección' : 'Guardar' }}</button></form></td></tr></tbody>
         </table></div>
-        <div class="uncategorized"><h3>Actividad sin categoría</h3><strong>{{ valueText(budget.uncategorized_activity) }}</strong><ul v-if="explanation(budget.uncategorized_activity).length"><li v-for="detail in explanation(budget.uncategorized_activity)" :key="detail">{{ detail }}</li></ul></div>
+        <div class="uncategorized"><h3>Actividad sin categoría</h3><strong class="numeric">{{ valueText(budget.uncategorized_activity) }}</strong><ul v-if="explanation(budget.uncategorized_activity).length"><li v-for="detail in explanation(budget.uncategorized_activity)" :key="detail">{{ detail }}</li></ul></div>
       </section>
       <section v-if="!budget.closed" class="panel close-panel" aria-labelledby="close-title"><h2 id="close-title">Cerrar período</h2><p>Antes de cerrar, revisa cada saldo restante y elige si llevarlo al siguiente período o liberarlo.</p><button type="button" class="button-secondary" @click="loadClosePreview">Ver vista previa del cierre</button>
         <div v-if="preview" class="close-preview"><p v-if="!preview.close.eligible" class="notice" role="status">{{ preview.close.reason || 'El período todavía no se puede cerrar.' }}</p><fieldset v-for="item in preview.close.categories" :key="item.category_id"><legend>{{ preview.categories.find((category) => category.id === item.category_id)?.name ?? 'Categoría' }}</legend><label><input v-model="dispositions[item.category_id]" type="radio" :name="`disposition-${item.category_id}`" value="carry"> Llevar saldo</label><label><input v-model="dispositions[item.category_id]" type="radio" :name="`disposition-${item.category_id}`" value="release"> Liberar saldo</label></fieldset><button type="button" :disabled="!preview.close.eligible || saving !== null" @click="closePeriod">Confirmar cierre</button></div>
@@ -340,21 +373,27 @@ function nextMonth(value: string): string { const [year, month] = value.split('-
 </template>
 
 <style scoped>
-.budget-page { display: grid; gap: 1.25rem; }
+.budget-page { display: grid; gap: var(--island-gap); padding-block: 8px 24px; min-width: 0; }
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; }
 .page-heading h1 { margin: 0; }.page-heading p { margin: .35rem 0 0; }
 .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; }
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(12rem,1fr)); gap: 1rem; }
-.panel { background: var(--surface, #fff); border: 1px solid var(--border, #d8d8d8); border-radius: .75rem; padding: 1rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(12rem,1fr)); gap: var(--island-gap); }
+.panel { background: var(--surface); border: 1px solid var(--border); min-width: 0; border-radius: var(--island-radius); padding: var(--island-padding); box-shadow: var(--shadow-island); }
 .summary-card h2 { font-size: 1rem; margin: 0 0 .7rem; }.summary-card strong { font-size: 1.25rem; }
-.table-scroll { overflow-x: auto; } table { width: 100%; border-collapse: collapse; } th,td { padding: .65rem; border-bottom: 1px solid var(--border, #ddd); text-align: left; vertical-align: top; } thead th { white-space: nowrap; }
+.table-scroll { position: relative; min-width: 0; overflow-x: auto; } table { width: 100%; border-collapse: collapse; } th,td { padding: .65rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; } thead th { white-space: nowrap; }
 .assignment-form { display: flex; gap: .4rem; } input:not([type=radio]) { max-width: 9rem; padding: .45rem; }
 button { min-height: 2.5rem; cursor: pointer; } button:disabled { cursor: wait; opacity: .65; }
-.detail, .detail-list { display: block; color: var(--muted, #5b6470); font-size: .88rem; margin-top: .25rem; }.detail-list { padding-left: 1.2rem; }
-.uncategorized { border-top: 1px solid var(--border, #ddd); margin-top: 1rem; padding-top: .5rem; }.uncategorized h3 { margin-bottom: .3rem; }
-.notice { padding: .75rem; background: #fff5d8; border-radius: .4rem; }.notice-error { background: #fde8e7; }.notice-success { background: #e5f5e9; }
+.detail, .detail-list { display: block; color: var(--muted); font-size: .88rem; margin-top: .25rem; }.detail-list { padding-left: 1.2rem; }
+.uncategorized { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: .5rem; }.uncategorized h3 { margin-bottom: .3rem; }
+.notice { padding: .75rem; background: var(--warning-bg); border-radius: .4rem; }.notice-error { background: var(--danger-bg); }.notice-success { background: var(--success-bg); }
 .close-preview { margin-top: 1rem; }.close-preview fieldset { display: flex; gap: 1rem; margin: .75rem 0; }.close-preview legend { font-weight: 600; }
-.category-manager { display: grid; gap: .75rem; }.category-new-form, .category-item { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; }.category-new-form label, .category-item label { display: grid; gap: .25rem; }.category-new-form input, .category-item input, .reason-field textarea { min-height: 2.5rem; padding: .4rem; }.category-list { display: grid; gap: .5rem; }.category-item { justify-content: space-between; border-top: 1px solid var(--border, #ddd); padding-top: .6rem; }.category-item input { max-width: 12rem; }.reason-field { display: grid; gap: .25rem; }
+.category-manager { display: grid; gap: .75rem; }.category-new-form, .category-item { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; }.category-new-form label, .category-item label { display: grid; gap: .25rem; }.category-new-form input, .category-item input, .reason-field textarea { min-height: 2.5rem; padding: .4rem; }.category-list { display: grid; gap: .5rem; }.category-item { justify-content: space-between; border-top: 1px solid var(--border); padding-top: .6rem; }.category-item input { max-width: 12rem; }.reason-field { display: grid; gap: .25rem; }
 .text-button { border: 0; background: none; text-decoration: underline; }.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 650px) { .page-heading { align-items: start; flex-direction: column; }.close-preview fieldset { flex-direction: column; } }
+.unavailable-summary strong { display: block; font-size: 1rem; color: var(--muted); }
+.unavailable-summary p { margin: .45rem 0 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+.usage-indicator { width: min(150px, 100%); height: 6px; margin-top: .55rem; overflow: hidden; border-radius: 999px; background: var(--border); }
+.usage-indicator span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.usage-indicator.is-overused span { background: var(--danger); }
+.overused-label { display: block; margin-top: .3rem; color: var(--danger); font-size: .75rem; font-weight: 650; }
 </style>

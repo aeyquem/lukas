@@ -1,107 +1,68 @@
+@import './themes/forest.css';
+@import './themes/nord.css';
+
+@font-face {
+  font-family: 'Lukas Fira Code';
+  src: url('./assets/fonts/FiraCodeNerdFontMono-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lukas Fira Code';
+  src: url('./assets/fonts/FiraCodeNerdFontMono-SemiBold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+}
 @layer reset, base, components;
 
 @layer reset {
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
-
-  html,
-  body,
-  #app {
-    min-height: 100%;
-    margin: 0;
-  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body, #app { min-height: 100%; margin: 0; }
 }
 
 @layer base {
-  :root {
-    color: #272b27;
-    background: #f6f5f1;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", sans-serif;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  body {
-    min-width: 320px;
-    min-height: 100vh;
-  }
-
-  a {
-    color: inherit;
-  }
-
-  :focus-visible {
-    outline: 3px solid #34765a;
-    outline-offset: 3px;
-  }
+  :root { color: var(--text); background: var(--canvas); font-family: var(--font-body); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 12% 8%, var(--canvas-glow), transparent 55%), radial-gradient(ellipse at 95% 85%, var(--canvas-cool), transparent 55%), var(--canvas); background-attachment: fixed; }
+  a { color: inherit; } button, input, select, textarea { font: inherit; } button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+  button, input, select, textarea { accent-color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  h1, h2, h3 { font-family: var(--font-display); } h1 { margin: 0; font-size: clamp(30px, 4vw, 48px); font-weight: 600; letter-spacing: -.05em; line-height: 1.12; }
+  p { line-height: 1.6; }
+  input:not([type='checkbox']):not([type='radio']), select, textarea { max-width: 100%; min-height: 42px; border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 9px 12px; color: var(--text); background: var(--surface-raised); }
+  button { min-height: 40px; border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 9px 14px; color: var(--accent); background: var(--surface-soft); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); } button:disabled { opacity: .6; cursor: not-allowed; }
 }
 
 @layer components {
-  .page-shell {
-    width: min(100% - 40px, 1120px);
-    min-height: 100vh;
-    margin-inline: auto;
-  }
+  .island { border: 1px solid var(--border); border-radius: var(--island-radius); background: var(--surface); box-shadow: var(--shadow-island); }
+  .page-shell, .page { width: 100%; min-height: 0; margin-inline: auto; }
+  .eyebrow { margin: 0 0 12px; color: var(--accent); font-size: 11px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
+}
 
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding-block: 28px;
-  }
+/* Keep an opaque fallback; blur is an enhancement, never required for legibility. */
+@supports (backdrop-filter: blur(1px)) {
+  .island { background: var(--surface-glass); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation)); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .island { background: var(--surface); backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
 
-  .brand-mark {
-    display: grid;
-    width: 36px;
-    height: 36px;
-    place-items: center;
-    border-radius: 12px;
-    color: #fff;
-    background: #34765a;
-    font-size: 18px;
-    font-weight: 700;
-  }
-
-  .brand-name {
-    font-size: 18px;
-    font-weight: 650;
-    letter-spacing: -0.03em;
-  }
-
-  .welcome {
-    max-width: 660px;
-    padding-block: clamp(84px, 18vh, 180px);
-  }
-
-  .eyebrow {
-    margin: 0 0 16px;
-    color: #52675b;
-    font-size: 13px;
-    font-weight: 650;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  h1 {
-    max-width: 620px;
-    margin: 0;
-    font-size: clamp(42px, 7vw, 76px);
-    font-weight: 560;
-    letter-spacing: -0.065em;
-    line-height: 1.02;
-  }
-
-  .welcome-copy {
-    max-width: 450px;
-    margin: 24px 0 0;
-    color: #616760;
-    font-size: 18px;
-    line-height: 1.6;
-  }
+/* Unlayered: feature font shorthands must not reset numerical typography. */
+.numeric,
+input[inputmode='decimal'],
+input[inputmode='numeric'],
+input[type='number'],
+input[type='date'],
+input[type='month'] {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-variant-ligatures: none;
+  letter-spacing: normal;
 }

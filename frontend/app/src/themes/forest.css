@@ -1,0 +1,57 @@
+/* Theme contract: override these tokens on :root[data-theme='your-theme'].
+   Components own layout; themes own palette, type, spacing and materials. */
+:root {
+  color-scheme: light;
+  --font-body: 'Segoe UI Variable', 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --font-numeric: 'Lukas Fira Code', ui-monospace, 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  --font-display: 'Segoe UI Variable Display', 'SF Pro Display', var(--font-body);
+  --canvas: #edf8df;
+  --canvas-glow: #c9efb0;
+  --canvas-cool: #d7eee3;
+  --text: #163e2c;
+  --muted: #4d6a59;
+  --accent: #167044;
+  --accent-hover: #105333;
+  --on-accent: #ffffff;
+  --accent-soft: #deefd6;
+  --surface: #fbfdf7;
+  --surface-glass: rgb(251 253 247 / 87%);
+  --surface-raised: #ffffff;
+  --surface-soft: #f0f6e9;
+  --border: #ccdcca;
+  --border-strong: #a6bfa6;
+  --edge-light: rgb(255 255 255 / 90%);
+  --shadow-island: 0 14px 40px rgb(32 75 43 / 7%), inset 0 1px 0 var(--edge-light);
+  --shadow-floating: 0 18px 48px rgb(27 60 41 / 17%);
+  --glass-blur: 20px;
+  --glass-saturation: 125%;
+  --island-radius: 26px;
+  --control-radius: 12px;
+  --island-gap: clamp(20px, 2.5vw, 36px);
+  --island-padding: clamp(20px, 2.3vw, 32px);
+  --shell-padding: clamp(14px, 2.4vw, 36px);
+  --danger: #9a3028;
+  --danger-bg: #fff0ec;
+  --success: #185b36;
+  --success-bg: #e4f4dd;
+  --warning: #715316;
+  --warning-bg: #fff6dd;
+  --warning-border: #dfc783;
+}
+
+:root[data-theme='lagoon'] {
+  --canvas: #e4f6ef;
+  --canvas-glow: #b8e5d4;
+  --canvas-cool: #d9eaf1;
+  --text: #143c37;
+  --muted: #466962;
+  --accent: #086b58;
+  --accent-hover: #064f43;
+  --accent-soft: #d7eee5;
+  --surface: #f6fcf9;
+  --surface-glass: rgb(246 252 249 / 87%);
+  --surface-soft: #eaf5ef;
+  --border: #c4dbd2;
+  --border-strong: #9ebfb3;
+  --shadow-island: 0 14px 40px rgb(24 71 63 / 7%), inset 0 1px 0 var(--edge-light);
+}

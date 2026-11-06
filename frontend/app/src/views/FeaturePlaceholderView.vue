@@ -30,13 +30,13 @@ h1 {
 
 .feature-copy {
   margin: 20px 0 0;
-  color: #616760;
+  color: var(--muted);
   font-size: 18px;
   line-height: 1.6;
 }
 
 .feature-status {
   margin-top: 36px;
-  color: #52675b;
+  color: var(--muted);
 }
 </style>

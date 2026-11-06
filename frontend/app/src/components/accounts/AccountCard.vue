@@ -32,6 +32,9 @@ const accountTypeLabels: Record<string, string> = {
   card: 'Tarjeta',
   investment: 'Inversión',
 }
+const accountTypeIcons: Record<string, string> = {
+  bank: '▤', cash: '◇', savings: '▣', card: '▭', investment: '↗',
+}
 </script>
 
 <template>
@@ -42,6 +45,7 @@ const accountTypeLabels: Record<string, string> = {
     @click="emit('select')"
   >
     <span class="account-card-heading">
+      <span class="account-icon" aria-hidden="true">{{ accountTypeIcons[account.account_type] ?? '◉' }}</span>
       <strong>{{ account.name }}</strong>
       <span class="account-kind">{{ accountTypeLabels[account.account_type] ?? account.account_type }}</span>
     </span>
@@ -49,7 +53,7 @@ const accountTypeLabels: Record<string, string> = {
     <span class="balances">
       <span v-for="wallet in account.wallets" :key="wallet.id" class="balance-line">
         <span>{{ wallet.currency }}</span>
-        <strong>{{ formatMoney(wallet.balance, wallet.currency) }}</strong>
+        <strong class="numeric">{{ formatMoney(wallet.balance, wallet.currency) }}</strong>
       </span>
     </span>
   </button>
@@ -61,23 +65,24 @@ const accountTypeLabels: Record<string, string> = {
   width: 100%;
   gap: 8px;
   padding: 15px;
-  border: 1px solid #e4e6e0;
-  border-radius: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
   color: inherit;
-  background: #fff;
+  background: var(--surface-raised);
   text-align: left;
   cursor: pointer;
 }
 
 .account-card:hover,
 .account-card[aria-current='true'] {
-  border-color: #7b9b83;
-  background: #f7faf7;
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
 }
 
 .account-card strong {
   font-size: 15px;
 }
+.account-icon { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border-radius: 9px; color: var(--accent); background: var(--accent-soft); font-size: 18px; }
 
 .account-card-heading {
   display: flex;
@@ -89,14 +94,14 @@ const accountTypeLabels: Record<string, string> = {
 .account-kind {
   padding: 4px 8px;
   border-radius: 999px;
-  color: #52675b;
-  background: #edf3ee;
+  color: var(--muted);
+  background: var(--accent-soft);
   font-size: 11px;
   font-weight: 700;
 }
 
 .account-meta {
-  color: #616760;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -104,7 +109,7 @@ const accountTypeLabels: Record<string, string> = {
   display: grid;
   gap: 4px;
   padding-top: 7px;
-  border-top: 1px solid #edf0ea;
+  border-top: 1px solid var(--border);
 }
 
 .balance-line {

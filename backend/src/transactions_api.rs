@@ -96,6 +96,7 @@ struct PageQuery {
     page_size: Option<i64>,
     before_date: Option<NaiveDate>,
     before_id: Option<Uuid>,
+    account_id: Option<Uuid>,
 }
 #[derive(FromRow)]
 struct ReceiptRow {
@@ -431,10 +432,12 @@ async fn list(
         .execute(&mut *tx)
         .await
         .map_err(ApiError::database)?;
-    let rows = if let (Some(date), Some(id)) = (q.before_date, q.before_id) {
-        sqlx::query_as::<_,StoredTransaction>("SELECT id,transaction_kind,business_date,category_id,source_expense_id,payee,note,confirmed_clp_amount,conversion_evidence,revision FROM financial_transactions WHERE workspace_id=$1 AND (business_date,id)<($2,$3) ORDER BY business_date DESC,id DESC LIMIT $4").bind(s.workspace_id).bind(date).bind(id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?
-    } else {
-        sqlx::query_as::<_,StoredTransaction>("SELECT id,transaction_kind,business_date,category_id,source_expense_id,payee,note,confirmed_clp_amount,conversion_evidence,revision FROM financial_transactions WHERE workspace_id=$1 ORDER BY business_date DESC,id DESC LIMIT $2").bind(s.workspace_id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?
+    let rows = match (q.before_date, q.before_id, q.account_id) {
+        (Some(date), Some(id), Some(account_id)) => sqlx::query_as::<_, StoredTransaction>("SELECT t.id,t.transaction_kind,t.business_date,t.category_id,t.source_expense_id,t.payee,t.note,t.confirmed_clp_amount,t.conversion_evidence,t.revision FROM financial_transactions t WHERE t.workspace_id=$1 AND (t.business_date,t.id)<($2,$3) AND EXISTS(SELECT 1 FROM financial_wallet_effects e JOIN financial_wallets w ON w.workspace_id=e.workspace_id AND w.id=e.wallet_id WHERE e.workspace_id=t.workspace_id AND e.transaction_id=t.id AND w.account_id=$4) ORDER BY t.business_date DESC,t.id DESC LIMIT $5").bind(s.workspace_id).bind(date).bind(id).bind(account_id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?,
+        (Some(date), Some(id), None) => sqlx::query_as::<_, StoredTransaction>("SELECT id,transaction_kind,business_date,category_id,source_expense_id,payee,note,confirmed_clp_amount,conversion_evidence,revision FROM financial_transactions WHERE workspace_id=$1 AND (business_date,id)<($2,$3) ORDER BY business_date DESC,id DESC LIMIT $4").bind(s.workspace_id).bind(date).bind(id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?,
+        (None, None, Some(account_id)) => sqlx::query_as::<_, StoredTransaction>("SELECT t.id,t.transaction_kind,t.business_date,t.category_id,t.source_expense_id,t.payee,t.note,t.confirmed_clp_amount,t.conversion_evidence,t.revision FROM financial_transactions t WHERE t.workspace_id=$1 AND EXISTS(SELECT 1 FROM financial_wallet_effects e JOIN financial_wallets w ON w.workspace_id=e.workspace_id AND w.id=e.wallet_id WHERE e.workspace_id=t.workspace_id AND e.transaction_id=t.id AND w.account_id=$2) ORDER BY t.business_date DESC,t.id DESC LIMIT $3").bind(s.workspace_id).bind(account_id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?,
+        (None, None, None) => sqlx::query_as::<_, StoredTransaction>("SELECT id,transaction_kind,business_date,category_id,source_expense_id,payee,note,confirmed_clp_amount,conversion_evidence,revision FROM financial_transactions WHERE workspace_id=$1 ORDER BY business_date DESC,id DESC LIMIT $2").bind(s.workspace_id).bind(size+1).fetch_all(&mut *tx).await.map_err(ApiError::database)?,
+        _ => return Err(ApiError::invalid("cursor", "invalid_page")),
     };
     let has_more = rows.len() as i64 > size;
     let rows: Vec<_> = rows.into_iter().take(size as usize).collect();

@@ -48,10 +48,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 <style scoped>
 .field { display: grid; gap: 7px; margin: 0 0 16px; }
-.opening-choice { border: 1px solid #c9cec8; border-radius: 10px; padding: 12px 14px; }
+.opening-choice { border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 12px 14px; }
 .opening-choice legend { font-size: 14px; font-weight: 650; }
 .opening-choice label { display: flex; align-items: flex-start; gap: 8px; font-weight: 450; line-height: 1.4; }
 .opening-choice input { width: auto; min-height: auto; margin-top: 3px; }
-.field-error { margin: 0; color: #a4372d; font-size: 13px; }
-.field-hint { margin: 0 0 2px; color: #626b63; font-size: 13px; line-height: 1.45; }
+.field-error { margin: 0; color: var(--danger); font-size: 13px; }
+.field-hint { margin: 0 0 2px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 </style>

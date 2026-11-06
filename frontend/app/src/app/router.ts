@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import AccountsView from '../views/AccountsView.vue'
 import TransactionsView from '../views/TransactionsView.vue'
 import BudgetView from '../views/BudgetView.vue'
+import FeaturePlaceholderView from '../views/FeaturePlaceholderView.vue'
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView },
@@ -11,6 +12,24 @@ const routes: RouteRecordRaw[] = [
     name: 'accounts',
     component: AccountsView,
     meta: { title: 'Cuentas', description: 'Tus cuentas y saldos por moneda.' },
+  },
+  {
+    path: '/payees',
+    name: 'payees',
+    component: FeaturePlaceholderView,
+    meta: { title: 'Payees', description: 'Los nombres y alias de comercios y personas se habilitarán cuando exista su directorio.' },
+  },
+  {
+    path: '/projections',
+    name: 'projections',
+    component: FeaturePlaceholderView,
+    meta: { title: 'Proyecciones', description: 'Escenarios futuros con supuestos visibles.' },
+  },
+  {
+    path: '/objectives',
+    name: 'objectives',
+    component: FeaturePlaceholderView,
+    meta: { title: 'Objetivos', description: 'Metas y reservas personales.' },
   },
   {
     path: '/transactions',
