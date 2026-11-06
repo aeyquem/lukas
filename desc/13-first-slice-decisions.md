@@ -42,6 +42,9 @@ features or self-hosted release operations.
    initial source of funding; never infer funding again from a later account
    balance read. Account eligibility, not a credit/overdraft limit, determines
    whether a balance participates.
+   Bank, savings, and investment accounts have one currency wallet; card and
+   cash accounts may have several. Cash in different currencies may also be
+   represented by separate cash accounts.
 3. Seed the editable expense categories already specified in
    `desc/08-first-slice-plan.md` (Vivienda, Alimentación, Transporte, Servicios
    y comunicaciones, Salud, Educación, Hogar, Vestuario y cuidado personal,
@@ -141,10 +144,10 @@ replaying each later event once and leaving saved assignments unchanged.
 - Mutate assignments only while their month is open. An assignment correction
   after close is a linked budget effect in the current open correction month;
   preserve the original snapshot and assignment intent.
-- Account name and descriptive fields are editable in place. Account type,
-  base currency, and tracked wallet currency may change only before that wallet
-  has non-opening ledger activity; otherwise return a clear conflict and
-  preserve the financial facts. Opening amount corrections change the desired
+- Account name and descriptive fields are editable in place. Opening entries
+  count as activity for changing account type, base currency, or tracked
+  wallet currency, so those values are immutable after account creation.
+  Opening amount corrections change the desired
   effective opening amount under revision and lock. Opening date/currency can
   change only while that wallet has no transactions; once activity exists,
   use a new wallet/account or a separately reviewed migration feature.
@@ -289,16 +292,16 @@ funding remains unavailable. Never infer a new basis from current rates.
   basic CSS, native controls, and the small typed `fetch` client. Keep
   Pinia Colada for server snapshots and local drafts separate from cached
   state. No UI suite or spreadsheet grid is required for this slice.
-- Enter submits a validated multi-field form or saves a budget cell; Escape
-  discards the form draft or restores the cell baseline. Use accessible field
-  errors and announcements, managed dialog focus, and reduced-motion support.
+- Form submissions validate the complete item before saving; explicit cancel
+  actions discard the full form draft or restore a budget cell baseline.
   Save failures show details with Retry and Cancel; cancellation does not
   clear an unknown outcome. Do not optimistically present derived money as
   confirmed.
 - Transaction lists use server pagination with default page size 50 and
   maximum 100; search/date-range filters are later. First-slice list review
-  uses at least 250 records. Support Firefox and Chrome (smoke-check Zen);
-  manually review keyboard-only use and NVDA with Firefox.
+  uses at least 250 records. Support Firefox and Chrome and smoke-check Zen.
+  Defer formal accessibility review, including keyboard, ARIA, and
+  screen-reader review, until the final UI design; it is not an MVP gate.
 - The API must be reachable; there is no offline mode. During implementation,
   demonstrate the real browser → proxy → API → PostgreSQL path, including
   routing, HMR, Host/Origin checks, read-back, persistence, failure, and retry

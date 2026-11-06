@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use tokio::time::timeout;
 use uuid::Uuid;
 
-use crate::{config::Config, origin::enforce_origin};
+use crate::{accounts_api, budget_api, config::Config, origin::enforce_origin, transactions_api};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -37,6 +37,9 @@ pub fn router(pool: PgPool, workspace_id: Uuid, config: Config) -> Router {
     Router::new()
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
+        .merge(accounts_api::router())
+        .merge(transactions_api::router())
+        .merge(budget_api::router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             enforce_origin,

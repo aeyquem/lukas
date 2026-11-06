@@ -3,8 +3,9 @@
 Status: **first-slice direction selected and independently reviewed**. Future
 authentication and cross-origin deployment details remain open. Use
 `desc/13-first-slice-decisions.md` for the resolved first-slice API, routing,
-interaction, accessibility, and deployment contracts; validate them during
-implementation.
+interaction, and deployment contracts; validate them during implementation.
+Formal accessibility requirements and review are deferred until the final UI
+design and are not an MVP gate.
 
 This document extracts the current frontend direction from `desc/09-technical-stack-proposal.md` and reviews it against the accepted rewrite context, first-slice plan, and backend architecture. It is a planning decision record, not a frozen implementation specification. Product behavior in `desc/05-mvp-acceptance.md` and `desc/08-first-slice-plan.md` takes precedence over UI convenience.
 
@@ -18,7 +19,9 @@ This document extracts the current frontend direction from `desc/09-technical-st
   container. Bind source files into the Vite container, retain dependencies
   built for the container separately from host `node_modules`. Bind individual
   source paths so the image's container-built dependencies are not obscured;
-  rebuild from the lockfile when its manifest or lockfile changes. If a
+  rebuild and recreate the Vite container from the lockfile when its manifest
+  or lockfile changes; rebuilding the image alone leaves an already-running
+  container with old dependencies. If a
   persistent dependency volume is used instead, explicitly refresh it from the
   lockfile on dependency changes so it cannot mask new image dependencies.
   Native filesystem events
@@ -43,7 +46,7 @@ This document extracts the current frontend direction from `desc/09-technical-st
 | Server snapshots | Pinia Colada for query/cache behavior | Accepted direction; confirm version/configuration and mutation invalidation details during implementation planning |
 | Tables/editors | Begin with semantic HTML tables and inputs; do not add a spreadsheet grid until a concrete workflow requires it | Selected; first-slice Enter/Escape and pagination details are in `desc/13-first-slice-decisions.md` |
 | Charts | Graphics are required; compare Chart.js, ECharts or app-owned SVG when implementing the first chart | Package deliberately deferred |
-| Tests/accessibility | Vitest, Vue Testing Library, Playwright; automated accessibility checks where practical and manual keyboard/assistive-technology review for critical workflows | First-slice manual review: keyboard-only and NVDA with Firefox; support Firefox/Chrome, smoke-check Zen, and use the list sizes in `desc/13-first-slice-decisions.md` |
+| Tests/browser support | Vitest, Vue Testing Library, Playwright; functional smoke checks in supported browsers | First slice: support Firefox/Chrome and smoke-check Zen. Formal accessibility review, including keyboard, ARIA, and screen-reader review, is deferred until the final UI design. |
 | Locale | Default to `es-CL` and `America/Santiago`; explicit currency codes where `$` is ambiguous | Accepted direction; preserve date-only business dates and decimal strings |
 | Connectivity | Online application that requires a reachable API; no offline mode | Accepted direction |
 | Authentication | None in the initial version; leave room for later email/password registration and/or OIDC sign-in | Initial behavior accepted; future design open |
@@ -53,7 +56,7 @@ semantic HTML and basic CSS. In a multi-field creation form, Enter submits the
 complete item after validation and Escape discards the draft. In a grid cell,
 Enter saves that field and Escape restores its previous value. Save failures
 show an alert with details and Retry/Cancel choices. Use paginated transaction
-lists. Keep field validation and accessible error feedback clear. Bulk paste
+lists. Keep field validation feedback clear. Bulk paste
 and spreadsheet behavior are not assumed for the first slice.
 
 The selected local route map is `http://localhost:4173` → loopback `dev-proxy`
@@ -92,9 +95,9 @@ Vue is selected as the starting framework, so a Vue/Svelte comparison is not a b
 1. **Time box:** one or two focused days for a throwaway spike, then record the result. Do not build production features three times.
 2. **Hold inputs constant:** use the same TypeScript level, fixture data, CSS, API stub, test cases, browser versions, machine and production build settings. Use equivalent routing and query-cache capabilities and count any extra adapter/library code each option needs.
 3. **Implement the same small workflows:** a transaction form with date, decimal-string amount and field error; a semantic transaction table with search/filter; and an editable draft that survives a server refetch and retains edits after a stale-write response. Include the planned full-stack API call shape, even if the spike uses a deterministic local API stub.
-4. **Measure:** production compressed initial and route-specific JS/CSS; time to usable screen; input-to-update latency on a small and larger fixed table fixture; memory and DOM/component count at the larger fixture; and keyboard/accessibility behavior. Run repeated production-build browser trials in Firefox and Chrome, report medians and spread, and smoke-check Zen. Keep backend/network time separate from client rendering time.
-5. **Compare development cost:** have one developer implement the same follow-up change in each option (add a field, show a server validation error, and adjust the save response). Record elapsed time, code touched, type/tooling friction, package compatibility and any accessibility regression. This is a small structured review, not a claim of statistically significant productivity measurement.
-6. **Decide by gates:** all variants must preserve the required behavior, strict typing and keyboard-accessible semantics. Prefer the simplest option that meets those gates. Treat speed as decisive only if repeatable gains show up in a user-visible interaction or meaningfully reduce shipped assets at realistic data sizes. If results are close, keep Vue as selected. Adopt Vapor only after confirming maturity and compatibility with Vue Router, Pinia Colada, component primitives and required tooling.
+4. **Measure:** production compressed initial and route-specific JS/CSS; time to usable screen; input-to-update latency on a small and larger fixed table fixture; memory and DOM/component count at the larger fixture. Run repeated production-build browser trials in Firefox and Chrome, report medians and spread, and smoke-check Zen. Keep backend/network time separate from client rendering time.
+5. **Compare development cost:** have one developer implement the same follow-up change in each option (add a field, show a server validation error, and adjust the save response). Record elapsed time, code touched, type/tooling friction, and package compatibility. This is a small structured review, not a claim of statistically significant productivity measurement.
+6. **Decide by gates:** all variants must preserve the required behavior and strict typing. Prefer the simplest option that meets those gates. Treat speed as decisive only if repeatable gains show up in a user-visible interaction or meaningfully reduce shipped assets at realistic data sizes. If results are close, keep Vue as selected. Adopt Vapor only after confirming maturity and compatibility with Vue Router, Pinia Colada, component primitives and required tooling.
 
 Vapor and Svelte share a compile-time rendering approach, but should not be assumed interchangeable: APIs, compiler constraints, component/library compatibility and developer workflow still differ. Vue's official documentation identifies page-load and update performance as distinct concerns and recommends measuring the app's actual use case. See [Vue performance guidance](https://vuejs.org/guide/best-practices/performance), [Svelte compiler documentation](https://svelte.dev/docs/svelte/svelte-compiler), and [Vue core's Vapor release notes](https://github.com/vuejs/core/releases).
 
@@ -108,21 +111,21 @@ Compare these variants within the selected Vue stack:
 2. **PrimeVue styled:** PrimeVue controls with its theme/token customization configured to match the app's visual direction.
 3. **PrimeVue unstyled:** PrimeVue interaction primitives styled with app-owned tokens, to test whether its behavior can be reused without making the product adopt its theme. PrimeVue documents both styled and unstyled modes; unstyled mode still requires application styling. See [PrimeVue theming modes](https://v4.primevue.org/theming/unstyled/) and [configuration](https://v4.primevue.org/configuration).
 
-Build the same small screen in each variant: text/decimal amount input, date input, select, checkbox, button and disabled/loading/error states, a confirmation dialog, and a compact account or transaction table. Include labels, help text, field-level server errors, keyboard navigation, focus restoration, narrow layout and `es-CL` formatting. Keep money/date semantics and backend validation identical. Do not let a UI package perform financial validation or calculations.
+Build the same small screen in each variant: text/decimal amount input, date input, select, checkbox, button and disabled/loading/error states, a confirmation dialog, and a compact account or transaction table. Include labels, help text, field-level server errors, narrow layout and `es-CL` formatting. Keep money/date semantics and backend validation identical. Do not let a UI package perform financial validation or calculations.
 
 Review each variant against the same checklist:
 
 - time to implement the screen and the amount of app-specific wrapper/glue code;
 - ability to apply app tokens, focus styles, density, responsive rules, and visual choices without fighting defaults;
-- keyboard and screen-reader behavior in Firefox and Chrome, plus a Zen smoke check; validate the actual controls rather than relying on a library's accessibility claim;
+- browser rendering and interaction behavior in Firefox and Chrome, plus a Zen smoke check;
 - styling override complexity, global CSS/cascade behavior, and how easily a component can be replaced;
 - production route asset increase and runtime behavior;
 - effort to add a field-level backend error and a new state (loading, disabled, warning) consistently;
 - integration with local draft ownership, `fetch`/Pinia Colada and the basic save/cancel flow.
 
-Time-box this to a few hours or one focused day. Record which controls genuinely save work and which are already simple with HTML. The decision can be mixed: keep forms native while adopting one library primitive for a dialog or select if it clearly improves accessibility and keyboard behavior. If PrimeVue is selected, wrap used controls in small app-owned components and keep product tokens and behavior in the application so screens do not depend directly on one library's theme conventions. A data-grid product is a separate decision from PrimeVue's ordinary table component.
+Time-box this to a few hours or one focused day. Record which controls genuinely save work and which are already simple with HTML. The decision can be mixed: keep forms native while adopting one library primitive for a dialog or select if it improves clarity and reduces interaction bugs. If PrimeVue is selected, wrap used controls in small app-owned components and keep product tokens and behavior in the application so screens do not depend directly on one library's theme conventions. A data-grid product is a separate decision from PrimeVue's ordinary table component.
 
-Adopt the general UI suite only if it reduces total implementation and maintenance effort while matching the app's visual tokens, accessible behavior, browser support and bundle budget. If results are close, keep native controls and add focused primitives only when a real workflow needs them.
+Adopt the general UI suite only if it reduces total implementation and maintenance effort while matching the app's visual direction, browser support and bundle budget. If results are close, keep native controls and add focused primitives only when a real workflow needs them.
 
 ## State ownership and financial trust
 
@@ -150,7 +153,7 @@ Organize by product feature with a small shared layer:
 
 Keep feature-specific components and composables within their feature. Promote code to `shared/` only after reuse is real. Avoid generic abstraction layers and cross-feature implementation imports.
 
-Use semantic roles, labels and names so workflows work with keyboard users, assistive technology, deterministic browser automation and AI-operated browsers. Dialogs need managed focus entry/return and Escape behavior, errors need accessible announcement, and motion must respect `prefers-reduced-motion`. Dense import and allocation workflows need a defined narrow-screen behavior. Charts need an exact-value accessible table or equivalent and a textual summary; charts are never the sole explanation.
+Formal accessibility requirements and review are deferred until the final UI design is approved. The MVP includes browser functionality checks only; it does not include a keyboard, ARIA, or screen-reader audit. Revisit accessible names and roles, focus handling, error announcements, reduced motion, narrow layouts, and exact-value chart alternatives as part of that design work.
 
 ## Decisions outside the first slice
 

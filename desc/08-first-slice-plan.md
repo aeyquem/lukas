@@ -20,11 +20,12 @@ separate member identities.
    first slice.
 2. The owner creates an account in one form. Required information includes its
    name, type, base currency, and whether it participates in the budget. The
-   form records one or more dated opening balances, each with its own currency;
-   the base currency does not convert those balances. Support bank, cash,
-   savings, card, and investment accounts; investment accounts default to
-   tracking-only. Account, tracked currency balances, and their opening entries
-   are created atomically.
+   form records dated opening balances. Bank, savings, and investment accounts
+   track one currency each; card and cash accounts may track several
+   currencies. Cash may also be split across separate accounts. The base currency
+   does not convert wallet balances. Support bank, cash, savings, card, and
+   investment accounts; investment accounts default to tracking-only. Account,
+   tracked currency balances, and their opening entries are created atomically.
 3. The owner records income, expenses, or transfers manually. Require account,
    actual date, amount with currency, and activity type; the currency must be a
    tracked balance on that account. Transfers also require the other account
@@ -73,11 +74,12 @@ separate member identities.
 
 ## Interaction decisions
 
-- Use plain semantic HTML and basic CSS. Visual polish is not a first-slice
-  goal. Keep keyboard access and clear validation/errors.
-- In a multi-field creation form, Enter submits the complete item after
-  validation; Escape discards the full draft. In a grid cell, Enter saves that
-  field and Escape restores its prior value.
+- Use native HTML and basic CSS. Visual polish and formal accessibility review
+  are not first-slice goals; defer accessibility review until the final UI
+  design. Keep validation errors clear.
+- In a multi-field creation form, submitting saves the complete item after
+  validation. In a grid cell, explicit save and cancel actions preserve or
+  restore the field baseline.
 - Account creation, its tracked currency balances, and their opening-balance
   entries are one atomic operation.
 - When a transaction is dated before the opening entry for its account and

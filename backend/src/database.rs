@@ -4,6 +4,7 @@ use thiserror::Error;
 use tokio::time::timeout;
 
 use crate::config::Config;
+use uuid::Uuid;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
@@ -49,10 +50,33 @@ pub async fn connect_pool(config: &Config) -> Result<PgPool, ConnectError> {
 }
 
 pub async fn run_migrations(pool: &PgPool) -> Result<(), ConnectError> {
-    MIGRATOR
-        .run(pool)
-        .await
-        .map_err(|_| ConnectError::Migration)
+    MIGRATOR.run(pool).await.map_err(|error| {
+        tracing::error!(%error, "database migration failed");
+        ConnectError::Migration
+    })
+}
+
+/// Rotate the workspace generation after an operator restores a database.
+/// Pending browser commands from the pre-restore database will then be rejected.
+pub async fn rotate_installation_generation(
+    pool: &PgPool,
+    workspace_id: Uuid,
+) -> Result<Uuid, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let workspace: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM workspaces WHERE id=$1 FOR UPDATE")
+            .bind(workspace_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    let workspace = workspace.ok_or(sqlx::Error::RowNotFound)?;
+    let generation = Uuid::new_v4();
+    sqlx::query("UPDATE workspaces SET installation_generation=$2 WHERE id=$1")
+        .bind(workspace)
+        .bind(generation)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(generation)
 }
 
 #[cfg(test)]

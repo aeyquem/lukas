@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict'
+import { browser } from './chromium.mjs'
+const b=await browser()
+try {
+  await b.waitFor(`Boolean(document.querySelector('#account-name'))`)
+  await b.click('form button[type="submit"]')
+  await b.waitFor(`Boolean(document.querySelector('#account-name-error'))`)
+  assert.equal(await b.evaluate(`document.querySelector('#account-name').getAttribute('aria-invalid')`),'true')
+  const name=`Browser verification bank ${Date.now()}`
+  await b.set('#account-name',name)
+  await b.set('#wallet-amount-0','10000')
+  await b.click('form button[type="submit"]')
+  await b.waitFor(`Boolean(document.querySelector('.success-notice'))`)
+  await b.evaluate(`Array.from(document.querySelectorAll('.account-card')).find(e=>e.innerText.includes(${JSON.stringify(name)})).click()`)
+  await b.waitFor(`Boolean(document.querySelector('#edit-account-name'))`)
+  const renamed=`${name} renamed`
+  await b.set('#edit-account-name',renamed)
+  await b.click('.name-edit button[type="submit"]')
+  await b.waitFor(`document.querySelector('.success-notice')?.innerText.includes('Nombre guardado')`)
+  await b.click('.opening-row button')
+  await b.set('#correction-amount','11000')
+  await b.set('#correction-reason','Browser verification of auditable opening correction')
+  await b.click('.correction-panel button[type="submit"]')
+  await b.waitFor(`document.querySelector('.success-notice')?.innerText.includes('Corrección guardada')`)
+  await b.evaluate('window.__beforeReload = true')
+  await b.command('Page.reload')
+  await b.waitFor('window.__beforeReload !== true && document.readyState === \'complete\'')
+  await b.waitFor(`Array.from(document.querySelectorAll('.account-card')).some(e=>e.innerText.includes(${JSON.stringify(renamed)}))`)
+  const account=await b.evaluate(`fetch('/api/accounts').then(r=>r.json()).then(a=>a.find(x=>x.name===${JSON.stringify(renamed)}))`)
+  assert.equal(account.wallets[0].balance,'11000')
+  assert.equal(account.revision,2)
+  assert.equal(account.wallets[0].openings[0].revision,2)
+  await b.command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true})
+  assert.equal(await b.evaluate('document.documentElement.scrollWidth <= window.innerWidth'),true)
+  console.log(JSON.stringify({result:'PASS',browser:await b.evaluate('navigator.userAgent'),account,checks:['required field association','bank creation','name edit','opening correction','reload readback','390px layout']}))
+} finally {await b.close()}

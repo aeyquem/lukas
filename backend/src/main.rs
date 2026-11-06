@@ -33,21 +33,31 @@ enum StartupError {
     Arguments,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StartupCommand {
+    Serve,
+    MigrateOnly,
+    RotateDatabaseGeneration,
+}
+
 enum StartupPlan {
     MigrateOnly,
+    RotateDatabaseGeneration(Uuid),
     Serve(Uuid),
 }
 
 fn startup_plan(
-    migrate_only: bool,
+    command: StartupCommand,
     workspace_id: Option<Uuid>,
 ) -> Result<StartupPlan, StartupError> {
-    if migrate_only {
-        Ok(StartupPlan::MigrateOnly)
-    } else {
-        workspace_id
+    match command {
+        StartupCommand::MigrateOnly => Ok(StartupPlan::MigrateOnly),
+        StartupCommand::RotateDatabaseGeneration => workspace_id
+            .map(StartupPlan::RotateDatabaseGeneration)
+            .ok_or(StartupError::WorkspaceBootstrap),
+        StartupCommand::Serve => workspace_id
             .map(StartupPlan::Serve)
-            .ok_or(StartupError::WorkspaceBootstrap)
+            .ok_or(StartupError::WorkspaceBootstrap),
     }
 }
 
@@ -58,18 +68,15 @@ fn init_tracing() {
     tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
-fn is_migrate_only() -> Result<bool, StartupError> {
-    let mut migrate_only = false;
-
-    for argument in env::args().skip(1) {
-        if argument == "--migrate-only" && !migrate_only {
-            migrate_only = true;
-        } else {
-            return Err(StartupError::Arguments);
+fn startup_command() -> Result<StartupCommand, StartupError> {
+    match env::args().skip(1).next().as_deref() {
+        None => Ok(StartupCommand::Serve),
+        Some("--migrate-only") if env::args().len() == 2 => Ok(StartupCommand::MigrateOnly),
+        Some("--rotate-database-generation") if env::args().len() == 2 => {
+            Ok(StartupCommand::RotateDatabaseGeneration)
         }
+        _ => Err(StartupError::Arguments),
     }
-
-    Ok(migrate_only)
 }
 
 async fn connect(config: &Config) -> Result<PgPool, StartupError> {
@@ -82,7 +89,7 @@ async fn connect(config: &Config) -> Result<PgPool, StartupError> {
 }
 
 async fn run() -> Result<(), StartupError> {
-    let migrate_only = is_migrate_only()?;
+    let command = startup_command()?;
     let config = Config::from_env()?;
     let pool = connect(&config).await?;
 
@@ -92,7 +99,7 @@ async fn run() -> Result<(), StartupError> {
                 .await
                 .map_err(|_| StartupError::Migration)?;
 
-            if migrate_only {
+            if command == StartupCommand::MigrateOnly {
                 Ok(None)
             } else {
                 bootstrap(&pool)
@@ -108,7 +115,7 @@ async fn run() -> Result<(), StartupError> {
         Err(_) => return Err(StartupError::DatabaseStartupTimeout),
     };
 
-    match startup_plan(migrate_only, workspace_id)? {
+    match startup_plan(command, workspace_id)? {
         StartupPlan::Serve(workspace_id) => {
             let app = router(pool.clone(), workspace_id, config.clone());
 
@@ -126,6 +133,12 @@ async fn run() -> Result<(), StartupError> {
                 .map_err(|_| StartupError::Server)?;
         }
         StartupPlan::MigrateOnly => info!("database migrations completed"),
+        StartupPlan::RotateDatabaseGeneration(workspace_id) => {
+            database::rotate_installation_generation(&pool, workspace_id)
+                .await
+                .map_err(|_| StartupError::WorkspaceBootstrap)?;
+            info!(workspace_id = %workspace_id, "installation generation rotated after restore");
+        }
     }
 
     pool.close().await;
@@ -162,19 +175,23 @@ async fn shutdown_signal() {
 mod tests {
     use uuid::Uuid;
 
-    use super::{StartupPlan, startup_plan};
+    use super::{StartupCommand, StartupPlan, startup_plan};
 
     #[test]
     fn migrate_only_plan_never_enters_listener_startup_branch() {
         assert!(matches!(
-            startup_plan(true, None),
+            startup_plan(StartupCommand::MigrateOnly, None),
             Ok(StartupPlan::MigrateOnly)
         ));
         assert!(matches!(
-            startup_plan(false, Some(Uuid::nil())),
+            startup_plan(StartupCommand::Serve, Some(Uuid::nil())),
             Ok(StartupPlan::Serve(_))
         ));
-        assert!(startup_plan(false, None).is_err());
+        assert!(startup_plan(StartupCommand::Serve, None).is_err());
+        assert!(matches!(
+            startup_plan(StartupCommand::RotateDatabaseGeneration, Some(Uuid::nil())),
+            Ok(StartupPlan::RotateDatabaseGeneration(_))
+        ));
     }
 }
 

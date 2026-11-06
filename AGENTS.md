@@ -43,3 +43,13 @@ The reviewer take the changes and finds reasons on why they fail and pass them t
 The cycle shold keep going until the writer passes the audit of the reviewer.
 
 each agent has to be specialized in their area of expertice
+
+## Interactive privileged commands
+
+When a necessary local command requires `sudo` or access the current sandbox
+cannot get (such as the local Docker Engine), run `tmux attach -t Interactive`
+and execute it there so the owner can enter a password directly if prompted.
+Do not put passwords in commands, scripts, environment variables, or chat. Send
+only the needed command to that session, leave password entry to the owner, then
+inspect the command output before continuing. Prefer the existing session over
+starting a separate privileged shell.

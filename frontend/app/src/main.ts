@@ -1,22 +1,14 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
 import App from './App.vue'
-import HomeView from './views/HomeView.vue'
+import { router } from './app/router'
 import './styles.css'
 
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-    },
-    {
-      path: '/:pathMatch(.*)*',
-      redirect: '/',
-    },
-  ],
-})
+const app = createApp(App)
+const pinia = createPinia()
 
-createApp(App).use(router).mount('#app')
+app.use(pinia)
+app.use(PiniaColada, { pinia })
+app.use(router)
+app.mount('#app')

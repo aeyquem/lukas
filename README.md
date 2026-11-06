@@ -36,12 +36,17 @@ PostgreSQL credentials are for local development only; do not reuse them for a
 self-hosted or public deployment. Keep custom local passwords URL-safe because
 Compose uses them to construct the API's database URL.
 
-When `frontend/app/package.json` or its lockfile changes, rebuild the Vite
-service from the lockfile:
+When frontend dependencies are added, removed, or updated in
+`frontend/app/package.json` or its lockfile, rebuild **and recreate** the Vite
+container so its installed `node_modules` match the lockfile. Building the
+image alone does not update a container that is already running:
 
 ```sh
-docker compose build vite
+docker compose up --build -d --no-deps vite
 ```
+
+Use the same pattern for backend dependency changes, targeting `api` instead of
+`vite`. Then reload the browser to clear any cached failed module response.
 
 ## Project context
 

@@ -107,11 +107,12 @@ Holdings and investment transactions remain later scope.
 Account creation requires a nonblank name, account type, base currency,
 opening balance and date, and budget eligibility. Offer CLP, today and zero as
 defaults, but ask the user to explicitly confirm the opening amount and its
-currency; distinguish card debt from money held. A bank or card account may
-hold several separately denominated balances/wallets; retain dated opening
-amounts for the currencies actually tracked, without requiring unused wallets.
-The base currency does not force conversion of those balances. Bank, cash,
-savings and credit-card accounts default to budgetable; investments default to tracking only. Eligibility is editable per
+currency; distinguish card debt from money held. Bank, savings, and investment
+accounts track one currency per account; card and cash accounts may have several
+separately denominated balances/wallets. Cash in another currency may also use
+a separate cash account. Retain dated openings without requiring unused
+wallets. The base currency does not force conversion of a wallet balance.
+Bank, cash, savings and credit-card accounts default to budgetable; investments default to tracking only. Eligibility is editable per
 account and controls budgeting only, without limiting categorization or
 reporting. Institution, account reference, notes and pool assignment are
 optional. Opening money enters ready-to-assign once under the existing
@@ -254,17 +255,19 @@ then spending reports use it. Otherwise they use a transaction-date estimate
 and show its source and rate. The original currency and amount remain
 available.
 
-### AC-3.9: Track account currency balances and bank conversion chains
+### AC-3.9: Track account currency balances and card conversion chains
 
-Given a bank or card account with a base currency and multiple currency
-balances/wallets, then preserve each balance's denomination independently of
-the base and reporting currencies. Budget eligibility and pool assignment
-remain per-account choices. Account, applicable pool and net-worth CLP totals
-include each relevant currency balance once; the base-currency summary is not
-an additional balance, and card debt is not pool money.
+Given a bank, savings, or investment account, then it has one tracked currency
+wallet. Given a card or cash account with a base currency and multiple currency
+balances/wallets, preserve each balance's denomination independently of the
+base and reporting currencies. Cash in a different currency may also use a
+separate cash account. Budget eligibility and pool assignment remain per-account
+choices. Account, applicable pool and net-worth CLP totals include each relevant
+currency balance once; the base-currency summary is not an additional balance,
+and card debt is not pool money.
 
-Given a EUR 100 purchase that the bank converts to USD 110 debt and later to
-CLP 103,400 debt at billing-cycle end, then retain the original EUR purchase
+Given a EUR 100 purchase that the card issuer converts to USD 110 debt and
+later to CLP 103,400 debt at billing-cycle end, then retain the original EUR purchase
 and each actual conversion's input/output amounts, currencies, source, date
 and available/derivable rate. On the later conversion date, replace the
 converted USD 110 portion with CLP 103,400; do not keep both as debt or create

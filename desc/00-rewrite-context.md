@@ -263,8 +263,10 @@ feature roadmap for the rewrite.
   gaps. A payment exceeding actual debt may create positive card credit: its
   non-debt portion is a transfer into an owned asset, not another expense,
   income or paid-uncovered debt. Preserve existing transaction and review rules.
-- Accounts have a base currency and retain real separately denominated balances;
-  a physical bank or card account can contain multiple currency wallets.
+- Accounts have a base currency and retain real separately denominated
+  balances. Bank, savings, and investment accounts track one currency per
+  account; credit card and cash accounts may contain multiple currency wallets.
+  Cash held in different currencies may also use separate cash accounts.
   Workspace reporting starts with CLP, independently of an account's base
   currency. Budget eligibility and pool grouping remain account-level choices.
   Retain each original purchase and the actual bank conversion chain, with

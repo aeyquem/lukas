@@ -32,10 +32,11 @@ baseline. This orchestration handoff does not itself start application code.
   workspace bootstrap, idempotency, locking, retries, migration/runtime
   behavior, and API-by-use-case approach are specified in
   `desc/13-first-slice-decisions.md`.
-- [x] Frontend interaction and first-slice manual accessibility review,
-  pagination sizes, local Compose service map, same-machine exposure, route
-  handling, runtime API configuration, and independent production images are
-  specified in `desc/13-first-slice-decisions.md`.
+- [x] Frontend interaction, pagination sizes, local Compose service map,
+  same-machine exposure, route handling, runtime API configuration, and
+  independent production images are specified in
+  `desc/13-first-slice-decisions.md`. Formal accessibility review is deferred
+  until the final UI design.
 
 ## Audit gate
 
@@ -59,8 +60,9 @@ Compose path and PostgreSQL, not only mocks:
 - Decimal/date parsing and round-trips, exact aggregates, range/overflow
   failures, incomplete foreign values, and stale-rate behavior.
 - Browser → dev proxy → API → PostgreSQL read/write/read-back; routing, HMR,
-  Host/Origin checks, paginated boundaries, keyboard flow, and NVDA with
-  Firefox. Include Firefox, Chrome, and a Zen smoke check.
+  Host/Origin checks, and paginated boundaries. Include functional Firefox,
+  Chrome, and Zen smoke checks. Formal accessibility review is outside the MVP
+  and deferred until the final UI design.
 - Failure injection for partial writes and lost responses; demonstrate exact
   retry and retained draft behavior.
 

@@ -1,4 +1,5 @@
 use axum::{body::Body, http::Request};
+use chrono::NaiveDate;
 use crc::{CRC_32_ISO_HDLC, Crc};
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
 use std::time::Duration;
@@ -7,10 +8,42 @@ use uuid::Uuid;
 
 use lukas_api::{
     config::Config,
-    database::{StartupDeadlineExceeded, run_migrations, with_startup_deadline},
+    database::{
+        StartupDeadlineExceeded, rotate_installation_generation, run_migrations,
+        with_startup_deadline,
+    },
     health::router,
+    persistence::{
+        fetch_accounts, fetch_assignments, fetch_categories, fetch_close_category_snapshots,
+        fetch_close_snapshot, fetch_corrections, fetch_funding_effects, fetch_fx_observations,
+        fetch_liability_basis, fetch_openings, fetch_transactions_page, fetch_wallet_effects,
+        fetch_wallets, find_idempotency_receipt,
+    },
     workspace::bootstrap,
 };
+
+#[sqlx::test(migrations = "./migrations")]
+async fn restore_generation_rotation_invalidates_the_previous_token(pool: PgPool) {
+    let workspace_id = bootstrap(&pool).await.unwrap();
+    let original: Uuid =
+        sqlx::query_scalar("SELECT installation_generation FROM workspaces WHERE id=$1")
+            .bind(workspace_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let rotated = rotate_installation_generation(&pool, workspace_id)
+        .await
+        .unwrap();
+    assert_ne!(rotated, original);
+    let stored: Uuid =
+        sqlx::query_scalar("SELECT installation_generation FROM workspaces WHERE id=$1")
+            .bind(workspace_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored, rotated);
+}
 
 #[sqlx::test(migrations = "./migrations")]
 async fn workspace_bootstrap_is_repeatable_and_preserves_owner_edits(pool: PgPool) {
@@ -93,8 +126,8 @@ async fn migration_runner_applies_in_order_and_is_safe_to_rerun(pool: PgPool) {
         .map(|row| row.get("version"))
         .collect();
 
-    assert_eq!(versions.len(), 2);
-    assert!(versions[0] < versions[1]);
+    assert_eq!(versions.len(), 4);
+    assert!(versions.windows(2).all(|pair| pair[0] < pair[1]));
 
     let categories_table: bool = sqlx::query_scalar(
         "SELECT EXISTS (\
@@ -108,8 +141,8 @@ async fn migration_runner_applies_in_order_and_is_safe_to_rerun(pool: PgPool) {
     assert!(categories_table);
 }
 
-#[sqlx::test(migrations = "./tests/fixtures/migrations_v1")]
-async fn database_at_previous_version_receives_current_category_migration(pool: PgPool) {
+#[sqlx::test(migrations = "./tests/fixtures/migrations_v2")]
+async fn database_with_workspace_and_categories_receives_financial_migration(pool: PgPool) {
     let categories_before: bool = sqlx::query_scalar(
         "SELECT EXISTS (\
             SELECT 1 FROM information_schema.tables \
@@ -119,7 +152,24 @@ async fn database_at_previous_version_receives_current_category_migration(pool: 
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(!categories_before);
+    assert!(categories_before);
+
+    let workspace_id = Uuid::new_v4();
+    let category_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO workspaces (id, singleton_key) VALUES ($1, 'owner')")
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO expense_categories (id, workspace_id, slug, name, sort_order) \
+         VALUES ($1, $2, 'vivienda', 'Vivienda editada', 0)",
+    )
+    .bind(category_id)
+    .bind(workspace_id)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     run_migrations(&pool).await.unwrap();
 
@@ -134,11 +184,332 @@ async fn database_at_previous_version_receives_current_category_migration(pool: 
     .unwrap();
     assert!(categories_after);
 
+    let preserved_category_name: String = sqlx::query_scalar(
+        "SELECT name FROM expense_categories WHERE workspace_id = $1 AND id = $2",
+    )
+    .bind(workspace_id)
+    .bind(category_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(preserved_category_name, "Vivienda editada");
+
     let migration_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(migration_count, 2);
+    assert_eq!(migration_count, 4);
+
+    let financial_tables: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM information_schema.tables \
+         WHERE table_schema = 'public' AND table_name = ANY($1)",
+    )
+    .bind(vec![
+        "financial_accounts",
+        "financial_wallets",
+        "financial_openings",
+        "foreign_liability_bases",
+        "financial_transactions",
+        "financial_wallet_effects",
+        "financial_idempotency_receipts",
+        "budget_assignments",
+        "daily_fx_observations",
+        "financial_corrections",
+        "budget_funding_effects",
+        "budget_close_snapshots",
+        "budget_close_category_snapshots",
+    ])
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(financial_tables, 13);
+
+    let decimal_boundary_checks: (bool, bool, bool) = sqlx::query_as(
+        "SELECT \
+            lukas_decimal_in_envelope('79228162514264337593543950335'::NUMERIC), \
+            lukas_decimal_in_envelope('0.0000000000000000000000000001'::NUMERIC), \
+            lukas_decimal_in_envelope('0.00000000000000000000000000001'::NUMERIC)",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(decimal_boundary_checks, (true, true, false));
+}
+
+#[sqlx::test]
+async fn financial_persistence_queries_map_workspace_records(pool: PgPool) {
+    let workspace_id = bootstrap(&pool).await.unwrap();
+    let account_id = Uuid::new_v4();
+    let wallet_id = Uuid::new_v4();
+    let opening_id = Uuid::new_v4();
+    let transaction_id = Uuid::new_v4();
+    let income_id = Uuid::new_v4();
+    let idempotency_key = Uuid::new_v4();
+    let assignment_id = Uuid::new_v4();
+    let snapshot_id = Uuid::new_v4();
+    let correction_id = Uuid::new_v4();
+    let today = NaiveDate::from_ymd_opt(2026, 11, 5).unwrap();
+    let period = NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+    let category_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM expense_categories WHERE workspace_id = $1 AND slug = 'alimentacion'",
+    )
+    .bind(workspace_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO financial_accounts (id, workspace_id, name, account_type, base_currency, budget_eligible) \
+         VALUES ($1, $2, 'Cuenta diaria', 'bank', 'CLP', TRUE)",
+    )
+    .bind(account_id)
+    .bind(workspace_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_wallets (id, workspace_id, account_id, currency) VALUES ($1, $2, $3, 'USD')",
+    )
+    .bind(wallet_id)
+    .bind(workspace_id)
+    .bind(account_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_openings (id, workspace_id, wallet_id, amount, business_date) \
+         VALUES ($1, $2, $3, '-12.50', $4)",
+    )
+    .bind(opening_id)
+    .bind(workspace_id)
+    .bind(wallet_id)
+    .bind(today)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO foreign_liability_bases (id, workspace_id, opening_id, clp_amount, provenance) \
+         VALUES ($1, $2, $3, '-11500', 'owner-confirmed')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(workspace_id)
+    .bind(opening_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_transactions \
+         (id, workspace_id, transaction_kind, business_date, category_id, confirmed_clp_amount) \
+         VALUES ($1, $2, 'expense', $3, $4, '1000')",
+    )
+    .bind(transaction_id)
+    .bind(workspace_id)
+    .bind(today)
+    .bind(category_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_wallet_effects \
+         (id, workspace_id, transaction_id, wallet_id, effect_role, amount) \
+         VALUES ($1, $2, $3, $4, 'single', '-1000')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(workspace_id)
+    .bind(transaction_id)
+    .bind(wallet_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_transactions (id, workspace_id, transaction_kind, business_date) \
+         VALUES ($1, $2, 'income', $3)",
+    )
+    .bind(income_id)
+    .bind(workspace_id)
+    .bind(today)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_idempotency_receipts \
+         (workspace_id, idempotency_key, http_method, route, request_hash, response_status, resource_id, resource_revision) \
+         VALUES ($1, $2, 'POST', '/api/transactions', decode(repeat('ab', 32), 'hex'), 201, $3, 1)",
+    )
+    .bind(workspace_id)
+    .bind(idempotency_key)
+    .bind(income_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO budget_assignments (id, workspace_id, period_start, category_id, amount) \
+         VALUES ($1, $2, $3, $4, '5000')",
+    )
+    .bind(assignment_id)
+    .bind(workspace_id)
+    .bind(period)
+    .bind(category_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO daily_fx_observations \
+         (id, workspace_id, source, base_currency, quote_currency, effective_date, rate) \
+         VALUES ($1, $2, 'Frankfurter v2', 'USD', 'CLP', $3, '900.25')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(workspace_id)
+    .bind(today)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rate_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM daily_fx_observations WHERE workspace_id = $1 AND quote_currency = 'CLP'",
+    )
+    .bind(workspace_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO financial_corrections \
+         (id, workspace_id, record_kind, transaction_id, prior_revision, new_revision, reason) \
+         VALUES ($1, $2, 'transaction', $3, 1, 2, 'category correction')",
+    )
+    .bind(correction_id)
+    .bind(workspace_id)
+    .bind(transaction_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO budget_funding_effects \
+         (id, workspace_id, period_start, source_kind, transaction_id, amount, currency) \
+         VALUES ($1, $2, $3, 'income', $4, '750', 'CLP')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(workspace_id)
+    .bind(period)
+    .bind(income_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO budget_close_snapshots (id, workspace_id, period_start, revision, funding, ready_to_assign) \
+         VALUES ($1, $2, $3, 1, '750', '250')",
+    )
+    .bind(snapshot_id)
+    .bind(workspace_id)
+    .bind(period)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO budget_close_category_snapshots \
+         (workspace_id, snapshot_id, category_id, assigned, activity, remaining, disposition) \
+         VALUES ($1, $2, $3, '5000', '1000', '4000', 'carry')",
+    )
+    .bind(workspace_id)
+    .bind(snapshot_id)
+    .bind(category_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(fetch_accounts(&pool, workspace_id).await.unwrap().len(), 1);
+    assert_eq!(
+        fetch_wallets(&pool, workspace_id, account_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fetch_openings(&pool, workspace_id, wallet_id)
+            .await
+            .unwrap()[0]
+            .amount
+            .to_string(),
+        "-12.50"
+    );
+    assert!(
+        fetch_liability_basis(&pool, workspace_id, opening_id)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        fetch_categories(&pool, workspace_id).await.unwrap().len(),
+        15
+    );
+
+    let first_page = fetch_transactions_page(&pool, workspace_id, 1, None)
+        .await
+        .unwrap();
+    assert_eq!(first_page.items.len(), 1);
+    assert!(first_page.has_more);
+    let cursor = (&first_page.items[0].business_date, first_page.items[0].id);
+    let second_page = fetch_transactions_page(&pool, workspace_id, 1, Some((*cursor.0, cursor.1)))
+        .await
+        .unwrap();
+    assert_eq!(second_page.items.len(), 1);
+    assert!(!second_page.has_more);
+    assert_eq!(
+        fetch_wallet_effects(&pool, workspace_id, transaction_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fetch_assignments(&pool, workspace_id, period)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fetch_funding_effects(&pool, workspace_id, period)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fetch_fx_observations(&pool, workspace_id, "USD", "CLP")
+            .await
+            .unwrap()[0]
+            .id,
+        rate_id
+    );
+    assert!(
+        find_idempotency_receipt(&pool, workspace_id, idempotency_key)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        fetch_corrections(&pool, workspace_id, "transaction", transaction_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fetch_close_snapshot(&pool, workspace_id, period)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        snapshot_id
+    );
+    assert_eq!(
+        fetch_close_category_snapshots(&pool, workspace_id, snapshot_id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[sqlx::test]
