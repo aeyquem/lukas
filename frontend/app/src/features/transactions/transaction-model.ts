@@ -1,7 +1,7 @@
 import { assertBusinessDate } from '../../shared/formatting/business-date'
 
-import type { TransactionKind, OpeningTreatment, AccountView, WalletView, TransactionView, TransactionRequest } from '../../features/transactions/api/contracts'
-export type * from '../../features/transactions/api/contracts'
+import type { TransactionKind, OpeningTreatment, AccountView, WalletView, TransactionView, TransactionRequest } from './api/contracts'
+export type * from './api/contracts'
 
 export interface TransactionDraft {
   kind: TransactionKind

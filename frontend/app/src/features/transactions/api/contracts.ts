@@ -45,6 +45,15 @@ export interface AccountTransactionPage {
   next: { before_date: string; before_id: string } | null
 }
 
+export interface TransactionCursor {
+  before_date: string
+  before_id: string
+}
+
+export interface TransactionPage extends AccountTransactionPage {
+  next: TransactionCursor | null
+}
+
 
 export interface TransactionCategory {
   id: string

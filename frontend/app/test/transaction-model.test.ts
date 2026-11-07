@@ -7,7 +7,7 @@ import {
   requiresOpeningTreatment,
   type AccountView,
   type TransactionView,
-} from '../src/components/activity/transaction-model'
+} from '../src/features/transactions/transaction-model'
 
 const accounts: AccountView[] = [
   {

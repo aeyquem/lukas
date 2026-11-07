@@ -1,47 +1,36 @@
 <script setup lang="ts">
-import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ApiClientError, apiRequest } from '../shared/api/client'
+import { useQueryCache } from '@pinia/colada'
+import { ApiClientError } from '../shared/api/client'
 import { formatMoney } from '../shared/formatting/money'
-import { sendFinancialWrite, retryPendingWrite, dismissPendingWrite, PendingWriteStore, type PendingFinancialWrite } from '../shared/api/pending-commands'
-import type { BudgetSnapshot, BudgetValue } from '../components/budget/budget-model'
-import { budgetRoute, currentPeriodInSantiago, normalizeCategoryDraft, unresolvedDescriptions } from '../components/budget/budget-model'
-
-interface ClosePreview extends BudgetSnapshot {
-  close: {
-    eligible: boolean
-    reason: string | null
-    expected_period_revision: string
-    categories: Array<{ category_id: string; proposed_disposition: 'carry' }>
-  }
-}
-interface Receipt { resource_id: string; revision: number }
-interface ExpenseCategory {
-  id: string
-  slug: string
-  name: string
-  sort_order: number
-  archived: boolean
-}
-interface CategoryDraft { name: string; sort_order: string; archived: boolean }
+import { dismissPendingWrite, PendingWriteStore, type PendingFinancialWrite } from '../shared/api/pending-commands'
+import type { BudgetClosePreview, BudgetValue } from '../features/budget/api/contracts'
+import { categoryOverused, currentPeriodInSantiago, prepareCloseWrite, unresolvedDescriptions, usagePercent } from '../features/budget/budget-model'
+import { fetchBudgetSnapshot, useBudgetClosePreviewQuery, useBudgetSnapshotQuery, useExpenseCategoriesQuery } from '../features/budget/api/queries'
+import { useBudgetRetryMutation, useBudgetWriteMutation } from '../features/budget/api/mutations'
+import BudgetCategoryManager from '../features/budget/components/BudgetCategoryManager.vue'
+import BudgetClosePanel from '../features/budget/components/BudgetClosePanel.vue'
+import { useBudgetAssignments } from '../features/budget/composables/use-budget-assignments'
 const route = useRoute()
 const router = useRouter()
+const queryCache = useQueryCache()
 const initialPeriod = typeof route.query.period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.period) ? route.query.period : currentPeriodInSantiago()
 const period = ref(initialPeriod)
-const budget = ref<BudgetSnapshot | null>(null)
-const drafts = ref<Record<string, string>>({})
-const reasonDrafts = ref<Record<string, string>>({})
-const preview = ref<ClosePreview | null>(null)
+const budgetQuery = useBudgetSnapshotQuery(period)
+const categoriesQuery = useExpenseCategoriesQuery()
+const closePreviewQuery = useBudgetClosePreviewQuery(period)
+const budgetWrite = useBudgetWriteMutation()
+const budgetRetry = useBudgetRetryMutation()
+const snapshotLoadedPeriod = ref<string | null>(null)
+const categoriesLoaded = ref(false)
+const budget = computed(() => snapshotLoadedPeriod.value === period.value ? budgetQuery.data.value ?? null : null)
+const categories = computed(() => categoriesLoaded.value ? categoriesQuery.data.value ?? [] : [])
+const preview = ref<BudgetClosePreview | null>(null)
 const dispositions = ref<Record<string, 'carry' | 'release'>>({})
 const pending = ref<PendingFinancialWrite[]>([])
 const dismissedPending = ref(new Set<string>())
-const categories = ref<ExpenseCategory[]>([])
-const categoryDrafts = ref<Record<string, CategoryDraft>>({})
-const newCategory = ref({ name: '', sort_order: '100' })
-const categoryError = ref('')
-const categoryNotice = ref('')
-const loading = ref(false)
+const loading = ref(true)
 const saving = ref<string | null>(null)
 const pageError = ref('')
 const staleMessage = ref('')
@@ -49,19 +38,62 @@ const success = ref('')
 let pendingStore: PendingWriteStore | undefined
 const sortedCategories = computed(() => [...(budget.value?.categories ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)))
 const visiblePending = computed(() => pending.value.filter((item) => !dismissedPending.value.has(item.idempotencyKey)))
+const categoryLoadError = ref('')
+const categoryBusy = ref(false)
+const categoryManager = ref<InstanceType<typeof BudgetCategoryManager> | null>(null)
+const assignmentWorkflow = useBudgetAssignments({
+  period,
+  budget,
+  refresh,
+  restorePending,
+  errorMessage: message,
+  onError: (value) => { pageError.value = value },
+  onStale: (value) => { staleMessage.value = value },
+  onSuccess: (value) => { success.value = value },
+})
+const { drafts, reasonDrafts, draftKey, assignDraft, assignReason } = assignmentWorkflow
+const busy = computed(() => saving.value !== null || assignmentWorkflow.saving.value !== null || categoryBusy.value)
 let latestLoad = 0
 let latestPreview = 0
 
-onFinanceInvalidated(() => refresh())
-onMounted(() => { restorePending(); void refresh(); void refreshCategories() })
-watch(() => route.query.period, (queryPeriod) => {
+onMounted(() => { restorePending(); void loadInitialData() })
+watch(() => route.query.period, async (queryPeriod) => {
   if (typeof queryPeriod !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(queryPeriod) || queryPeriod === period.value) return
+  budgetQuery.suspend()
   period.value = queryPeriod
   latestPreview += 1
   preview.value = null
-  budget.value = null
-  void refresh()
+  snapshotLoadedPeriod.value = null
+  pageError.value = ''
+  loading.value = true
+  const loadId = ++latestLoad
+  try {
+    await budgetQuery.refetchFresh()
+    if (period.value === queryPeriod && loadId === latestLoad) {
+      snapshotLoadedPeriod.value = queryPeriod
+      staleMessage.value = ''
+    }
+  } catch (error) {
+    if (period.value === queryPeriod && loadId === latestLoad) pageError.value = message(error, 'No fue posible cargar el presupuesto.')
+  } finally {
+    budgetQuery.resume()
+    if (loadId === latestLoad) loading.value = false
+  }
 })
+
+async function loadInitialData(): Promise<void> {
+  loading.value = true
+  pageError.value = ''
+  const [snapshot, categoryList] = await Promise.allSettled([
+    budgetQuery.activate(),
+    categoriesQuery.activate(),
+  ])
+  if (snapshot.status === 'fulfilled') snapshotLoadedPeriod.value = period.value
+  else pageError.value = message(snapshot.reason, 'No fue posible cargar el presupuesto.')
+  if (categoryList.status === 'fulfilled') categoriesLoaded.value = true
+  else categoryLoadError.value = message(categoryList.reason, 'No fue posible cargar las categorías.')
+  loading.value = false
+}
 
 function getPendingStore(): PendingWriteStore {
   pendingStore ??= new PendingWriteStore()
@@ -74,9 +106,9 @@ async function refresh(requestedPeriod = period.value): Promise<void> {
   loading.value = true
   pageError.value = ''
   try {
-    const snapshot = await apiRequest<BudgetSnapshot>(budgetRoute(requestedPeriod))
+    await budgetQuery.refetchFresh()
     if (period.value !== requestedPeriod || loadId !== latestLoad) return
-    budget.value = snapshot
+    snapshotLoadedPeriod.value = requestedPeriod
     // Drafts are intentionally retained across refetches, including stale conflicts.
     staleMessage.value = ''
   } catch (error) {
@@ -87,108 +119,22 @@ async function refresh(requestedPeriod = period.value): Promise<void> {
   finally { if (loadId === latestLoad) loading.value = false }
 }
 
-function draftKey(categoryId: string): string { return `${period.value}:${categoryId}` }
-function assignDraft(categoryId: string, value: string): void { drafts.value = { ...drafts.value, [draftKey(categoryId)]: value } }
-function assignReason(categoryId: string, value: string): void { reasonDrafts.value = { ...reasonDrafts.value, [draftKey(categoryId)]: value } }
 function periodChanged(value: string): void {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return
   void router.replace({ name: 'budget', query: { period: value } })
 }
+function setDisposition(categoryId: string, disposition: 'carry' | 'release'): void {
+  dispositions.value = { ...dispositions.value, [categoryId]: disposition }
+}
 
 async function refreshCategories(): Promise<void> {
   try {
-    categories.value = await apiRequest<ExpenseCategory[]>('categories')
+    await categoriesQuery.refetchFresh()
+    categoriesLoaded.value = true
+    categoryLoadError.value = ''
   } catch (error) {
-    categoryError.value = message(error, 'No fue posible cargar las categorías.')
+    categoryLoadError.value = message(error, 'No fue posible cargar las categorías.')
   }
-}
-
-function editCategory(category: ExpenseCategory): void {
-  categoryDrafts.value = {
-    ...categoryDrafts.value,
-    [category.id]: { name: category.name, sort_order: String(category.sort_order), archived: category.archived },
-  }
-}
-function cancelCategoryEdit(categoryId: string): void {
-  const next = { ...categoryDrafts.value }; delete next[categoryId]; categoryDrafts.value = next
-}
-
-async function saveNewCategory(): Promise<void> {
-  await saveCategory(null)
-}
-
-async function setCategoryArchived(categoryId: string, archived: boolean): Promise<void> {
-  const category = categories.value.find((item) => item.id === categoryId)
-  if (!category) return
-  if (!categoryDrafts.value[categoryId]) editCategory(category)
-  const currentDraft = categoryDrafts.value[categoryId]
-  if (!currentDraft) return
-  categoryDrafts.value = { ...categoryDrafts.value, [categoryId]: { ...currentDraft, archived } }
-  await saveCategory(categoryId)
-}
-
-async function saveCategory(categoryId: string | null, archive?: boolean): Promise<void> {
-  const draft = categoryId ? categoryDrafts.value[categoryId] : newCategory.value
-  const normalized = normalizeCategoryDraft(draft?.name ?? '', draft?.sort_order ?? '')
-  if (!normalized) {
-    categoryError.value = 'Escribe un nombre y un orden entero entre 0 y 32767.'
-    return
-  }
-  categoryError.value = ''; categoryNotice.value = ''; saving.value = categoryId ?? 'category-create'
-  const body = JSON.stringify({
-    ...normalized,
-    ...(categoryId ? { archived: archive ?? categoryDrafts.value[categoryId]?.archived ?? false } : {}),
-  })
-  try {
-    await sendFinancialWrite<Receipt>({
-      method: categoryId ? 'PUT' : 'POST',
-      route: categoryId ? `/api/categories/${categoryId}` : '/api/categories',
-      body,
-    })
-    if (categoryId) {
-      const next = { ...categoryDrafts.value }; delete next[categoryId]; categoryDrafts.value = next
-    } else {
-      newCategory.value = { name: '', sort_order: String(Math.max(0, ...categories.value.map((item) => item.sort_order)) + 10) }
-    }
-    categoryNotice.value = categoryId ? 'Categoría actualizada.' : 'Categoría añadida.'
-    restorePending(); await refreshCategories()
-  } catch (error) {
-    categoryError.value = error instanceof ApiClientError && error.code === 'category_in_use'
-      ? 'No se puede archivar: la categoría ya tiene actividad o asignaciones.'
-      : message(error, 'No fue posible guardar la categoría.')
-    restorePending()
-  } finally { saving.value = null }
-}
-
-async function saveAssignment(categoryId: string): Promise<void> {
-  if (!budget.value) return
-  const requestedPeriod = period.value
-  const key = draftKey(categoryId)
-  const category = budget.value.categories.find((item) => item.id === categoryId)
-  const amount = drafts.value[key]
-  if (!category || amount === undefined || !/^\d+(?:\.\d+)?$/.test(amount)) return
-  const reason = reasonDrafts.value[key] ?? ''
-  if (budget.value.closed && !reason.trim()) {
-    pageError.value = 'Indica el motivo de la corrección para un período cerrado.'
-    return
-  }
-  saving.value = categoryId; pageError.value = ''; staleMessage.value = ''; success.value = ''
-  const body = JSON.stringify({ amount, expected_period_revision: budget.value.revision, expected_revision: category.assignment_revision, ...(budget.value.closed ? { reason: reason.trim() } : {}) })
-  try {
-    await sendFinancialWrite<Receipt>({ method: 'PUT', route: `/api/budgets/${requestedPeriod}/assignments/${categoryId}`, body })
-    const nextDrafts = { ...drafts.value }; delete nextDrafts[key]; drafts.value = nextDrafts
-    const nextReasons = { ...reasonDrafts.value }; delete nextReasons[key]; reasonDrafts.value = nextReasons
-    success.value = `Asignación guardada para ${category.name}.`
-    restorePending(); await refresh(requestedPeriod)
-  } catch (error) {
-    if (error instanceof ApiClientError && error.kind === 'conflict' && period.value === requestedPeriod) {
-      const conflictMessage = `El presupuesto cambió. El borrador de ${category.name} se conserva; actualiza los datos y vuelve a guardar.`
-      await refresh(requestedPeriod)
-      if (period.value === requestedPeriod) staleMessage.value = conflictMessage
-    }
-    restorePending()
-    if (period.value === requestedPeriod) pageError.value = message(error, 'No fue posible guardar la asignación.')
-  } finally { saving.value = null }
 }
 
 async function loadClosePreview(): Promise<void> {
@@ -196,9 +142,10 @@ async function loadClosePreview(): Promise<void> {
   const previewId = ++latestPreview
   pageError.value = ''; preview.value = null
   try {
-    const result = await apiRequest<ClosePreview>(budgetRoute(requestedPeriod, '/close-preview'))
+    const result = await closePreviewQuery.refetch(true)
     if (period.value !== requestedPeriod || previewId !== latestPreview) return
-    preview.value = result
+    if (result.status !== 'success') throw result.error ?? new Error('No fue posible cargar la vista previa.')
+    preview.value = result.data
     dispositions.value = Object.fromEntries(preview.value.close.categories.map((item) => [item.category_id, item.proposed_disposition]))
   } catch (error) {
     if (period.value === requestedPeriod && previewId === latestPreview) {
@@ -211,10 +158,11 @@ async function closePeriod(): Promise<void> {
   const current = preview.value
   if (!current?.close.eligible) return
   const closedPeriod = current.period
+  const body = prepareCloseWrite(current, dispositions.value)
+  if (!body) return
   pageError.value = ''; success.value = ''; saving.value = 'close'
-  const body = JSON.stringify({ expected_period_revision: current.close.expected_period_revision, categories: current.close.categories.map((item) => ({ category_id: item.category_id, disposition: dispositions.value[item.category_id] ?? 'carry' })) })
   try {
-    await sendFinancialWrite<Receipt>({ method: 'POST', route: `/api/budgets/${closedPeriod}/close`, body })
+    await budgetWrite.mutateAsync({ method: 'POST', route: `/api/budgets/${closedPeriod}/close`, body })
     success.value = 'El período se cerró. Se actualizará el resumen autoritativo.'
     preview.value = null; restorePending()
     await refreshAfterClose(closedPeriod)
@@ -229,15 +177,11 @@ async function closePeriod(): Promise<void> {
 async function retry(command: PendingFinancialWrite): Promise<void> {
   saving.value = command.idempotencyKey; pageError.value = ''
   try {
-    await retryPendingWrite<Receipt>(command.idempotencyKey)
+    await budgetRetry.mutateAsync(command)
     restorePending()
     const commandPeriod = command.route.match(/\/budgets\/(\d{4}-\d{2})\//)?.[1]
     if (command.route === '/api/categories' || command.route.startsWith('/api/categories/')) {
-      await refreshCategories()
-      const categoryId = command.route.match(/^\/api\/categories\/([^/]+)$/)?.[1]
-      if (categoryId) cancelCategoryEdit(categoryId)
-      else newCategory.value = { name: '', sort_order: String(Math.max(0, ...categories.value.map((item) => item.sort_order)) + 10) }
-      categoryNotice.value = 'El cambio de categoría pendiente se confirmó.'
+      await categoryManager.value?.confirmPending(command.route)
     } else if (command.route.includes('/close')) {
       if (commandPeriod) await refreshAfterClose(commandPeriod)
       success.value = 'El cierre guardado se confirmó.'
@@ -251,18 +195,12 @@ async function retry(command: PendingFinancialWrite): Promise<void> {
 
 async function refreshAfterClose(closedPeriod: string): Promise<void> {
   const nextPeriod = nextMonth(closedPeriod)
-  if (period.value === closedPeriod && budget.value) {
-    budget.value = { ...budget.value, closed: true }
-  }
   try {
-    const [closed, next] = await Promise.all([
-      apiRequest<BudgetSnapshot>(budgetRoute(closedPeriod)),
-      apiRequest<BudgetSnapshot>(budgetRoute(nextPeriod)),
-    ])
-    void closed
+    await fetchBudgetSnapshot(queryCache, nextPeriod)
     if (period.value === closedPeriod) {
       period.value = nextPeriod
-      budget.value = next
+      snapshotLoadedPeriod.value = nextPeriod
+      budgetQuery.resume()
       await router.replace({ name: 'budget', query: { period: nextPeriod } })
     }
   } catch (error) {
@@ -295,27 +233,6 @@ function explanation(value: BudgetValue): string[] {
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
 function nextMonth(value: string): string { const [year, month] = value.split('-').map(Number); return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}` }
 
-function usagePercent(category: BudgetSnapshot['categories'][number]): number | null {
-  if (category.activity.state !== 'complete') return null
-  const assigned = category.assigned
-  const used = category.activity.amount ?? '0'
-  const decimalParts = [assigned, used].map((value) => value.replace(/^-/, '').split('.'))
-  const scale = Math.max(...decimalParts.map((parts) => parts[1]?.length ?? 0))
-  const coefficients = [assigned, used].map((value) => {
-    const negative = value.startsWith('-')
-    const [whole, fraction = ''] = value.replace(/^-/, '').split('.')
-    const coefficient = BigInt(`${whole}${fraction.padEnd(scale, '0')}`)
-    return negative ? -coefficient : coefficient
-  })
-  if (coefficients[0] === 0n) return coefficients[1] > 0n ? 100 : 0
-  if (coefficients[1] <= 0n) return 0
-  const basisPoints = (coefficients[1] * 10_000n) / coefficients[0]
-  return Number(basisPoints > 10_000n ? 10_000n : basisPoints) / 100
-}
-
-function categoryOverused(category: BudgetSnapshot['categories'][number]): boolean {
-  return category.remaining.state === 'complete' && (category.remaining.amount ?? '0').startsWith('-') && !/^-(?:0+)(?:\.0+)?$/.test(category.remaining.amount ?? '')
-}
 </script>
 
 <template>
@@ -324,34 +241,8 @@ function categoryOverused(category: BudgetSnapshot['categories'][number]): boole
     <p v-if="pageError" class="notice notice-error" role="alert">{{ pageError }}</p>
     <p v-if="staleMessage" class="notice" role="status">{{ staleMessage }} <button type="button" class="text-button" @click="refresh()">Actualizar presupuesto</button></p>
     <p v-if="success" class="notice notice-success" role="status">{{ success }}</p>
-    <section v-if="visiblePending.length" class="panel" aria-labelledby="pending-title"><h2 id="pending-title">Comandos pendientes</h2><p>El resultado de estos comandos todavía no se confirmó. Puedes reintentar el mismo envío.</p><ul><li v-for="command in visiblePending" :key="command.idempotencyKey"><span>{{ command.route.startsWith('/api/categories') ? 'Categoría' : command.route.includes('/close') ? 'Cierre' : 'Asignación' }} · {{ command.createdAt }}</span><button type="button" :disabled="saving !== null" @click="retry(command)">Reintentar comando exacto</button><button type="button" :disabled="saving !== null" @click="dismiss(command)">Ocultar aviso</button></li></ul></section>
-    <section class="panel category-manager" aria-labelledby="category-manager-title">
-      <h2 id="category-manager-title">Administrar categorías</h2>
-      <p>Añade categorías, cambia su nombre u orden y archiva las que todavía no tienen actividad ni asignaciones.</p>
-      <p v-if="categoryError" class="notice notice-error" role="alert">{{ categoryError }}</p>
-      <p v-if="categoryNotice" class="notice notice-success" role="status">{{ categoryNotice }}</p>
-      <form class="category-new-form" @submit.prevent="saveNewCategory">
-        <label>Nombre<input v-model="newCategory.name" required maxlength="80" autocomplete="off"></label>
-        <label>Orden<input v-model="newCategory.sort_order" required type="number" min="0" max="32767" step="1"></label>
-        <button type="submit" :disabled="saving !== null">Añadir categoría</button>
-      </form>
-      <div class="category-list">
-        <article v-for="category in categories" :key="category.id" class="category-item">
-          <template v-if="categoryDrafts[category.id]">
-            <label :for="`category-name-${category.id}`">Nombre</label><input :id="`category-name-${category.id}`" v-model="categoryDrafts[category.id].name" required maxlength="80">
-            <label :for="`category-order-${category.id}`">Orden</label><input :id="`category-order-${category.id}`" v-model="categoryDrafts[category.id].sort_order" required type="number" min="0" max="32767" step="1">
-            <span>{{ categoryDrafts[category.id].archived ? 'Archivada' : 'Activa' }}</span>
-            <button type="button" :disabled="saving !== null" @click="saveCategory(category.id)">Guardar</button>
-            <button type="button" :disabled="saving !== null" @click="setCategoryArchived(category.id, !category.archived)">{{ category.archived ? 'Restaurar' : 'Archivar' }}</button>
-            <button type="button" class="text-button" :disabled="saving !== null" @click="cancelCategoryEdit(category.id)">Cancelar</button>
-          </template>
-          <template v-else>
-            <strong>{{ category.name }}</strong><span>Orden {{ category.sort_order }} · {{ category.archived ? 'archivada' : 'activa' }}</span>
-            <button type="button" @click="editCategory(category)">Editar</button>
-          </template>
-        </article>
-      </div>
-    </section>
+    <section v-if="visiblePending.length" class="panel" aria-labelledby="pending-title"><h2 id="pending-title">Comandos pendientes</h2><p>El resultado de estos comandos todavía no se confirmó. Puedes reintentar el mismo envío.</p><ul><li v-for="command in visiblePending" :key="command.idempotencyKey"><span>{{ command.route.startsWith('/api/categories') ? 'Categoría' : command.route.includes('/close') ? 'Cierre' : 'Asignación' }} · {{ command.createdAt }}</span><button type="button" :disabled="busy" @click="retry(command)">Reintentar comando exacto</button><button type="button" :disabled="busy" @click="dismiss(command)">Ocultar aviso</button></li></ul></section>
+    <BudgetCategoryManager ref="categoryManager" :categories="categories" :disabled="busy" :load-error="categoryLoadError" :refresh="refreshCategories" :restore-pending="restorePending" :error-message="message" @busy-change="categoryBusy = $event" />
     <p v-if="loading" role="status">Cargando presupuesto…</p>
     <template v-if="budget">
       <section class="summary-grid" aria-label="Resumen del período">
@@ -363,13 +254,11 @@ function categoryOverused(category: BudgetSnapshot['categories'][number]): boole
       </section>
       <section class="panel" aria-labelledby="categories-title"><h2 id="categories-title">Categorías</h2><p v-if="!budget.closed">Los saldos restantes conservan su signo; un valor negativo indica gasto por encima de lo asignado.</p><p v-else>Las asignaciones originales del cierre permanecen como referencia. Las correcciones guardan el objetivo vigente y su efecto neto por separado.</p>
         <div class="table-scroll"><table><thead><tr><th scope="col">Categoría</th><th scope="col">Asignado</th><th scope="col">Actividad</th><th scope="col">Restante</th><th scope="col">Nueva asignación</th></tr></thead>
-          <tbody><tr v-for="category in sortedCategories" :key="category.id"><th scope="row">{{ category.name }}<div class="usage-indicator" :class="{ 'is-overused': categoryOverused(category) }" role="img" :aria-label="usagePercent(category) === null ? `Uso de ${category.name} incompleto` : categoryOverused(category) ? `${category.name} sobrepasó su asignación` : `${category.name}: ${usagePercent(category)} por ciento utilizado`"><span v-if="usagePercent(category) !== null" :style="{ width: `${usagePercent(category)}%` }"></span></div><small v-if="categoryOverused(category)" class="overused-label">Sobrepasado</small><small v-else-if="usagePercent(category) === null" class="detail">Uso incompleto</small><small v-else class="detail">{{ usagePercent(category) }}% utilizado</small></th><td class="numeric">{{ money(category.assigned) }}<small v-if="budget.closed" class="detail">Objetivo vigente: {{ money(category.assignment_intent ?? category.assigned) }}</small></td><td class="numeric">{{ valueText(category.activity) }}<small v-for="detail in explanation(category.activity)" :key="detail" class="detail">{{ detail }}</small></td><td class="numeric">{{ valueText(category.remaining) }}<small v-for="detail in explanation(category.remaining)" :key="detail" class="detail">{{ detail }}</small></td><td><form class="assignment-form" @submit.prevent="saveAssignment(category.id)"><label class="sr-only" :for="`assign-${category.id}`">{{ budget.closed ? 'Nuevo objetivo corregido' : 'Nueva asignación' }} para {{ category.name }} en CLP</label><input :id="`assign-${category.id}`" :value="drafts[draftKey(category.id)] ?? (budget.closed ? category.assignment_intent ?? category.assigned : category.assigned)" inputmode="decimal" autocomplete="off" @input="assignDraft(category.id, ($event.target as HTMLInputElement).value)"><label v-if="budget.closed" class="reason-field">Motivo de corrección<textarea :value="reasonDrafts[draftKey(category.id)] ?? ''" required @input="assignReason(category.id, ($event.target as HTMLTextAreaElement).value)"></textarea></label><button type="submit" :disabled="saving !== null">{{ budget.closed ? 'Guardar corrección' : 'Guardar' }}</button></form></td></tr></tbody>
+          <tbody><tr v-for="category in sortedCategories" :key="category.id"><th scope="row">{{ category.name }}<div class="usage-indicator" :class="{ 'is-overused': categoryOverused(category) }" role="img" :aria-label="usagePercent(category) === null ? `Uso de ${category.name} incompleto` : categoryOverused(category) ? `${category.name} sobrepasó su asignación` : `${category.name}: ${usagePercent(category)} por ciento utilizado`"><span v-if="usagePercent(category) !== null" :style="{ width: `${usagePercent(category)}%` }"></span></div><small v-if="categoryOverused(category)" class="overused-label">Sobrepasado</small><small v-else-if="usagePercent(category) === null" class="detail">Uso incompleto</small><small v-else class="detail">{{ usagePercent(category) }}% utilizado</small></th><td class="numeric">{{ money(category.assigned) }}<small v-if="budget.closed" class="detail">Objetivo vigente: {{ money(category.assignment_intent ?? category.assigned) }}</small></td><td class="numeric">{{ valueText(category.activity) }}<small v-for="detail in explanation(category.activity)" :key="detail" class="detail">{{ detail }}</small></td><td class="numeric">{{ valueText(category.remaining) }}<small v-for="detail in explanation(category.remaining)" :key="detail" class="detail">{{ detail }}</small></td><td><form class="assignment-form" @submit.prevent="assignmentWorkflow.save(category.id)"><label class="sr-only" :for="`assign-${category.id}`">{{ budget.closed ? 'Nuevo objetivo corregido' : 'Nueva asignación' }} para {{ category.name }} en CLP</label><input :id="`assign-${category.id}`" :value="drafts[draftKey(category.id)] ?? (budget.closed ? category.assignment_intent ?? category.assigned : category.assigned)" inputmode="decimal" autocomplete="off" @input="assignDraft(category.id, ($event.target as HTMLInputElement).value)"><label v-if="budget.closed" class="reason-field">Motivo de corrección<textarea :value="reasonDrafts[draftKey(category.id)] ?? ''" required @input="assignReason(category.id, ($event.target as HTMLTextAreaElement).value)"></textarea></label><button type="submit" :disabled="busy">{{ budget.closed ? 'Guardar corrección' : 'Guardar' }}</button></form></td></tr></tbody>
         </table></div>
         <div class="uncategorized"><h3>Actividad sin categoría</h3><strong class="numeric">{{ valueText(budget.uncategorized_activity) }}</strong><ul v-if="explanation(budget.uncategorized_activity).length"><li v-for="detail in explanation(budget.uncategorized_activity)" :key="detail">{{ detail }}</li></ul></div>
       </section>
-      <section v-if="!budget.closed" class="panel close-panel" aria-labelledby="close-title"><h2 id="close-title">Cerrar período</h2><p>Antes de cerrar, revisa cada saldo restante y elige si llevarlo al siguiente período o liberarlo.</p><button type="button" class="button-secondary" @click="loadClosePreview">Ver vista previa del cierre</button>
-        <div v-if="preview" class="close-preview"><p v-if="!preview.close.eligible" class="notice" role="status">{{ preview.close.reason || 'El período todavía no se puede cerrar.' }}</p><fieldset v-for="item in preview.close.categories" :key="item.category_id"><legend>{{ preview.categories.find((category) => category.id === item.category_id)?.name ?? 'Categoría' }}</legend><label><input v-model="dispositions[item.category_id]" type="radio" :name="`disposition-${item.category_id}`" value="carry"> Llevar saldo</label><label><input v-model="dispositions[item.category_id]" type="radio" :name="`disposition-${item.category_id}`" value="release"> Liberar saldo</label></fieldset><button type="button" :disabled="!preview.close.eligible || saving !== null" @click="closePeriod">Confirmar cierre</button></div>
-      </section>
+      <BudgetClosePanel v-if="!budget.closed" :preview="preview" :dispositions="dispositions" :disabled="busy" @load-preview="loadClosePreview" @close="closePeriod" @update-disposition="setDisposition" />
     </template>
   </main>
 </template>
@@ -388,10 +277,9 @@ button { min-height: 2.5rem; cursor: pointer; } button:disabled { cursor: wait; 
 .detail, .detail-list { display: block; color: var(--muted); font-size: .88rem; margin-top: .25rem; }.detail-list { padding-left: 1.2rem; }
 .uncategorized { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: .5rem; }.uncategorized h3 { margin-bottom: .3rem; }
 .notice { padding: .75rem; background: var(--warning-bg); border-radius: .4rem; }.notice-error { background: var(--danger-bg); }.notice-success { background: var(--success-bg); }
-.close-preview { margin-top: 1rem; }.close-preview fieldset { display: flex; gap: 1rem; margin: .75rem 0; }.close-preview legend { font-weight: 600; }
-.category-manager { display: grid; gap: .75rem; }.category-new-form, .category-item { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; }.category-new-form label, .category-item label { display: grid; gap: .25rem; }.category-new-form input, .category-item input, .reason-field textarea { min-height: 2.5rem; padding: .4rem; }.category-list { display: grid; gap: .5rem; }.category-item { justify-content: space-between; border-top: 1px solid var(--border); padding-top: .6rem; }.category-item input { max-width: 12rem; }.reason-field { display: grid; gap: .25rem; }
+.reason-field { display: grid; gap: .25rem; }.reason-field textarea { min-height: 2.5rem; padding: .4rem; }
 .text-button { border: 0; background: none; text-decoration: underline; }.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-@media (max-width: 650px) { .page-heading { align-items: start; flex-direction: column; }.close-preview fieldset { flex-direction: column; } }
+@media (max-width: 650px) { .page-heading { align-items: start; flex-direction: column; } }
 .unavailable-summary strong { display: block; font-size: 1rem; color: var(--muted); }
 .unavailable-summary p { margin: .45rem 0 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .usage-indicator { width: min(150px, 100%); height: 6px; margin-top: .55rem; overflow: hidden; border-radius: 999px; background: var(--border); }

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { formatBusinessDate } from '../../shared/formatting/business-date'
-import { formatMoney } from '../../shared/formatting/money'
-import type { AccountView, TransactionCategory, TransactionView } from './transaction-model'
+import { formatBusinessDate } from '../../../shared/formatting/business-date'
+import { formatMoney } from '../../../shared/formatting/money'
+import type { AccountView, TransactionCategory, TransactionView } from '../transaction-model'
 
 const props = defineProps<{
   items: TransactionView[]

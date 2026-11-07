@@ -1,26 +1,29 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import type { TransactionView } from '../components/activity/transaction-model'
-import { budgetRoute, currentPeriodInSantiago, type BudgetSnapshot, type BudgetValue } from '../components/budget/budget-model'
+import type { TransactionView } from '../features/transactions/transaction-model'
+import { currentPeriodInSantiago, type BudgetSnapshot, type BudgetValue } from '../features/budget/budget-model'
 import { useAccountListQuery } from '../features/accounts/accounts-feature'
-import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
-import { apiRequest } from '../shared/api/client'
 import { formatBusinessDate } from '../shared/formatting/business-date'
 import { formatMoney } from '../shared/formatting/money'
-
-interface TransactionPage { items: TransactionView[]; next: { before_date: string; before_id: string } | null }
+import { useBudgetSnapshotQuery } from '../features/budget/budget-feature'
+import { useTransactionPageQuery } from '../features/transactions/transactions-feature'
 
 const route = useRoute()
 const period = computed(() => typeof route.query.dashboardPeriod === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.dashboardPeriod) ? route.query.dashboardPeriod : currentPeriodInSantiago())
 const accountQuery = useAccountListQuery()
+const budgetQuery = useBudgetSnapshotQuery(period)
+const transactionsEnabled = ref(false)
+const transactionQuery = useTransactionPageQuery(null, 20, transactionsEnabled, 30_000)
 const accounts = computed(() => accountQuery.data.value ?? null)
-const budget = ref<BudgetSnapshot | null>(null)
-const transactions = ref<TransactionView[] | null>(null)
+const budgetReadPeriod = ref<string | null>(null)
+const budget = computed<BudgetSnapshot | null>(() => budgetReadPeriod.value === period.value ? budgetQuery.data.value ?? null : null)
+const transactions = computed<TransactionView[] | null>(() => transactionsLoaded.value ? transactionQuery.data.value?.items ?? null : null)
 const accountError = computed(() => accountQuery.error.value ? 'No fue posible cargar los saldos.' : '')
 const budgetError = ref('')
 const transactionError = ref('')
 const loading = ref(false)
+const transactionsLoaded = ref(false)
 let latestRequest = 0
 
 const moneyText = (value: BudgetValue | undefined) => {
@@ -37,23 +40,32 @@ async function loadDashboard(): Promise<void> {
   loading.value = true
   budgetError.value = ''; transactionError.value = ''
   const results = await Promise.allSettled([
-    apiRequest<BudgetSnapshot>(budgetRoute(period.value)),
-    apiRequest<TransactionPage>('transactions?page_size=20'),
+    budgetQuery.activate(),
+    readRecentTransactions(),
   ])
   if (requestId !== latestRequest) return
   const [budgetResult, transactionResult] = results
-  budget.value = budgetResult.status === 'fulfilled' ? budgetResult.value : null
-  transactions.value = transactionResult.status === 'fulfilled' ? transactionResult.value.items : null
+  budgetReadPeriod.value = budgetResult.status === 'fulfilled' ? period.value : null
+  transactionsLoaded.value = transactionResult.status === 'fulfilled'
   budgetError.value = budgetResult.status === 'rejected' ? 'No fue posible cargar el presupuesto de este período.' : ''
   transactionError.value = transactionResult.status === 'rejected' ? 'No fue posible cargar la actividad reciente.' : ''
   loading.value = false
 }
 
-onFinanceInvalidated(loadDashboard)
+async function readRecentTransactions(): Promise<TransactionView[]> {
+  const result = await transactionQuery.refetch(true)
+  if (result.status === 'success') {
+    transactionsEnabled.value = true
+    return result.data.items
+  }
+  if (result.status === 'error') throw result.error
+  throw new Error('La actividad reciente no está disponible.')
+}
+
 onMounted(() => { void loadDashboard() })
 function refreshDashboard() { void accountQuery.refetch(); void loadDashboard() }
 watch(period, () => {
-  budget.value = null
+  budgetReadPeriod.value = null
   void loadDashboard()
 })
 </script>

@@ -1,56 +1,36 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useAccountListQuery, useFinanceInvalidation } from '../features/accounts/accounts-feature'
-import { onFinanceInvalidated } from '../shared/api/finance-invalidation'
-import TransactionForm from '../components/activity/transaction-form.vue'
-import TransactionList from '../components/activity/transaction-list.vue'
-import { ApiClientError, apiRequest } from '../shared/api/client'
-import {
-  PendingWriteStore,
-  dismissPendingWrite,
-  retryPendingWrite,
-  sendFinancialWrite,
-  type PendingFinancialWrite,
-} from '../shared/api/pending-commands'
-import type {
-  TransactionCategory,
-  TransactionView,
-} from '../components/activity/transaction-model'
-
-interface TransactionCursor {
-  before_date: string
-  before_id: string
-}
-
-interface TransactionPage {
-  items: TransactionView[]
-  next: TransactionCursor | null
-}
-
-interface BootstrapResponse {
-  categories: TransactionCategory[]
-}
-
-interface MutationReceipt {
-  resource_id: string
-  revision: number
-}
+import { useAccountListQuery } from '../features/accounts/accounts-feature'
+import TransactionForm from '../features/transactions/components/transaction-form.vue'
+import TransactionList from '../features/transactions/components/transaction-list.vue'
+import type { PendingFinancialWrite } from '../shared/api/pending-commands'
+import type { TransactionView } from '../features/transactions/api/contracts'
+import { useTransactionCategoriesQuery } from '../features/transactions/api/queries'
+import { useTransactionPages } from '../features/transactions/composables/use-transaction-pages'
+import { useTransactionCommands } from '../features/transactions/composables/use-transaction-commands'
 
 const accountQuery = useAccountListQuery()
 const accounts = computed(() => accountQuery.data.value ?? [])
-const invalidateFinance = useFinanceInvalidation()
-const categories = ref<TransactionCategory[]>([])
-const transactions = ref<TransactionView[]>([])
-const nextCursor = ref<TransactionCursor | null>(null)
+const categoriesQuery = useTransactionCategoriesQuery()
+const categoriesLoaded = ref(false)
+const categories = computed(() => categoriesLoaded.value ? categoriesQuery.data.value ?? [] : [])
+const transactionPages = useTransactionPages()
+const transactions = transactionPages.items
+const nextCursor = transactionPages.nextCursor
+const isLoadingMore = transactionPages.isLoadingMore
+const {
+  visiblePendingCommands: pendingCommands,
+  serverErrors,
+  pageError,
+  successMessage,
+  isSaving,
+  restorePendingCommands,
+  dismissCommand,
+  submitWrite: submitTransactionWrite,
+  retryCommand: retryTransactionCommand,
+} = useTransactionCommands()
 const editingTransaction = ref<TransactionView | null>(null)
-const pendingCommands = ref<PendingFinancialWrite[]>([])
-const dismissedPendingKeys = ref(new Set<string>())
-const serverErrors = ref<Record<string, string>>({})
-const pageError = ref('')
-const successMessage = ref('')
 const isLoading = ref(false)
-const isLoadingMore = ref(false)
-const isSaving = ref(false)
 const initialized = ref(false)
 
 function todayInSantiago(): string {
@@ -65,19 +45,7 @@ function todayInSantiago(): string {
 }
 
 const today = todayInSantiago()
-let pendingStore: PendingWriteStore | undefined
 
-function getPendingStore(): PendingWriteStore {
-  pendingStore ??= new PendingWriteStore()
-  return pendingStore
-}
-
-let skipOwnInvalidation = false
-let pageGeneration = 0
-onFinanceInvalidated(async () => {
-  if (skipOwnInvalidation) return
-  try { await loadFirstPage() } catch (error) { pageError.value = messageFor(error, 'No fue posible cargar los movimientos.') }
-})
 onMounted(() => {
   restorePendingCommands()
   void loadInitialData()
@@ -87,11 +55,14 @@ async function loadInitialData(): Promise<void> {
   isLoading.value = true
   pageError.value = ''
   try {
-    const [, bootstrap] = await Promise.all([
+    const [, categoryResult] = await Promise.all([
       accountQuery.refresh(true),
-      apiRequest<BootstrapResponse>('bootstrap'),
+      categoriesQuery.refetch(true),
     ])
-    categories.value = bootstrap.categories
+    if (categoryResult.status !== 'success') {
+      throw categoryResult.error ?? new Error('No fue posible cargar las categorías de movimientos.')
+    }
+    categoriesLoaded.value = true
     await loadFirstPage()
     initialized.value = true
   } catch (error) {
@@ -102,113 +73,21 @@ async function loadInitialData(): Promise<void> {
 }
 
 async function loadFirstPage(): Promise<void> {
-  const generation = ++pageGeneration
-  const page = await fetchPage(null)
-  if (generation !== pageGeneration) return
-  transactions.value = page.items
-  nextCursor.value = page.next
+  await transactionPages.loadFirstPage()
 }
 
 async function loadMore(): Promise<void> {
-  const cursor = nextCursor.value
-  if (!cursor || isLoadingMore.value) return
-  const generation = pageGeneration
-  isLoadingMore.value = true
   pageError.value = ''
-  try {
-    const page = await fetchPage(cursor)
-    if (generation !== pageGeneration) return
-    transactions.value = [...transactions.value, ...page.items]
-    nextCursor.value = page.next
-  } catch (error) {
-    if (generation === pageGeneration) pageError.value = messageFor(error, 'No fue posible cargar la página siguiente.')
-  } finally {
-    isLoadingMore.value = false
-  }
-}
-
-async function fetchPage(cursor: TransactionCursor | null): Promise<TransactionPage> {
-  const params = new URLSearchParams({ page_size: '50' })
-  if (cursor) {
-    params.set('before_date', cursor.before_date)
-    params.set('before_id', cursor.before_id)
-  }
-  return apiRequest<TransactionPage>(`transactions?${params.toString()}`)
-}
-
-async function submitWrite(command: { method: 'POST' | 'PUT'; route: string; body: string }): Promise<void> {
-  pageError.value = ''
-  successMessage.value = ''
-  serverErrors.value = {}
-  isSaving.value = true
-  try {
-    const receipt = await sendFinancialWrite<MutationReceipt>(command)
-    skipOwnInvalidation = true
-    try { await invalidateFinance() } finally { skipOwnInvalidation = false }
-    editingTransaction.value = null
-    successMessage.value = `Movimiento guardado (revisión ${receipt.revision}).`
-    restorePendingCommands()
-    try {
-      await loadFirstPage()
-    } catch {
-      pageError.value = 'El movimiento se guardó, pero no se pudo actualizar la lista. Intenta recargarla.'
-    }
-  } catch (error) {
-    if (error instanceof ApiClientError && error.fields.length > 0) {
-      serverErrors.value = Object.fromEntries(error.fields.map((field) => [field.field, fieldMessage(field.code)]))
-    }
-    if (hasPendingCommandKey(error)) restorePendingCommands()
-    pageError.value = messageFor(error, 'No fue posible guardar el movimiento.')
-  } finally {
-    isSaving.value = false
-  }
+  try { await transactionPages.loadNextPage() }
+  catch (error) { pageError.value = messageFor(error, 'No fue posible cargar la página siguiente.') }
 }
 
 async function retryCommand(command: PendingFinancialWrite): Promise<void> {
-  pageError.value = ''
-  successMessage.value = ''
-  isSaving.value = true
-  try {
-    const receipt = await retryPendingWrite<MutationReceipt>(command.idempotencyKey)
-    skipOwnInvalidation = true
-    try { await invalidateFinance() } finally { skipOwnInvalidation = false }
-    editingTransaction.value = null
-    successMessage.value = `El comando guardado se confirmó (revisión ${receipt.revision}).`
-    restorePendingCommands()
-    try {
-      await loadFirstPage()
-    } catch {
-      pageError.value = 'El comando se confirmó, pero no se pudo actualizar la lista. Intenta recargarla.'
-    }
-  } catch (error) {
-    if (error instanceof ApiClientError && error.fields.length > 0) {
-      serverErrors.value = Object.fromEntries(error.fields.map((field) => [field.field, fieldMessage(field.code)]))
-    }
-    restorePendingCommands()
-    pageError.value = messageFor(error, 'No se pudo confirmar el comando pendiente.')
-  } finally {
-    isSaving.value = false
-  }
+  await retryTransactionCommand(command, loadFirstPage, () => { editingTransaction.value = null })
 }
 
-function restorePendingCommands(): void {
-  try {
-    pendingCommands.value = getPendingStore()
-      .list()
-      .filter((command) => command.route.startsWith('/api/transactions'))
-  } catch (error) {
-    pageError.value = messageFor(error, 'No fue posible leer los comandos guardados.')
-  }
-}
-
-function dismissCommand(command: PendingFinancialWrite): void {
-  // Dismiss only hides this notice. The stored command remains available after reload.
-  try {
-    dismissPendingWrite(command.idempotencyKey, getPendingStore())
-  } catch (error) {
-    pageError.value = messageFor(error, 'No fue posible ocultar el aviso.')
-  }
-  dismissedPendingKeys.value = new Set([...dismissedPendingKeys.value, command.idempotencyKey])
+async function submitWrite(command: { method: 'POST' | 'PUT'; route: string; body: string }): Promise<void> {
+  await submitTransactionWrite(command, loadFirstPage, () => { editingTransaction.value = null })
 }
 
 function beginEdit(transaction: TransactionView): void {
@@ -233,30 +112,8 @@ function beginCreate(): void {
   document.querySelector<HTMLFormElement>('#transaction-editor form input')?.focus({ preventScroll: true })
 }
 
-function hasPendingCommandKey(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'pendingCommandKey' in error
-}
-
 function messageFor(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
-}
-
-function fieldMessage(code: string): string {
-  const messages: Record<string, string> = {
-    required_for_opening_date: 'Elige cómo tratar el movimiento respecto del saldo inicial.',
-    unsupported: 'Selecciona una opción válida.',
-    required: 'Completa este campo.',
-    must_be_positive: 'Escribe un monto mayor que cero.',
-    same_currency_amounts_must_match: 'Los montos deben coincidir para monedas iguales.',
-    must_differ: 'Elige una billetera distinta.',
-    required_for_cross_currency: 'Añade evidencia de conversión para esta transferencia.',
-    unknown_or_archived: 'La categoría ya no está disponible.',
-    must_match_source_expense: 'El reembolso debe seguir la categoría del gasto original.',
-    refund_only: 'Solo un reembolso puede vincularse con un gasto.',
-    cannot_link_to_self: 'El movimiento no puede vincularse consigo mismo.',
-    stale_revision: 'El movimiento cambió. Recarga su versión actual antes de corregirlo.',
-  }
-  return messages[code] ?? 'Revisa este campo.'
 }
 </script>
 
@@ -283,7 +140,7 @@ function fieldMessage(code: string): string {
       </div>
       <ul class="pending-list">
         <li
-          v-for="command in pendingCommands.filter((item) => !dismissedPendingKeys.has(item.idempotencyKey))"
+          v-for="command in pendingCommands"
           :key="command.idempotencyKey"
           class="pending-card"
         >

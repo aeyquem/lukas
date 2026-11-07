@@ -1,6 +1,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { currentPeriodInSantiago } from '../components/budget/budget-model'
+import { currentPeriodInSantiago } from '../features/budget/budget-model'
 
 // The URL owns explicit selection; the clock only supplies the current-month fallback.
 export function useDashboardPeriod() {

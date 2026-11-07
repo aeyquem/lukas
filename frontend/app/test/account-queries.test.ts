@@ -1,11 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createApp, effectScope, nextTick, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { useAccountListQuery, useAccountDetailQuery, useAccountActivityQuery } from '../src/features/accounts/api/queries'
 import { useAccountWriteMutation, useAccountRetryMutation } from '../src/features/accounts/api/mutations'
 import { apiRequest } from '../src/shared/api/client'
 import { sendFinancialWrite, retryPendingWrite } from '../src/shared/api/pending-commands'
+import { accountKeys } from '../src/features/accounts/api/queries'
+import { transactionKeys } from '../src/features/transactions/api/queries'
+import { budgetKeys } from '../src/features/budget/api/queries'
 vi.mock('../src/shared/api/client', () => ({ apiRequest: vi.fn() }))
 vi.mock('../src/shared/api/pending-commands', () => ({ sendFinancialWrite: vi.fn(), retryPendingWrite: vi.fn() }))
 const a = '11111111-1111-4111-8111-111111111111'
@@ -46,10 +49,15 @@ it('does not send disabled invalid detail and activity IDs', async () => {
 it('retains confirmed mutation receipt when authoritative read fails', async () => {
   vi.mocked(sendFinancialWrite).mockResolvedValue({ resource_id: a, revision: 1 })
   vi.mocked(apiRequest).mockRejectedValue(new Error('read unavailable'))
+  const cache = setup(useQueryCache)
+  const invalidate = vi.spyOn(cache, 'invalidateQueries').mockResolvedValue([])
   const mutation = setup(useAccountWriteMutation)
   const result = await mutation.mutateAsync({ method: 'POST', route: '/api/accounts', payload: { name: 'A' } })
   expect(result.receipt.revision).toBe(1); expect(result.readError).toBeInstanceOf(Error)
   expect(sendFinancialWrite).toHaveBeenCalledTimes(1)
+  expect(invalidate.mock.calls.map(([filter]) => filter)).toContainEqual({ key: accountKeys.all })
+  expect(invalidate.mock.calls.map(([filter]) => filter)).toContainEqual({ key: transactionKeys.pages })
+  expect(invalidate.mock.calls.map(([filter]) => filter)).toContainEqual({ key: budgetKeys.snapshots })
 })
 it('explicit retry uses saved command once and separates read failure', async () => {
   vi.mocked(retryPendingWrite).mockResolvedValue({ resource_id: a, revision: 2 })

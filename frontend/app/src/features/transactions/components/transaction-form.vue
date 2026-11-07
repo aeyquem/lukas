@@ -9,7 +9,7 @@ import {
   type TransactionCategory,
   type TransactionDraft,
   type TransactionView,
-} from './transaction-model'
+} from '../transaction-model'
 import OpeningTreatmentField from './opening-treatment-field.vue'
 
 const props = defineProps<{

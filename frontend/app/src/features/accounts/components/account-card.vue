@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../../shared/formatting/money'
+import { formatMoney } from '../../../shared/formatting/money'
 
 interface WalletSummary {
   id: string

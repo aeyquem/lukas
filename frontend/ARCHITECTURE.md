@@ -1,53 +1,86 @@
 # Frontend state ownership
 
-Accounts is the pilot for feature-owned state. Routes compose UI and own selection
-by ID. `src/features/accounts/components` owns creation, editing, opening
-correction, pending-command presentation and activity. Creation and correction
-forms own independent local drafts; fetched account records are never editable
-form models. Pure draft defaults and validation live in `account-draft.ts`.
+Routes compose feature UI and coordinate route context. Feature contracts,
+queries, mutations, focused workflows, and domain-facing components live under
+`src/features/<feature>`. Cross-feature consumers use a feature's public entry
+file instead of importing its implementation details.
 
-Other features consume the explicit public exports in
-`src/features/accounts/accounts-feature.ts`, rather than account component internals.
-Account HTTP contracts and query/mutation definitions live in `accounts/api`;
-transaction contracts and activity queries belong to `features/transactions/api`.
-Shared transport, pending-command storage and formatting remain under `shared`.
+## Feature boundaries
 
-Colada owns fetched account snapshots. Account keys are `['accounts', 'list']` and
-`['accounts', 'detail', id]`. Activity keys begin with `account-activity` and
-include account ID, page size and both cursor fields. Empty or invalid IDs disable dependent requests. Activity is scoped to
-its selected account and retains the existing first 50 recent transactions UI;
-there is no accumulated cross-account page array. Reads have an explicit 30-second
-freshness window, with focus/reconnect refetch disabled. Explicit Refresh calls
-`refetch`, which performs a network read. Errors remain visible alongside cached
-values; a failed read never manufactures a zero balance.
+- Accounts: `src/features/accounts/accounts-feature.ts` exports account queries,
+  mutations, contracts, and account UI. Account forms own their drafts and
+  baseline revisions; query readback never edits form state.
+- Transactions: `src/features/transactions/transactions-feature.ts` exports
+  transaction page/category/activity queries, exact-write mutations, cursor-page
+  coordination, contracts, form/list components, and field messages. The route
+  owns the selected transaction and page composition; page snapshots live in
+  Colada while search, sort, and edits remain local.
+- Budget: `src/features/budget/budget-feature.ts` exports budget/category/close
+  queries, write and retry mutations, budget components, workflows, and public
+  contracts. `useBudgetAssignments` owns period-keyed amount/reason drafts;
+  `BudgetCategoryManager` owns category editing drafts; the route owns URL
+  period selection and composes the summary, category table, and close panel.
+- Dashboard: `src/views/home-view.vue` composes the public account, budget, and
+  transaction query definitions. Its account list keeps the established
+  30-second freshness policy; budget and recent transactions force a read on
+  dashboard entry. The dashboard period remains independent in the
+  `dashboardPeriod` URL query parameter.
 
-Each draft captures its baseline revision on initialization. Refetch updates the
-readback, without overwriting unsaved input or advancing the baseline. A 409
-retains the draft; explicit review/reload adopts the current snapshot. Transaction
-entry initializes on edit/new intent changes, rather than account-option array
-replacement. Option refresh therefore cannot erase opening-treatment choices.
+Pure financial display and draft rules stay in feature model files. Formatting,
+transport, and exact pending-command persistence stay under `src/shared`.
+Components keep their existing markup hierarchy, scoped styles, wording, and
+responsive behavior during the structural refactor.
 
-Account Colada mutations wrap the existing exact-command persistence layer.
-They do not optimistically alter financial values or automatically retry writes.
-The command bytes, idempotency key and installation generation are persisted
-before dispatch; storage failure prevents dispatch. Explicit retry sends the
-persisted command after an uncached generation check. Dismissal hides a notice
-without deleting the unresolved command.
+## Query ownership and freshness
 
-A successful receipt and its authoritative readback are distinct outcomes.
-`writeThenRead` returns the confirmed receipt even when the read fails. Forms
-report that separately and offer refresh, rather than suggesting another write.
-Read values alone provide the displayed confirmed money.
+Colada owns fetched snapshots. Query keys include all result-changing inputs:
 
-`shared/api/finance-invalidation.ts` is a temporary notification bridge. It owns
-no snapshots: mounted legacy budget/dashboard/transaction readers subscribe with
-their existing guarded refresh functions, and clean up with their Vue scope.
-Account invalidation refreshes Colada account/activity entries; legacy refreshes
-retain local drafts. Every confirmed financial write and exact retry triggers
-this coordination. Unmounted readers load normally on their next mount. Remove
-the bridge subscription for each reader when that resource moves to Colada;
-then replace the corresponding notification with query-key invalidation. Remove
-the bridge entirely once the final legacy financial reader migrates.
+- Accounts: `['accounts', 'list']`, account details by ID, and activity by
+  account ID, page size, and both cursor fields.
+- Transactions: categories and ledger pages by page size and cursor. The full
+  transaction route uses bounded 50-item pages; the dashboard uses the same
+  page query at 20 items and displays the first six.
+- Budget: snapshots by period, categories by their shared key, and close
+  previews by period.
+
+Budget route entry explicitly activates a forced read before exposing cached
+data as current. Once successful, active budget/category observers respond to
+targeted invalidation. The dashboard uses the same budget query and forces its
+own entry read. Close previews are fetched only on explicit user action. The
+transaction route's page coordinator forces each page read and protects page
+ordering with its generation guard; dashboard recent activity uses the public
+transaction query. Account list freshness and the explicit refresh behavior
+remain unchanged.
+
+Loading, error, incomplete, unavailable, and empty states stay distinct. A
+failed request never turns an unavailable value into a confirmed zero. Local
+drafts stay separate from server snapshots, and query invalidation cannot
+overwrite dirty input. Budget assignments retain period/category keys and
+expected revisions; conflicts keep drafts for review. Transaction cursor and
+page size are part of query identity, and sorting/searching remain scoped to the
+currently loaded ledger pages.
+
+## Writes and invalidation
+
+Feature mutations call the shared `sendFinancialWrite` and
+`retryPendingWrite` command layer. Commands are persisted before dispatch,
+storage failure prevents dispatch, and retry sends the exact stored bytes,
+idempotency key, and installation generation. Writes are never optimistic or
+automatically retried. A confirmed receipt remains confirmed if subsequent
+readback fails; the relevant screen reports the refresh problem separately.
+
+`src/shared/api/finance-query-invalidation.ts` is the single cross-feature
+invalidation entry point. Account and transaction writes invalidate mounted
+account/activity, transaction-page, and budget snapshot/preview readers.
+Budget writes invalidate budget categories, snapshots, and previews. Dashboard
+uses those same query keys, so mounted sections update without callback
+subscriptions. Draft state remains in its feature workflow across those reads.
+
+The former `finance-invalidation.ts` callback bridge has been removed. Query
+keys and invalidation impact stay explicit; the shared invalidation module owns
+no fetched data and does not host feature workflows.
+
+## App-shared preferences
 
 App-shared client preferences belong in a Pinia setup store. Shareable periods
 and filters remain in the URL. Theme palette and geometry tokens remain CSS;
