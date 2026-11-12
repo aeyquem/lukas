@@ -1,6 +1,7 @@
 use axum::{body::Body, http::Request};
 use chrono::NaiveDate;
 use crc::{CRC_32_ISO_HDLC, Crc};
+use rust_decimal::Decimal;
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
 use std::time::Duration;
 use tower::ServiceExt;
@@ -126,7 +127,7 @@ async fn migration_runner_applies_in_order_and_is_safe_to_rerun(pool: PgPool) {
         .map(|row| row.get("version"))
         .collect();
 
-    assert_eq!(versions.len(), 4);
+    assert_eq!(versions.len(), 6);
     assert!(versions.windows(2).all(|pair| pair[0] < pair[1]));
 
     let categories_table: bool = sqlx::query_scalar(
@@ -198,7 +199,7 @@ async fn database_with_workspace_and_categories_receives_financial_migration(poo
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(migration_count, 4);
+    assert_eq!(migration_count, 6);
 
     let financial_tables: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM information_schema.tables \
@@ -639,4 +640,136 @@ async fn api_origin_middleware_checks_the_actual_request_headers(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(health_without_origin.status(), axum::http::StatusCode::OK);
+}
+
+#[sqlx::test(migrations = false)]
+async fn budget_group_migration_preserves_existing_financial_and_close_category_references(
+    pool: PgPool,
+) {
+    // Exercise the additive migration on the real immediately preceding schema.
+    for sql in [
+        include_str!("../migrations/20261105000100_create_workspaces.sql"),
+        include_str!("../migrations/20261105000200_create_expense_categories.sql"),
+        include_str!("../migrations/20261105000300_create_financial_records.sql"),
+        include_str!("../migrations/20261105000400_preserve_fx_observation_revisions.sql"),
+        include_str!("../migrations/20261105000500_complete_budget_close_snapshots.sql"),
+    ] {
+        sqlx::raw_sql(sql).execute(&pool).await.unwrap();
+    }
+    let workspace = Uuid::new_v4();
+    sqlx::query("INSERT INTO workspaces(id,singleton_key) VALUES($1,'owner')")
+        .bind(workspace)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let general = Uuid::new_v4();
+    let transport = Uuid::new_v4();
+    let savings = Uuid::new_v4();
+    let custom = Uuid::new_v4();
+    for (id, slug, name, order) in [
+        (general, "vivienda", "Owner's edited home", 1_i16),
+        (transport, "transporte", "Transporte", 2),
+        (savings, "ahorro-general", "Ahorro general", 3),
+        (custom, "custom-legacy", "Custom", 4),
+    ] {
+        sqlx::query("INSERT INTO expense_categories(id,workspace_id,slug,name,sort_order) VALUES($1,$2,$3,$4,$5)")
+            .bind(id).bind(workspace).bind(slug).bind(name).bind(order).execute(&pool).await.unwrap();
+    }
+    let transaction = Uuid::new_v4();
+    let snapshot = Uuid::new_v4();
+    let assignment = Uuid::new_v4();
+    let date = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+    sqlx::query("INSERT INTO financial_transactions(id,workspace_id,transaction_kind,business_date,category_id,note) VALUES($1,$2,'expense',$3,$4,'Preserved purchase')")
+        .bind(transaction).bind(workspace).bind(date).bind(general).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_assignments(id,workspace_id,period_start,category_id,amount) VALUES($1,$2,$3,$4,123.45)")
+        .bind(assignment).bind(workspace).bind(date).bind(general).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_close_snapshots(id,workspace_id,period_start,revision,funding,ready_to_assign) VALUES($1,$2,$3,1,500,376.55)")
+        .bind(snapshot).bind(workspace).bind(date).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_close_category_snapshots(workspace_id,snapshot_id,category_id,assigned,activity,remaining,disposition,category_name,category_sort_order) VALUES($1,$2,$3,123.45,20,103.45,'carry','Immutable home label',1)")
+        .bind(workspace).bind(snapshot).bind(general).execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../migrations/20261111000100_budget_category_groups.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mappings:Vec<(Uuid,String,String)> = sqlx::query_as("SELECT c.id,c.name,g.slug FROM expense_categories c JOIN budget_category_groups g ON g.workspace_id=c.workspace_id AND g.id=c.group_id WHERE c.workspace_id=$1 ORDER BY c.sort_order")
+        .bind(workspace).fetch_all(&pool).await.unwrap();
+    assert_eq!(
+        mappings,
+        vec![
+            (
+                general,
+                "Owner's edited home".to_owned(),
+                "general".to_owned()
+            ),
+            (transport, "Transporte".to_owned(), "transport".to_owned()),
+            (savings, "Ahorro general".to_owned(), "savings".to_owned()),
+            (custom, "Custom".to_owned(), "general".to_owned())
+        ]
+    );
+    let retained:(Uuid,Uuid,Uuid,String,Decimal) = sqlx::query_as("SELECT t.category_id,a.category_id,s.category_id,s.category_name,s.remaining FROM financial_transactions t JOIN budget_assignments a ON a.workspace_id=t.workspace_id JOIN budget_close_category_snapshots s ON s.workspace_id=t.workspace_id WHERE t.id=$1 AND a.id=$2 AND s.snapshot_id=$3")
+        .bind(transaction).bind(assignment).bind(snapshot).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        retained,
+        (
+            general,
+            general,
+            general,
+            "Immutable home label".to_owned(),
+            Decimal::new(10345, 2)
+        )
+    );
+    let snapshot_explanation: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT available_to_budget_breakdown FROM budget_close_snapshots WHERE id=$1",
+    )
+    .bind(snapshot)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(snapshot_explanation.is_none());
+    let groups_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM budget_category_groups WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(groups_count, 3);
+    bootstrap(&pool).await.unwrap();
+    let categories_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM expense_categories WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(categories_count, 4);
+    // Composite membership rejects a group from another workspace, regardless of UUID validity.
+    let cross_workspace = Uuid::new_v4();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("ALTER TABLE workspaces DROP CONSTRAINT workspaces_single_owner")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO workspaces(id,singleton_key) VALUES($1,'test-other')")
+        .bind(cross_workspace)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let foreign_group = Uuid::new_v4();
+    sqlx::query("INSERT INTO budget_category_groups(id,workspace_id,slug,name,sort_order) VALUES($1,$2,'general','Other workspace',1)").bind(foreign_group).bind(cross_workspace).execute(&mut *tx).await.unwrap();
+    let result = sqlx::query("UPDATE expense_categories SET group_id=$1 WHERE id=$2")
+        .bind(foreign_group)
+        .bind(general)
+        .execute(&mut *tx)
+        .await;
+    assert!(result.is_err());
+    tx.rollback().await.unwrap();
+    // A legacy caller omits the new column; the additive migration still supplies
+    // deterministic membership instead of breaking the old INSERT shape.
+    let legacy = Uuid::new_v4();
+    sqlx::query("INSERT INTO expense_categories(id,workspace_id,slug,name,sort_order) VALUES($1,$2,'legacy-after-migration','Legacy caller',10)")
+        .bind(legacy).bind(workspace).execute(&pool).await.unwrap();
+    let legacy_group:String = sqlx::query_scalar("SELECT g.slug FROM expense_categories c JOIN budget_category_groups g ON g.workspace_id=c.workspace_id AND g.id=c.group_id WHERE c.id=$1")
+        .bind(legacy).fetch_one(&pool).await.unwrap();
+    assert_eq!(legacy_group, "general");
 }

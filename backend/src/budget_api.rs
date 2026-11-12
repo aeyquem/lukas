@@ -36,6 +36,8 @@ use crate::{
     write_guard::{installation_generation, lock_workspace},
 };
 
+macro_rules! category_references { () => { "EXISTS(SELECT 1 FROM financial_transactions t WHERE t.workspace_id=c.workspace_id AND t.category_id=c.id) OR EXISTS(SELECT 1 FROM budget_assignments a WHERE a.workspace_id=c.workspace_id AND a.category_id=c.id) OR EXISTS(SELECT 1 FROM budget_close_category_snapshots s WHERE s.workspace_id=c.workspace_id AND s.category_id=c.id) OR EXISTS(SELECT 1 FROM financial_corrections f WHERE f.workspace_id=c.workspace_id AND f.transaction_target_category_id=c.id) OR EXISTS(SELECT 1 FROM budget_activity_effects e WHERE e.workspace_id=c.workspace_id AND e.category_id=c.id) OR EXISTS(SELECT 1 FROM budget_close_transaction_snapshots t WHERE t.workspace_id=c.workspace_id AND t.category_id=c.id)" }; }
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
@@ -44,7 +46,12 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/categories/{category_id}",
-            axum::routing::put(edit_category),
+            axum::routing::put(edit_category).delete(delete_category),
+        )
+        .route("/api/budget-groups", get(list_groups).post(create_group))
+        .route(
+            "/api/budget-groups/{group_id}",
+            axum::routing::put(edit_group),
         )
         .route("/api/budgets/{period}", get(read_budget))
         .route(
@@ -62,12 +69,41 @@ pub fn router() -> Router<AppState> {
 }
 
 #[derive(Clone, Debug, FromRow, Serialize)]
-struct CategoryView {
+pub(crate) struct CategoryView {
     id: Uuid,
     slug: String,
     name: String,
     sort_order: i16,
     archived: bool,
+    group_id: Uuid,
+    revision: i64,
+    #[sqlx(default)]
+    can_delete: bool,
+}
+
+#[derive(Clone, Debug, FromRow, Serialize)]
+struct BudgetGroup {
+    id: Uuid,
+    name: String,
+    sort_order: i16,
+    archived: bool,
+    revision: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GroupRequest {
+    name: String,
+    sort_order: i16,
+    #[serde(default)]
+    archived: bool,
+    expected_revision: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeleteCategoryRequest {
+    expected_revision: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -75,6 +111,7 @@ struct CategoryView {
 struct CreateCategoryRequest {
     name: String,
     sort_order: i16,
+    group_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -83,6 +120,8 @@ struct EditCategoryRequest {
     name: String,
     sort_order: i16,
     archived: bool,
+    group_id: Option<Uuid>,
+    expected_revision: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -128,6 +167,9 @@ struct BudgetResponse {
     uncategorized_activity: BudgetValue,
     complete: bool,
     categories: Vec<BudgetCategory>,
+    archived_categories: Vec<BudgetCategory>,
+    groups: Vec<BudgetGroup>,
+    available_to_budget_breakdown: AvailableToBudgetBreakdown,
 }
 
 #[derive(Serialize)]
@@ -151,7 +193,7 @@ struct ClosePreviewCategory {
     proposed_disposition: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 enum BudgetValue {
     Complete {
@@ -166,7 +208,7 @@ enum BudgetValue {
     },
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct UnresolvedValue {
     kind: String,
     category_id: Option<String>,
@@ -174,9 +216,25 @@ struct UnresolvedValue {
     amount: Option<MoneyAmount>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct AvailableToBudgetBreakdown {
+    prior_unassigned: BudgetValue,
+    funding_total: BudgetValue,
+    income: BudgetValue,
+    openings: BudgetValue,
+    transfers: BudgetValue,
+    valuation: BudgetValue,
+    corrections: BudgetValue,
+    category_releases: BudgetValue,
+    category_rollover: BudgetValue,
+    assignments: BudgetValue,
+}
+
 #[derive(Serialize)]
 struct BudgetCategory {
     id: Uuid,
+    group_id: Uuid,
+    archived: bool,
     name: String,
     sort_order: i16,
     assigned: MoneyAmount,
@@ -309,6 +367,7 @@ struct CloseSnapshotRow {
     activity: Decimal,
     uncategorized_activity: Decimal,
     closed_at: chrono::DateTime<chrono::Utc>,
+    available_to_budget_breakdown: Option<Value>,
 }
 
 #[derive(Clone, FromRow)]
@@ -429,17 +488,19 @@ struct StoredReceipt {
     resource_revision: Option<i64>,
 }
 
-async fn list_categories(
+pub(crate) async fn list_categories(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CategoryView>>, ApiError> {
-    let rows = sqlx::query_as::<_, CategoryView>(
-        "SELECT id, slug, name, sort_order, archived FROM expense_categories \
-         WHERE workspace_id = $1 ORDER BY sort_order, id",
-    )
-    .bind(state.workspace_id)
-    .fetch_all(&state.pool)
-    .await
-    .map_err(ApiError::database)?;
+    let sql = concat!(
+        "SELECT c.id,c.slug,c.name,c.sort_order,c.archived,c.group_id,c.revision, NOT (",
+        category_references!(),
+        ") AS can_delete FROM expense_categories c WHERE c.workspace_id=$1 ORDER BY c.sort_order,c.id"
+    );
+    let rows = sqlx::query_as::<_, CategoryView>(sql)
+        .bind(state.workspace_id)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(ApiError::database)?;
     Ok(Json(rows))
 }
 
@@ -479,18 +540,20 @@ async fn create_category_attempt(
     }
     let request: CreateCategoryRequest = parse_body(&body)?;
     validate_category(&request.name, request.sort_order)?;
+    let group_id = active_group_in(&mut tx, state.workspace_id, request.group_id).await?;
     let id = Uuid::new_v4();
     let slug = format!("custom-{}", id.simple());
     let row = sqlx::query_as::<_, CategoryView>(
-        "INSERT INTO expense_categories (id, workspace_id, slug, name, sort_order) \
-         VALUES ($1, $2, $3, $4, $5) \
-         RETURNING id, slug, name, sort_order, archived",
+        "INSERT INTO expense_categories (id, workspace_id, slug, name, sort_order, group_id) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         RETURNING id, slug, name, sort_order, archived, group_id, revision",
     )
     .bind(id)
     .bind(state.workspace_id)
     .bind(slug)
     .bind(request.name.trim())
     .bind(request.sort_order)
+    .bind(group_id)
     .fetch_one(&mut *tx)
     .await
     .map_err(ApiError::database)?;
@@ -558,47 +621,30 @@ async fn edit_category_attempt(
     }
     let request: EditCategoryRequest = parse_body(&body)?;
     validate_category(&request.name, request.sort_order)?;
-    let exists: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM expense_categories WHERE workspace_id=$1 AND id=$2 FOR UPDATE",
-    )
-    .bind(state.workspace_id)
-    .bind(category_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(ApiError::database)?;
-    if exists.is_none() {
-        return Err(ApiError::not_found());
-    }
-    if request.archived {
-        let in_use: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM financial_transactions WHERE workspace_id=$1 AND category_id=$2) \
-             OR EXISTS(SELECT 1 FROM budget_assignments WHERE workspace_id=$1 AND category_id=$2)",
+    let current = sqlx::query_as::<_, CategoryView>("SELECT id,slug,name,sort_order,archived,group_id,revision FROM expense_categories WHERE workspace_id=$1 AND id=$2 FOR UPDATE")
+        .bind(state.workspace_id).bind(category_id).fetch_optional(&mut *tx).await.map_err(ApiError::database)?.ok_or_else(ApiError::not_found)?;
+    check_organization_revision(request.expected_revision, current.revision)?;
+    let group_id = request.group_id.unwrap_or(current.group_id);
+    if !request.archived {
+        active_group_in(&mut tx, state.workspace_id, Some(group_id)).await?;
+    } else {
+        // Archived categories may retain membership in an archived group.
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM budget_category_groups WHERE workspace_id=$1 AND id=$2)",
         )
         .bind(state.workspace_id)
-        .bind(category_id)
+        .bind(group_id)
         .fetch_one(&mut *tx)
         .await
         .map_err(ApiError::database)?;
-        if in_use {
-            return Err(ApiError::new(
-                StatusCode::CONFLICT,
-                "category_in_use",
-                "A category referenced by activity or an assignment cannot be archived.",
-            ));
+        if !exists {
+            return Err(ApiError::invalid("group_id", "not_found"));
         }
     }
-    sqlx::query(
-        "UPDATE expense_categories SET name=$3, sort_order=$4, archived=$5, updated_at=now() \
-         WHERE workspace_id=$1 AND id=$2",
-    )
-    .bind(state.workspace_id)
-    .bind(category_id)
-    .bind(request.name.trim())
-    .bind(request.sort_order)
-    .bind(request.archived)
-    .execute(&mut *tx)
-    .await
-    .map_err(ApiError::database)?;
+    let revision = current.revision + 1;
+    sqlx::query("UPDATE expense_categories SET name=$3,sort_order=$4,archived=$5,group_id=$6,revision=$7,updated_at=now() WHERE workspace_id=$1 AND id=$2")
+        .bind(state.workspace_id).bind(category_id).bind(request.name.trim()).bind(request.sort_order).bind(request.archived).bind(group_id).bind(revision)
+        .execute(&mut *tx).await.map_err(ApiError::database)?;
     save_receipt(
         &mut tx,
         state.workspace_id,
@@ -608,7 +654,7 @@ async fn edit_category_attempt(
         &hash,
         StatusCode::OK,
         category_id,
-        1,
+        revision,
     )
     .await?;
     tx.commit().await.map_err(ApiError::database)?;
@@ -616,7 +662,7 @@ async fn edit_category_attempt(
         StatusCode::OK,
         Json(MutationReceipt {
             resource_id: category_id,
-            revision: 1,
+            revision,
             period_revision: None,
         }),
     ))
@@ -697,8 +743,16 @@ fn closed_snapshot_response(
             let assignment = data.assignments.iter().find(|assignment| {
                 assignment.period_start == target && assignment.category_id == row.category_id
             });
+            let category = data
+                .categories
+                .iter()
+                .find(|category| category.id == row.category_id);
             Ok(BudgetCategory {
                 id: row.category_id,
+                group_id: category
+                    .map(|c| c.group_id)
+                    .ok_or_else(ApiError::not_found)?,
+                archived: category.is_some_and(|c| c.archived),
                 name: row.category_name.clone().unwrap_or_else(|| {
                     data.categories
                         .iter()
@@ -742,6 +796,9 @@ fn closed_snapshot_response(
         },
         complete: true,
         categories,
+        archived_categories: Vec::new(),
+        groups: data.groups.clone(),
+        available_to_budget_breakdown: closed_breakdown(target, snapshot, data)?,
     })
 }
 
@@ -759,6 +816,7 @@ async fn read_close_preview(
     let categories = budget
         .categories
         .iter()
+        .chain(budget.archived_categories.iter())
         .map(|category| ClosePreviewCategory {
             category_id: category.id,
             proposed_disposition: "carry".to_owned(),
@@ -937,6 +995,7 @@ async fn close_budget_attempt(
     let expected_categories = budget
         .categories
         .iter()
+        .chain(budget.archived_categories.iter())
         .map(|category| category.id)
         .collect::<HashSet<_>>();
     if requested.len() != expected_categories.len()
@@ -992,8 +1051,8 @@ async fn close_budget_attempt(
     let snapshot_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO budget_close_snapshots \
-         (id, workspace_id, period_start, revision, funding, ready_to_assign, activity, uncategorized_activity) \
-         VALUES ($1,$2,$3,1,$4,$5,$6,$7)",
+         (id, workspace_id, period_start, revision, funding, ready_to_assign, activity, uncategorized_activity, available_to_budget_breakdown) \
+         VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8)",
     )
     .bind(snapshot_id)
     .bind(state.workspace_id)
@@ -1002,10 +1061,15 @@ async fn close_budget_attempt(
     .bind(ready)
     .bind(activity)
     .bind(uncategorized)
+    .bind(serde_json::to_value(&budget.available_to_budget_breakdown).map_err(|_| stored_money_error("breakdown serialization"))?)
     .execute(&mut *tx)
     .await
     .map_err(ApiError::database)?;
-    for category in &budget.categories {
+    for category in budget
+        .categories
+        .iter()
+        .chain(budget.archived_categories.iter())
+    {
         let assigned = category.assigned.decimal();
         let category_activity = complete_amount(&category.activity)
             .ok_or_else(|| close_conflict("incomplete_values"))?;
@@ -3225,6 +3289,7 @@ struct BudgetData {
     activity_effects: Vec<ActivityEffectRow>,
     assignments: Vec<AssignmentRow>,
     categories: Vec<CategoryView>,
+    groups: Vec<BudgetGroup>,
     close_snapshots: Vec<CloseSnapshotRow>,
     close_category_snapshots: Vec<CloseCategorySnapshotRow>,
     assignment_targets: HashMap<Uuid, Decimal>,
@@ -3250,6 +3315,7 @@ async fn period_revision_in(
          COALESCE((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.period_start,e.transaction_id,e.category_id NULLS FIRST)::text FROM budget_activity_effects e WHERE e.workspace_id=$1 AND e.period_start < $2), '[]'), \
          COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'source', r.source, 'base_currency', r.base_currency, 'quote_currency', r.quote_currency, 'effective_date', r.effective_date, 'rate', r.rate, 'observed_at', r.observed_at) ORDER BY r.id)::text FROM daily_fx_observations r WHERE r.workspace_id=$1 AND r.effective_date < $2), '[]'), \
          COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id)::text FROM expense_categories c WHERE c.workspace_id=$1), '[]'), \
+         COALESCE((SELECT jsonb_agg(to_jsonb(g) ORDER BY g.id)::text FROM budget_category_groups g WHERE g.workspace_id=$1), '[]'), \
          COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id)::text FROM budget_assignments a WHERE a.workspace_id=$1 AND a.period_start < $2), '[]'), \
          COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.period_start)::text FROM budget_close_snapshots s WHERE s.workspace_id=$1 AND s.period_start < $2), '[]'), \
          COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.snapshot_id, s.category_id)::text FROM budget_close_category_snapshots s JOIN budget_close_snapshots p ON p.workspace_id=s.workspace_id AND p.id=s.snapshot_id WHERE s.workspace_id=$1 AND p.period_start < $2), '[]'))",
@@ -3265,6 +3331,7 @@ async fn period_revision_in(
 struct CurrentBudget {
     result: PeriodResult,
     funding: CalculatedValue,
+    breakdown: AvailableToBudgetBreakdown,
 }
 
 async fn load_budget_data(
@@ -3350,7 +3417,7 @@ async fn load_budget_data(
     .map_err(ApiError::database)?;
 
     let categories = sqlx::query_as::<_, CategoryView>(
-        "SELECT id, slug, name, sort_order, archived FROM expense_categories \
+        "SELECT id, slug, name, sort_order, archived, group_id, revision FROM expense_categories \
          WHERE workspace_id=$1 ORDER BY sort_order, id",
     )
     .bind(workspace_id)
@@ -3358,9 +3425,11 @@ async fn load_budget_data(
     .await
     .map_err(ApiError::database)?;
 
+    let groups = sqlx::query_as::<_, BudgetGroup>("SELECT id,name,sort_order,archived,revision FROM budget_category_groups WHERE workspace_id=$1 ORDER BY sort_order,id")
+        .bind(workspace_id).fetch_all(&mut *tx).await.map_err(ApiError::database)?;
     let close_snapshots = sqlx::query_as::<_, CloseSnapshotRow>(
         "SELECT id, period_start, funding, ready_to_assign, activity, \
-                uncategorized_activity, closed_at \
+                uncategorized_activity, closed_at, available_to_budget_breakdown \
          FROM budget_close_snapshots WHERE workspace_id=$1 AND period_start <= $2 \
          ORDER BY period_start",
     )
@@ -3420,6 +3489,7 @@ async fn load_budget_data(
         activity_effects,
         assignments,
         categories,
+        groups,
         close_snapshots,
         close_category_snapshots,
         assignment_targets,
@@ -3609,6 +3679,7 @@ async fn calculate_open_period(
             activities,
             assignments_clp,
         };
+        let breakdown = open_breakdown(&input, &inherited_missing_funding)?;
         let period_funding = calculate_funding(&input.funding_events, &input.activities, period)?;
         let mut result = calculate_period(&input).map_err(calculation_error)?;
         apply_activity_correction_effects(&mut result, &data.activity_effects, month)?;
@@ -3687,6 +3758,7 @@ async fn calculate_open_period(
             current_result = Some(CurrentBudget {
                 result,
                 funding: period_funding,
+                breakdown,
             });
             break;
         }
@@ -4412,14 +4484,22 @@ fn to_budget_response(
     };
 
     let mut categories = Vec::new();
-    for category in data.categories.iter().filter(|category| !category.archived) {
+    let mut archived_categories = Vec::new();
+    for category in &data.categories {
         let id = category.id.to_string();
         let assigned = data.assignments.iter().find(|assignment| {
             assignment.period_start == period_start && assignment.category_id == category.id
         });
         let assigned_amount = assigned.map(|row| row.amount).unwrap_or(Decimal::ZERO);
-        categories.push(BudgetCategory {
+        let target = if category.archived {
+            &mut archived_categories
+        } else {
+            &mut categories
+        };
+        target.push(BudgetCategory {
             id: category.id,
+            group_id: category.group_id,
+            archived: category.archived,
             name: category.name.clone(),
             sort_order: category.sort_order,
             assigned: MoneyAmount::new(assigned_amount).map_err(stored_money_error)?,
@@ -4454,6 +4534,9 @@ fn to_budget_response(
         uncategorized_activity: value_to_wire(&result.uncategorized_activity_clp)?,
         complete: result.can_close,
         categories,
+        archived_categories,
+        groups: data.groups.clone(),
+        available_to_budget_breakdown: budget.breakdown.clone(),
     })
 }
 
@@ -4651,4 +4734,386 @@ async fn save_receipt(
     .await
     .map_err(ApiError::database)?;
     Ok(())
+}
+
+// Keep the eligibility display and destructive guard identical. Include retained
+// correction/snapshot references even after a transaction has been recategorized.
+
+fn check_organization_revision(expected: Option<i64>, current: i64) -> Result<(), ApiError> {
+    if expected.is_some_and(|revision| revision != current) {
+        return Err(ApiError::stale_revision());
+    }
+    Ok(())
+}
+
+async fn active_group_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    workspace: Uuid,
+    group: Option<Uuid>,
+) -> Result<Uuid, ApiError> {
+    sqlx::query_scalar("SELECT id FROM budget_category_groups WHERE workspace_id=$1 AND NOT archived AND (($2::uuid IS NOT NULL AND id=$2) OR ($2 IS NULL AND slug='general'))")
+        .bind(workspace).bind(group).fetch_optional(&mut **tx).await.map_err(ApiError::database)?
+        .ok_or_else(|| ApiError::invalid("group_id", "active_group_required"))
+}
+
+async fn list_groups(State(state): State<AppState>) -> Result<Json<Vec<BudgetGroup>>, ApiError> {
+    let groups = sqlx::query_as::<_, BudgetGroup>("SELECT id,name,sort_order,archived,revision FROM budget_category_groups WHERE workspace_id=$1 ORDER BY sort_order,id")
+        .bind(state.workspace_id).fetch_all(&state.pool).await.map_err(ApiError::database)?;
+    Ok(Json(groups))
+}
+
+async fn create_group(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let key = idempotency_key(&headers)?;
+    let generation = installation_generation(&headers)?;
+    retry_transaction(|| group_attempt(state.clone(), generation, None, key, body.clone())).await
+}
+
+async fn edit_group(
+    State(state): State<AppState>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let Path(id) = path.map_err(|_| ApiError::invalid_request_parameter())?;
+    let key = idempotency_key(&headers)?;
+    let generation = installation_generation(&headers)?;
+    retry_transaction(|| group_attempt(state.clone(), generation, Some(id), key, body.clone()))
+        .await
+}
+
+async fn group_attempt(
+    state: AppState,
+    generation: Uuid,
+    existing: Option<Uuid>,
+    key: Uuid,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let (method, route) = existing
+        .map(|id| ("PUT", format!("/api/budget-groups/{id}")))
+        .unwrap_or(("POST", "/api/budget-groups".to_owned()));
+    let hash = Sha256::digest(&body).to_vec();
+    let mut tx = state.pool.begin().await.map_err(ApiError::database)?;
+    lock_workspace(&mut tx, state.workspace_id, generation).await?;
+    if let Some(receipt) =
+        find_receipt(&mut tx, state.workspace_id, key, method, &route, &hash).await?
+    {
+        tx.commit().await.map_err(ApiError::database)?;
+        return Ok((
+            StatusCode::from_u16(receipt.response_status as u16).unwrap_or(StatusCode::OK),
+            Json(MutationReceipt {
+                resource_id: receipt.resource_id.ok_or_else(ApiError::not_found)?,
+                revision: receipt.resource_revision.unwrap_or(1),
+                period_revision: None,
+            }),
+        ));
+    }
+    let request: GroupRequest = parse_body(&body)?;
+    validate_category(&request.name, request.sort_order)?;
+    let id = existing.unwrap_or_else(Uuid::new_v4);
+    let revision = if existing.is_some() {
+        let current: i64 = sqlx::query_scalar("SELECT revision FROM budget_category_groups WHERE workspace_id=$1 AND id=$2 FOR UPDATE")
+            .bind(state.workspace_id).bind(id).fetch_optional(&mut *tx).await.map_err(ApiError::database)?.ok_or_else(ApiError::not_found)?;
+        check_organization_revision(request.expected_revision, current)?;
+        if request.archived {
+            let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM expense_categories WHERE workspace_id=$1 AND group_id=$2 AND NOT archived)")
+                .bind(state.workspace_id).bind(id).fetch_one(&mut *tx).await.map_err(ApiError::database)?;
+            if active {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "group_has_active_categories",
+                    "Move or archive active categories before archiving their group.",
+                ));
+            }
+        }
+        sqlx::query("UPDATE budget_category_groups SET name=$3,sort_order=$4,archived=$5,revision=revision+1,updated_at=now() WHERE workspace_id=$1 AND id=$2")
+            .bind(state.workspace_id).bind(id).bind(request.name.trim()).bind(request.sort_order).bind(request.archived).execute(&mut *tx).await.map_err(ApiError::database)?;
+        current + 1
+    } else {
+        if request.archived {
+            return Err(ApiError::invalid("archived", "new_group_must_be_active"));
+        }
+        sqlx::query("INSERT INTO budget_category_groups (id,workspace_id,slug,name,sort_order) VALUES ($1,$2,$3,$4,$5)")
+            .bind(id).bind(state.workspace_id).bind(format!("custom-{}",id.simple())).bind(request.name.trim()).bind(request.sort_order).execute(&mut *tx).await.map_err(ApiError::database)?;
+        1
+    };
+    let status = if existing.is_some() {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    save_receipt(
+        &mut tx,
+        state.workspace_id,
+        key,
+        method,
+        &route,
+        &hash,
+        status,
+        id,
+        revision,
+    )
+    .await?;
+    tx.commit().await.map_err(ApiError::database)?;
+    Ok((
+        status,
+        Json(MutationReceipt {
+            resource_id: id,
+            revision,
+            period_revision: None,
+        }),
+    ))
+}
+
+async fn delete_category(
+    State(state): State<AppState>,
+    path: Result<Path<Uuid>, PathRejection>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let Path(id) = path.map_err(|_| ApiError::invalid_request_parameter())?;
+    let key = idempotency_key(&headers)?;
+    let generation = installation_generation(&headers)?;
+    retry_transaction(|| delete_category_attempt(state.clone(), generation, id, key, body.clone()))
+        .await
+}
+
+async fn delete_category_attempt(
+    state: AppState,
+    generation: Uuid,
+    id: Uuid,
+    key: Uuid,
+    body: Bytes,
+) -> Result<impl IntoResponse, ApiError> {
+    let route = format!("/api/categories/{id}");
+    let hash = Sha256::digest(&body).to_vec();
+    let mut tx = state.pool.begin().await.map_err(ApiError::database)?;
+    lock_workspace(&mut tx, state.workspace_id, generation).await?;
+    if let Some(receipt) =
+        find_receipt(&mut tx, state.workspace_id, key, "DELETE", &route, &hash).await?
+    {
+        tx.commit().await.map_err(ApiError::database)?;
+        return Ok(Json(MutationReceipt {
+            resource_id: id,
+            revision: receipt.resource_revision.unwrap_or(1),
+            period_revision: None,
+        }));
+    }
+    let request: DeleteCategoryRequest = parse_body(&body)?;
+    let revision: i64 = sqlx::query_scalar(
+        "SELECT revision FROM expense_categories WHERE workspace_id=$1 AND id=$2 FOR UPDATE",
+    )
+    .bind(state.workspace_id)
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(ApiError::database)?
+    .ok_or_else(ApiError::not_found)?;
+    check_organization_revision(request.expected_revision, revision)?;
+    let sql = concat!(
+        "SELECT (",
+        category_references!(),
+        ") FROM expense_categories c WHERE c.workspace_id=$1 AND c.id=$2"
+    );
+    let referenced: bool = sqlx::query_scalar(sql)
+        .bind(state.workspace_id)
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(ApiError::database)?;
+    if referenced {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "category_in_use",
+            "Archive this category to preserve its transactions and budget history.",
+        ));
+    }
+    sqlx::query("DELETE FROM expense_categories WHERE workspace_id=$1 AND id=$2")
+        .bind(state.workspace_id)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(ApiError::database)?;
+    save_receipt(
+        &mut tx,
+        state.workspace_id,
+        key,
+        "DELETE",
+        &route,
+        &hash,
+        StatusCode::OK,
+        id,
+        revision,
+    )
+    .await?;
+    tx.commit().await.map_err(ApiError::database)?;
+    Ok(Json(MutationReceipt {
+        resource_id: id,
+        revision,
+        period_revision: None,
+    }))
+}
+
+fn known_budget_value(amount: Decimal) -> Result<BudgetValue, ApiError> {
+    Ok(BudgetValue::Complete {
+        amount: MoneyAmount::new(amount).map_err(stored_money_error)?,
+    })
+}
+
+fn sum_budget_amounts(values: impl IntoIterator<Item = Decimal>) -> Result<Decimal, ApiError> {
+    values.into_iter().try_fold(Decimal::ZERO, |total, amount| {
+        let value = total.checked_add(amount).ok_or_else(|| {
+            calculation_api_error("Budget explanation exceeded the supported range.")
+        })?;
+        MoneyAmount::new(value).map_err(stored_money_error)?;
+        if value.checked_sub(total) != Some(amount) || value.checked_sub(amount) != Some(total) {
+            return Err(calculation_api_error(
+                "Budget explanation cannot be represented exactly.",
+            ));
+        }
+        Ok(value)
+    })
+}
+
+fn amount_component(values: impl IntoIterator<Item = Decimal>) -> BudgetValue {
+    sum_budget_amounts(values)
+        .and_then(known_budget_value)
+        .unwrap_or_else(|_| BudgetValue::Unavailable {
+            reasons: vec!["component_out_of_range".to_owned()],
+        })
+}
+
+fn open_breakdown(
+    input: &PeriodInput,
+    inherited_missing: &[MissingValue],
+) -> Result<AvailableToBudgetBreakdown, ApiError> {
+    let attributed = attribute_transactions(&input.activities).map_err(calculation_error)?;
+    let component = |kind: FundingKind| -> Result<BudgetValue, ApiError> {
+        let events = input
+            .funding_events
+            .iter()
+            .chain(attributed.funding_events.iter())
+            .filter(|event| {
+                event.eligible && input.period.contains(event.date) && event.kind == kind
+            });
+        let mut values = Vec::new();
+        let mut missing = Vec::new();
+        for event in events {
+            match event.value_clp {
+                ValueState::Known(amount) => values.push(amount),
+                ValueState::Missing(reason) => {
+                    if !missing.contains(&reason) {
+                        missing.push(reason);
+                    }
+                }
+            }
+        }
+        if missing.is_empty() {
+            Ok(amount_component(values))
+        } else {
+            value_to_wire(&CalculatedValue::Unavailable(missing))
+        }
+    };
+    let prior_unassigned = if inherited_missing.is_empty() {
+        known_budget_value(input.prior_unassigned_clp)?
+    } else {
+        value_to_wire(&CalculatedValue::Unavailable(inherited_missing.to_vec()))?
+    };
+    Ok(AvailableToBudgetBreakdown {
+        prior_unassigned,
+        funding_total: value_to_wire(&calculate_funding(
+            &input.funding_events,
+            &input.activities,
+            input.period,
+        )?)?,
+        income: component(FundingKind::Income)?,
+        openings: component(FundingKind::Opening)?,
+        transfers: component(FundingKind::Transfer)?,
+        valuation: component(FundingKind::ForeignAssetRevaluation)?,
+        corrections: component(FundingKind::OtherCorrection)?,
+        category_releases: amount_component(
+            input.released_category_remainders_clp.values().copied(),
+        ),
+        category_rollover: known_budget_value(Decimal::ZERO)?,
+        assignments: amount_component(input.assignments_clp.values().copied()),
+    })
+}
+
+fn closed_breakdown(
+    target: NaiveDate,
+    snapshot: &CloseSnapshotRow,
+    data: &BudgetData,
+) -> Result<AvailableToBudgetBreakdown, ApiError> {
+    if let Some(stored) = &snapshot.available_to_budget_breakdown {
+        return serde_json::from_value(stored.clone())
+            .map_err(|_| stored_money_error("invalid closed explanation"));
+    }
+    // Older snapshots retain the funding total but not its source components.
+    // Derive carry only from immutable snapshot values, never today's facts.
+    let prior_close = data
+        .close_snapshots
+        .iter()
+        .filter(|row| row.period_start < target)
+        .max_by_key(|row| row.period_start);
+    let releases = amount_component(
+        data.close_category_snapshots
+            .iter()
+            .filter(|row| {
+                Some(row.snapshot_id) == prior_close.map(|close| close.id)
+                    && row.disposition == "release"
+            })
+            .map(|row| row.remaining),
+    );
+    let assignments = amount_component(
+        data.close_category_snapshots
+            .iter()
+            .filter(|row| row.snapshot_id == snapshot.id)
+            .map(|row| row.assigned),
+    );
+    let carry = match (complete_amount(&releases), complete_amount(&assignments)) {
+        (Some(releases), Some(assignments)) => amount_component([
+            snapshot.ready_to_assign,
+            assignments,
+            -snapshot.funding,
+            -releases,
+        ]),
+        _ => BudgetValue::Unavailable {
+            reasons: vec!["component_out_of_range".to_owned()],
+        },
+    };
+    let unavailable = || BudgetValue::Unavailable {
+        reasons: vec!["closed_snapshot_breakdown_unavailable".to_owned()],
+    };
+    Ok(AvailableToBudgetBreakdown {
+        prior_unassigned: carry,
+        funding_total: known_budget_value(snapshot.funding)?,
+        income: unavailable(),
+        openings: unavailable(),
+        transfers: unavailable(),
+        valuation: unavailable(),
+        corrections: unavailable(),
+        category_releases: releases,
+        category_rollover: known_budget_value(Decimal::ZERO)?,
+        assignments,
+    })
+}
+
+#[cfg(test)]
+mod workspace_breakdown_tests {
+    use super::*;
+
+    #[test]
+    fn component_sum_reports_unavailable_instead_of_rounding_money() {
+        let max = Decimal::MAX;
+        let fraction = Decimal::new(1, 1);
+        assert!(sum_budget_amounts([max, fraction]).is_err());
+        assert!(matches!(
+            amount_component([max, fraction]),
+            BudgetValue::Unavailable { .. }
+        ));
+        assert_eq!(sum_budget_amounts([-max, max, fraction]).unwrap(), fraction);
+    }
 }

@@ -57,7 +57,14 @@ records, then makes foreign-exchange observations append-only by rate. The
 fourth migration preserves existing observations while allowing a changed
 provider rate for the same effective date to be stored as a distinct fact. The
 fifth migration adds immutable close facts and linked funding/activity state
-for budget corrections.
+for budget corrections. The sixth adds workspace budget groups, deterministic
+starter-category membership, organization revisions, and optional immutable
+close explanations. Existing category IDs and financial references are retained;
+legacy inserts omitting group membership remain supported by a defaulting trigger.
+This preserves the older INSERT shape, not a verified binary downgrade path:
+SQLx also validates the applied migration set against the embedded migrator.
+An application rollback must retain a compatible migrator; do not remove an
+applied migration or its metadata to force an older binary to start.
 
 After restoring a database backup, rotate the installation generation before
 starting API instances. This makes pending browser commands from the previous

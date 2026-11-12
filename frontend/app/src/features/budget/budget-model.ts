@@ -1,4 +1,5 @@
-import type { BudgetClosePreview, BudgetSnapshot, BudgetValue } from './api/contracts'
+import { formatMoney } from '../../shared/formatting/money'
+import type { BudgetCategory, BudgetClosePreview, BudgetGroup, BudgetSnapshot, BudgetValue } from './api/contracts'
 export type * from './api/contracts'
 
 export function currentPeriodInSantiago(now = new Date()): string {
@@ -97,4 +98,31 @@ export function unresolvedDescriptions(value: BudgetValue): string[] {
     const detail = [item.amount, item.currency].filter(Boolean).join(' ')
     return detail ? `${item.kind}: ${detail}` : item.kind
   })
+}
+
+
+export function budgetValueText(value: BudgetValue | undefined): string {
+  if (!value || value.state === 'unavailable' || (value.state === 'complete' && value.amount === undefined)) return 'No disponible'
+  if (value.state === 'complete') return formatMoney(value.amount!, 'CLP')
+  return value.known_subtotal === undefined ? 'Incompleto' : `${formatMoney(value.known_subtotal, 'CLP')} · subtotal conocido (incompleto)`
+}
+
+export function budgetValueReasons(value: BudgetValue | undefined): string[] {
+  if (!value) return ['El API no proporciona este componente.']
+  return value.state === 'incomplete' ? unresolvedDescriptions(value) : value.reasons ?? []
+}
+
+export interface BudgetSection { group: BudgetGroup; categories: BudgetCategory[] }
+export function groupedBudgetSections(categories: readonly BudgetCategory[], groups: readonly BudgetGroup[]): BudgetSection[] {
+  return [...groups].filter((group) => !group.archived)
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .map((group) => ({ group, categories: categories.filter((item) => !item.archived && item.group_id === group.id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)) }))
+}
+
+
+export function closeCategoryLabel(preview: BudgetSnapshot, categoryId: string): string {
+  const category = [...preview.categories, ...(preview.archived_categories ?? [])].find((item) => item.id === categoryId)
+  if (!category) return 'Categoría no disponible'
+  return `${category.name}${category.archived ? ' (archivada)' : ''} · Restante ${budgetValueText(category.remaining)}`
 }

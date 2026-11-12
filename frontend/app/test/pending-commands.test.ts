@@ -150,6 +150,28 @@ describe('durable financial write commands', () => {
     expect(new PendingWriteStore(storage).list()).toHaveLength(1)
   })
 
+  it('persists an unknown category deletion and retries its exact method, revision, and key after reload', async () => {
+    const storage = new MemoryStorage()
+    const store = new PendingWriteStore(storage)
+    const deleteBody = '{"expected_revision":7}'
+    fetchMock.mockResolvedValueOnce(bootstrapResponse())
+    fetchMock.mockRejectedValueOnce(new TypeError('delete receipt lost'))
+    await expect(sendFinancialWrite({ ...intent(), method: 'DELETE', route: '/api/categories/category-1', body: deleteBody }, store))
+      .rejects.toMatchObject({ pendingCommandKey: key, outcomeUnknown: true })
+
+    const reloadedStore = new PendingWriteStore(storage)
+    expect(reloadedStore.list()[0]).toMatchObject({ method: 'DELETE', body: deleteBody })
+    fetchMock.mockResolvedValueOnce(bootstrapResponse())
+    fetchMock.mockResolvedValueOnce(successResponse())
+    await retryPendingWrite(key, reloadedStore)
+    const [route, options] = fetchMock.mock.calls[3] as [string, RequestInit]
+    expect(route).toBe('/api/categories/category-1')
+    expect(options.method).toBe('DELETE')
+    expect(options.body).toBe(deleteBody)
+    expect(new Headers(options.headers).get('Idempotency-Key')).toBe(key)
+    expect(reloadedStore.list()).toEqual([])
+  })
+
   it('refuses a retry after the server installation generation changes', async () => {
     const storage = new MemoryStorage()
     const store = new PendingWriteStore(storage)

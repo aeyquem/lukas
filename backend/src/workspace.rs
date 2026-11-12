@@ -110,11 +110,28 @@ pub async fn bootstrap(pool: &PgPool) -> Result<Uuid, BootstrapError> {
             .await
             .map_err(|_| BootstrapError)?;
 
-    for category in STARTER_CATEGORIES {
-        sqlx::query(
+    for (slug, name, order) in [
+        ("general", "General", 1_i16),
+        ("transport", "Transporte", 2),
+        ("savings", "Ahorro", 3),
+    ] {
+        sqlx::query("INSERT INTO budget_category_groups (id,workspace_id,slug,name,sort_order) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (workspace_id,slug) DO NOTHING")
+            .bind(Uuid::new_v4()).bind(workspace_id).bind(slug).bind(name).bind(order)
+            .execute(&mut *transaction).await.map_err(|_| BootstrapError)?;
+    }
+    let seeded: bool = sqlx::query_scalar(
+        "SELECT budget_categories_seeded FROM workspaces WHERE id=$1 FOR UPDATE",
+    )
+    .bind(workspace_id)
+    .fetch_one(&mut *transaction)
+    .await
+    .map_err(|_| BootstrapError)?;
+    if !seeded {
+        for category in STARTER_CATEGORIES {
+            sqlx::query(
             "INSERT INTO expense_categories \
-             (id, workspace_id, slug, name, sort_order) \
-             VALUES ($1, $2, $3, $4, $5) \
+             (id, workspace_id, slug, name, sort_order, group_id) \
+             VALUES ($1, $2, $3, $4, $5, (SELECT id FROM budget_category_groups WHERE workspace_id=$2 AND slug=$6)) \
              ON CONFLICT (workspace_id, slug) DO NOTHING",
         )
         .bind(Uuid::new_v4())
@@ -122,11 +139,18 @@ pub async fn bootstrap(pool: &PgPool) -> Result<Uuid, BootstrapError> {
         .bind(category.slug)
         .bind(category.name)
         .bind(category.sort_order)
+        .bind(match category.slug { "transporte" => "transport", "ahorro-general" => "savings", _ => "general" })
         .execute(&mut *transaction)
         .await
         .map_err(|_| BootstrapError)?;
-    }
+        }
 
+        sqlx::query("UPDATE workspaces SET budget_categories_seeded=TRUE WHERE id=$1")
+            .bind(workspace_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|_| BootstrapError)?;
+    }
     transaction.commit().await.map_err(|_| BootstrapError)?;
     Ok(workspace_id)
 }

@@ -145,18 +145,38 @@ To request the following page, pass the returned `next.before_date` and `next.be
 | `GET /api/categories` | List workspace categories, including archived categories | `200` |
 | `POST /api/categories` | Create a custom category | `201` |
 | `PUT /api/categories/{category_id}` | Rename, reorder, or archive a category | `200` |
+| `DELETE /api/categories/{category_id}` | Permanently delete a category without retained references | `200` |
+| `GET /api/budget-groups` | List groups, including archived groups | `200` |
+| `POST /api/budget-groups` | Create a group | `201` |
+| `PUT /api/budget-groups/{group_id}` | Rename, reorder, archive, or restore a group | `200` |
 | `GET /api/budgets/{YYYY-MM}` | Read calculated or immutable closed-period values | `200` |
 | `PUT /api/budgets/{YYYY-MM}/assignments/{category_id}` | Save the assignment for one category and month | `200` |
 | `GET /api/budgets/{YYYY-MM}/close-preview` | Read values, eligibility, revision, and proposed dispositions | `200` |
 | `POST /api/budgets/{YYYY-MM}/close` | Close an eligible period with explicit dispositions | `201` |
 
-Category creation accepts `{ "name": "Pet care", "sort_order": 30 }`.
-Category edits send the full editable representation, for example
-`{ "name": "Pets", "sort_order": 30, "archived": false }`. Archiving is
-rejected with `409 category_in_use` while any transaction or assignment refers
-to the category. Starter categories are seeded idempotently during workspace
-bootstrap. Expenses without a category remain visible in
+Category creation accepts `{ "name": "Pet care", "sort_order": 30, "group_id": "<uuid>" }`.
+Omitting `group_id` uses the active General group. Category edits send the full
+editable representation plus `group_id` and `expected_revision`; older clients
+may omit these fields to retain membership and their previous write behavior.
+Reads return `group_id`, `revision`, and `can_delete`, including in bootstrap.
+Order is stable by `sort_order`, then ID within a group.
+
+Archiving hides a category from active planning while preserving transactions,
+assignments, monetary carry, and immutable close history. Permanent deletion
+sends JSON `{ "expected_revision": 1 }` and returns `409 category_in_use` if any
+transaction, assignment, close snapshot, or retained correction references it.
+Starter groups and categories are seeded once; deleted starter categories do
+not reappear on restart. Expenses without a category remain visible in
 `uncategorized_activity`.
+
+Group reads return `id`, `name`, `sort_order`, `archived`, and `revision`.
+Create accepts `name` and `sort_order`; edit adds `archived` and
+`expected_revision`. A stale supplied revision returns `409 stale_revision`.
+Archiving a group requires moving or archiving its active categories first;
+otherwise the API returns `409 group_has_active_categories`. Active categories
+cannot be added to an archived group. All organization writes use the same
+installation-generation and exact-request idempotency safeguards as financial
+writes.
 
 Budget reads return server-calculated values and a revision fingerprint over
 the inputs. A money value is a tagged object: `complete` includes `amount`,
@@ -166,6 +186,25 @@ total. Signed activity and remaining values are preserved; the server does not
 clamp negatives or reject an assignment merely because it exceeds available
 funding. Assignments are saved owner intent and do not alter calculated values
 such as activity or funding.
+
+Budget reads also return ordered `groups`, active `categories`, and
+`archived_categories` holding archived monetary state for review and close.
+Closed-period `categories` include all preserved snapshot rows and labels.
+Each row includes `group_id` and `archived`; grouping does not change money.
+
+`available_to_budget_breakdown` contains tagged money values for
+`prior_unassigned`, `funding_total`, `income`, `openings`, `transfers`,
+`valuation`, `corrections`, `category_releases`, `category_rollover`, and
+`assignments`. In complete cases, prior unassigned + funding total + category
+releases - assignments equals ready-to-assign. The source funding components
+sum to funding total; do not add both the aggregate and its sources. Ordinary
+category rollover contributes zero; explicit releases retain their actual
+sign. Unknown inherited funding stays unavailable. A component outside the
+exact Decimal envelope is unavailable with `component_out_of_range`, even when
+the total is representable. New closes preserve this explanation immutably;
+older snapshots expose funding total but unavailable funding-source details
+(`closed_snapshot_breakdown_unavailable`). Close preview includes archived
+categories so their signed carry/release choices are retained.
 
 An assignment request contains a nonnegative decimal-string `amount`, the
 latest `expected_period_revision`, and `expected_revision` (`null` when no

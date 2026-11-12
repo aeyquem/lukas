@@ -18,7 +18,7 @@ use crate::{
     financial_values::{BusinessDate, MoneyAmount},
     health::AppState,
     http_error::{ApiError, retry_transaction},
-    persistence::{AccountRow, CategoryRow, WalletRow},
+    persistence::{AccountRow, WalletRow},
     write_guard::{installation_generation, lock_workspace},
 };
 
@@ -40,16 +40,7 @@ pub fn router() -> Router<AppState> {
 struct BootstrapResponse {
     workspace_id: Uuid,
     installation_generation: Uuid,
-    categories: Vec<CategoryResponse>,
-}
-
-#[derive(Serialize)]
-struct CategoryResponse {
-    id: Uuid,
-    slug: String,
-    name: String,
-    sort_order: i16,
-    archived: bool,
+    categories: Vec<crate::budget_api::CategoryView>,
 }
 
 #[derive(Deserialize)]
@@ -159,23 +150,9 @@ async fn bootstrap(State(state): State<AppState>) -> Result<Json<BootstrapRespon
             .map_err(ApiError::database)?
             .ok_or_else(ApiError::not_found)?;
 
-    let categories = sqlx::query_as::<_, CategoryRow>(
-        "SELECT id, workspace_id, slug, name, sort_order, archived, created_at, updated_at \
-         FROM expense_categories WHERE workspace_id = $1 ORDER BY sort_order, id",
-    )
-    .bind(state.workspace_id)
-    .fetch_all(&state.pool)
-    .await
-    .map_err(ApiError::database)?
-    .into_iter()
-    .map(|category| CategoryResponse {
-        id: category.id,
-        slug: category.slug,
-        name: category.name,
-        sort_order: category.sort_order,
-        archived: category.archived,
-    })
-    .collect();
+    let categories = crate::budget_api::list_categories(State(state.clone()))
+        .await?
+        .0;
 
     Ok(Json(BootstrapResponse {
         workspace_id: state.workspace_id,

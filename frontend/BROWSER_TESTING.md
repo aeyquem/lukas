@@ -113,3 +113,62 @@ and numerical input styles on the mobile financial screens. These additions
 have not been executed: local privileged session access was blocked by an
 automatic approval-review usage limit. Build/type-check and static font and
 contrast validation are recorded separately; do not treat them as browser QA.
+
+## Grouped monthly budget workspace check
+
+`frontend/browser-checks/budget-workspace.mjs` verifies the rewritten workspace
+through Chromium, the real Rust API, and PostgreSQL. Run it only through the
+isolated verification proxy on `http://localhost:4174`, backed by a freshly
+created disposable database and the current backend build. It refuses to run
+against the normal development origin or an account list that already contains
+records. It retains its named fixtures and closes the previous calendar month.
+A subsequent run requires a new disposable database; do not reset the owner's
+development database to rerun it.
+
+```sh
+LUKAS_BROWSER_ORIGIN=http://localhost:4174 node frontend/browser-checks/budget-workspace.mjs
+```
+
+The check covers the single table named Presupuesto, the separate category
+administration tab, group creation/rename/archive, keyboard category order, cross-group moves,
+group drag persistence, active-group archive rejection, arrangement locking, drawer creation/edit/archive and
+guarded deletion, decimal-string inline Enter saves, explicit stale-draft review,
+committed-response loss and exact retry after reload, incomplete foreign activity,
+actual close releases versus ordinary category carry, closed correction reasons,
+immutable historical labels/totals, and a 390px drawer with focus restoration.
+The older `budget.mjs` targets the previous category manager and archive rules;
+use `budget-workspace.mjs` for the grouped budget workspace. Execution results
+are recorded separately from syntax validation.
+
+Recorded 2026-11-11, Chromium 155.0.8059.84 on Arch Linux: the complete
+workspace workflow passed against the isolated `lukas_workspace_verify`
+PostgreSQL database and Rust API. It verified the separate administration tab,
+single Presupuesto table, visible release/carry explanation, exact retry after
+reload, closed correction reason, archived history, and the 390px drawer's
+focus and width behavior. The read-only 813×693 screenshot was visually
+reviewed against the budget workspace model supplied for this change.
+
+
+## Budget table interaction regression
+
+With the local Vite development server running on port 4180:
+
+```sh
+LUKAS_BROWSER_ORIGIN=http://127.0.0.1:4180 node frontend/browser-checks/budget-table.mjs
+```
+
+This isolated Chromium check mounts the real table and assignment workflow with
+in-memory API fixtures; it does not use PostgreSQL or write financial records.
+It covers clear currency headers, display-to-editor focus, icon and Enter saves,
+exact decimal request amounts, invalid input, rejected/stale draft retention,
+category drops onto empty groups and category rows, pending organization locks,
+closed correction reasons, and mobile overflow. The workspace integration check
+opens assignment editors explicitly and keeps group edit-mode assertions separate
+from always-available category dragging.
+
+Recorded 2026-11-11, Chromium 155.0.8059.84 on Arch Linux: this isolated
+regression passed, including native mouse dragging into an empty group,
+synthetic drop events on category rows, both assignment save controls, retained
+failed/stale drafts, required closed correction reasons, and 390px page width.
+The PostgreSQL workspace integration check was updated but was not rerun for
+this follow-up.

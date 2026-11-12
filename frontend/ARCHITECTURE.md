@@ -17,9 +17,16 @@ file instead of importing its implementation details.
   Colada while search, sort, and edits remain local.
 - Budget: `src/features/budget/budget-feature.ts` exports budget/category/close
   queries, write and retry mutations, budget components, workflows, and public
-  contracts. `useBudgetAssignments` owns period-keyed amount/reason drafts;
-  `BudgetCategoryManager` owns category editing drafts; the route owns URL
-  period selection and composes the summary, category table, and close panel.
+  contracts. `useBudgetAssignments` owns period-keyed amount/reason drafts and captured
+  baseline revisions. Refetches retain those baselines; stale edits need explicit
+  review before saving against current revisions. The route owns URL period
+  selection and the Presupuesto / Administrar categorías tabs. Presupuesto
+  contains one grouped planning table, the available-to-budget explanation, and
+  list-based close controls. `BudgetPlanningTable` owns arrangement mode and
+  `useBudgetOrganization` persists drag/keyboard changes. The separate
+  administration tab composes category and group management.
+  `BudgetCategoryManager` owns retained category drafts and coordinates a native
+  modal right-side drawer that can also open from planning-row details.
 - Dashboard: `src/views/home-view.vue` composes the public account, budget, and
   transaction query definitions. Its account list keeps the established
   30-second freshness policy; budget and recent transactions force a read on
@@ -40,7 +47,7 @@ Colada owns fetched snapshots. Query keys include all result-changing inputs:
 - Transactions: categories and ledger pages by page size and cursor. The full
   transaction route uses bounded 50-item pages; the dashboard uses the same
   page query at 20 items and displays the first six.
-- Budget: snapshots by period, categories by their shared key, and close
+- Budget: snapshots by period, categories and groups by their shared keys, and close
   previews by period.
 
 Budget route entry explicitly activates a forced read before exposing cached
@@ -72,7 +79,11 @@ readback fails; the relevant screen reports the refresh problem separately.
 `src/shared/api/finance-query-invalidation.ts` is the single cross-feature
 invalidation entry point. Account and transaction writes invalidate mounted
 account/activity, transaction-page, and budget snapshot/preview readers.
-Budget writes invalidate budget categories, snapshots, and previews. Dashboard
+Budget writes invalidate budget categories, groups, snapshots, and previews.
+Pending category/group/assignment commands lock conflicting new submissions;
+explicit retry reuses the saved bytes. A confirmed assignment retry clears only
+the matching sent draft, preserving any newer local edits. Group and category
+reordering refreshes authoritative organization after success or partial failure. Dashboard
 uses those same query keys, so mounted sections update without callback
 subscriptions. Draft state remains in its feature workflow across those reads.
 

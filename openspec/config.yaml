@@ -24,10 +24,11 @@ githubCopilot:
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
 # This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
+Example:
+  operations:
+    apply:
+      guidance:
+        - Always use an orchestrator agent to implement changes, so there can be also reviewers
 #         - Keep test summaries concise
 #     archive:
 #       guidance:

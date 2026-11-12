@@ -1,6 +1,6 @@
 import { ApiClientError, apiRequest } from './client'
 
-export type FinancialWriteMethod = 'POST' | 'PUT'
+export type FinancialWriteMethod = 'POST' | 'PUT' | 'DELETE'
 
 export interface PendingFinancialWrite {
   method: FinancialWriteMethod
@@ -125,7 +125,7 @@ function isPendingWrite(value: unknown): value is PendingFinancialWrite {
   if (typeof value !== 'object' || value === null) return false
   const command = value as Partial<PendingFinancialWrite>
   return (
-    (command.method === 'POST' || command.method === 'PUT') &&
+    (command.method === 'POST' || command.method === 'PUT' || command.method === 'DELETE') &&
     typeof command.route === 'string' &&
     command.route.startsWith('/') &&
     typeof command.body === 'string' &&

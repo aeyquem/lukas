@@ -25,7 +25,18 @@
 
 @layer base {
   :root { color: var(--text); background: var(--canvas); font-family: var(--font-body); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-  body { min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 12% 8%, var(--canvas-glow), transparent 55%), radial-gradient(ellipse at 95% 85%, var(--canvas-cool), transparent 55%), var(--canvas); background-attachment: fixed; }
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    background-color: var(--canvas);
+    background-image:
+      linear-gradient(var(--canvas-image-wash), var(--canvas-image-wash)),
+      url('/torres-del-paine.png');
+    background-size: auto, cover;
+    background-position: center, 100% center;
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: fixed, fixed;
+  }
   a { color: inherit; } button, input, select, textarea { font: inherit; } button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
   button, input, select, textarea { accent-color: var(--accent); }
   :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
@@ -34,6 +45,14 @@
   input:not([type='checkbox']):not([type='radio']), select, textarea { max-width: 100%; min-height: 42px; border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 9px 12px; color: var(--text); background: var(--surface-raised); }
   button { min-height: 40px; border: 1px solid var(--border-strong); border-radius: var(--control-radius); padding: 9px 14px; color: var(--accent); background: var(--surface-soft); font-weight: 600; cursor: pointer; }
   button:hover:not(:disabled) { border-color: var(--accent); } button:disabled { opacity: .6; cursor: not-allowed; }
+}
+
+@media (max-width: 600px) {
+  body { background-position: center, 82% center; }
+}
+
+@media (min-width: 2000px) {
+  body { background-size: auto, 150vw auto; background-position: center, 100% center; }
 }
 
 @layer components {

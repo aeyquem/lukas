@@ -50,6 +50,7 @@ services:
       - --strictPort
     volumes:
       - ./frontend/app/src:/workspace/src:ro
+      - ./frontend/app/public:/workspace/public:ro
       - ./frontend/app/index.html:/workspace/index.html:ro
       - ./frontend/app/vite.config.ts:/workspace/vite.config.ts:ro
       - ./frontend/app/tsconfig.json:/workspace/tsconfig.json:ro

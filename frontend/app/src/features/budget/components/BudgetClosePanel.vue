@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BudgetClosePreview } from '../api/contracts'
+import { closeCategoryLabel } from '../budget-model'
 
 defineProps<{
   preview: BudgetClosePreview | null
@@ -21,7 +22,7 @@ const emit = defineEmits<{
     <div v-if="preview" class="close-preview">
       <p v-if="!preview.close.eligible" class="notice" role="status">{{ preview.close.reason || 'El período todavía no se puede cerrar.' }}</p>
       <fieldset v-for="item in preview.close.categories" :key="item.category_id">
-        <legend>{{ preview.categories.find((category) => category.id === item.category_id)?.name ?? 'Categoría' }}</legend>
+        <legend>{{ closeCategoryLabel(preview, item.category_id) }}</legend>
         <label><input type="radio" :name="`disposition-${item.category_id}`" value="carry" :checked="(dispositions[item.category_id] ?? 'carry') === 'carry'" @change="emit('updateDisposition', item.category_id, 'carry')"> Llevar saldo</label>
         <label><input type="radio" :name="`disposition-${item.category_id}`" value="release" :checked="dispositions[item.category_id] === 'release'" @change="emit('updateDisposition', item.category_id, 'release')"> Liberar saldo</label>
       </fieldset>

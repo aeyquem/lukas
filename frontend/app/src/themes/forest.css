@@ -8,6 +8,7 @@
   --canvas: #edf8df;
   --canvas-glow: #c9efb0;
   --canvas-cool: #d7eee3;
+  --canvas-image-wash: rgb(237 248 223 / 54%);
   --text: #163e2c;
   --muted: #4d6a59;
   --accent: #167044;
@@ -43,6 +44,7 @@
   --canvas: #e4f6ef;
   --canvas-glow: #b8e5d4;
   --canvas-cool: #d9eaf1;
+  --canvas-image-wash: rgb(228 246 239 / 58%);
   --text: #143c37;
   --muted: #466962;
   --accent: #086b58;

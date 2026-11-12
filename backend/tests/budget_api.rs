@@ -513,6 +513,15 @@ async fn budget_read_returns_signed_values_uncategorized_activity_and_assignment
     assert_eq!(budget["ready_to_assign"]["state"], "complete");
     assert_eq!(budget["ready_to_assign"]["amount"], "-9999");
     assert_eq!(budget["uncategorized_activity"]["amount"], "1000");
+    let explanation = &budget["available_to_budget_breakdown"];
+    assert_eq!(explanation["prior_unassigned"]["amount"], "0");
+    assert_eq!(explanation["openings"]["amount"], "100000");
+    assert_eq!(explanation["income"]["amount"], "10001");
+    assert_eq!(explanation["funding_total"], budget["funding"]);
+    assert_eq!(explanation["assignments"]["amount"], "120000");
+    assert_eq!(explanation["category_rollover"]["amount"], "0");
+    assert_eq!(explanation["category_releases"]["amount"], "0");
+    assert_eq!(explanation["corrections"]["amount"], "0");
     let food = budget["categories"]
         .as_array()
         .unwrap()
@@ -525,7 +534,7 @@ async fn budget_read_returns_signed_values_uncategorized_activity_and_assignment
     assert_eq!(food["remaining"]["amount"], "115000");
 
     let archive = json!({ "name": "Alimentación", "sort_order": 2, "archived": true }).to_string();
-    let (archive_status, error) = json_response(
+    let (archive_status, _) = json_response(
         send(
             pool.clone(),
             workspace,
@@ -537,7 +546,53 @@ async fn budget_read_returns_signed_values_uncategorized_activity_and_assignment
         .await,
     )
     .await;
-    assert_eq!(archive_status, axum::http::StatusCode::CONFLICT);
+    assert_eq!(archive_status, axum::http::StatusCode::OK);
+    let (status, archived_budget) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{period_text}"),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert_eq!(
+        archived_budget["ready_to_assign"],
+        budget["ready_to_assign"]
+    );
+    assert_eq!(archived_budget["activity"], budget["activity"]);
+    assert!(
+        !archived_budget["categories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|category| category["id"] == food_category)
+    );
+    let archived = archived_budget["archived_categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["id"] == food_category)
+        .unwrap();
+    assert_eq!(archived["assigned"], "120000");
+    assert_eq!(archived["remaining"]["amount"], "115000");
+    let (delete_status, error) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "DELETE",
+            &format!("/api/categories/{food_category}"),
+            Some(Uuid::new_v4()),
+            Some(json!({}).to_string()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(delete_status, axum::http::StatusCode::CONFLICT);
     assert_eq!(error["error"]["code"], "category_in_use");
 }
 
@@ -877,6 +932,18 @@ async fn close_snapshots_replay_and_closed_assignment_corrections_are_period_net
     .await;
     assert_eq!(next_status, axum::http::StatusCode::OK);
     assert_eq!(next["funding"]["amount"], "0");
+    let explanation = &next["available_to_budget_breakdown"];
+    assert_eq!(explanation["prior_unassigned"], closed["ready_to_assign"]);
+    assert_eq!(
+        explanation["category_releases"],
+        closed["categories"][0]["remaining"]
+    );
+    assert_eq!(explanation["category_rollover"]["amount"], "0");
+    assert_eq!(explanation["assignments"]["amount"], "0");
+    assert_eq!(
+        closed["available_to_budget_breakdown"]["openings"]["amount"],
+        "100000"
+    );
     let expected_next_ready =
         Decimal::from_str_exact(closed["ready_to_assign"]["amount"].as_str().unwrap()).unwrap()
             + Decimal::from_str_exact(
@@ -2455,4 +2522,595 @@ async fn period_fingerprint_detects_transaction_edits_and_other_category_assignm
     )
     .await;
     assert_eq!(stale_assignment_status, axum::http::StatusCode::CONFLICT);
+}
+
+async fn write_budget_resource(
+    pool: &PgPool,
+    workspace: Uuid,
+    method: &str,
+    route: &str,
+    body: Value,
+) -> (axum::http::StatusCode, Value) {
+    json_response(
+        send(
+            pool.clone(),
+            workspace,
+            method,
+            route,
+            Some(Uuid::new_v4()),
+            Some(body.to_string()),
+        )
+        .await,
+    )
+    .await
+}
+
+#[sqlx::test]
+async fn budget_groups_validate_revisions_order_membership_and_archive_rules(pool: PgPool) {
+    use axum::http::StatusCode;
+    let workspace = bootstrap(&pool).await.unwrap();
+    let _ = bootstrap(&pool).await.unwrap();
+    let (status, groups) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/budget-groups",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(groups.as_array().unwrap().len(), 3);
+    assert_eq!(groups[0]["name"], "General");
+    let general = groups[0]["id"].as_str().unwrap();
+    let transport = groups[1]["id"].as_str().unwrap();
+    let categories = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    let category = categories
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["slug"] == "transporte")
+        .unwrap();
+    assert_eq!(category["group_id"], transport);
+    let ahorro = categories
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["slug"] == "ahorro-general")
+        .unwrap();
+    assert_eq!(ahorro["group_id"], groups[2]["id"]);
+    assert!(
+        categories
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["slug"] != "transporte" && c["slug"] != "ahorro-general")
+            .all(|c| c["group_id"] == general)
+    );
+    for invalid in [
+        json!({"name":" ","sort_order":4}),
+        json!({"name":"Valid","sort_order":-1}),
+    ] {
+        let (status, _) =
+            write_budget_resource(&pool, workspace, "POST", "/api/budget-groups", invalid).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    let key = Uuid::new_v4();
+    let body = json!({"name":"Viajes","sort_order":0}).to_string();
+    let (status, created) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "POST",
+            "/api/budget-groups",
+            Some(key),
+            Some(body.clone()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let replay = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "POST",
+            "/api/budget-groups",
+            Some(key),
+            Some(body),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(replay, (status, created.clone()));
+    let changed = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "POST",
+            "/api/budget-groups",
+            Some(key),
+            Some(json!({"name":"Other","sort_order":0}).to_string()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(changed.0, StatusCode::CONFLICT);
+    let group_id = created["resource_id"].as_str().unwrap();
+    let route = format!("/api/budget-groups/{group_id}");
+    let ordered = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/budget-groups",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    assert_eq!(ordered[0]["id"], group_id);
+    let (status, receipt) = write_budget_resource(
+        &pool,
+        workspace,
+        "PUT",
+        &route,
+        json!({"name":"Vacaciones","sort_order":4,"archived":false,"expected_revision":1}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(receipt["revision"], 2);
+    let stale = write_budget_resource(
+        &pool,
+        workspace,
+        "PUT",
+        &route,
+        json!({"name":"Stale","sort_order":1,"archived":false,"expected_revision":1}),
+    )
+    .await;
+    assert_eq!(stale.0, StatusCode::CONFLICT);
+    assert_eq!(stale.1["error"]["code"], "stale_revision");
+    let category_id = category["id"].as_str().unwrap();
+    let category_route = format!("/api/categories/{category_id}");
+    let edited = write_budget_resource(&pool,workspace,"PUT",&category_route,json!({"name":"Transporte","sort_order":0,"archived":false,"group_id":group_id,"expected_revision":1})).await;
+    assert_eq!(edited.0, StatusCode::OK);
+    let stale = write_budget_resource(&pool,workspace,"PUT",&category_route,json!({"name":"Stale","sort_order":0,"archived":false,"group_id":general,"expected_revision":1})).await;
+    assert_eq!(stale.0, StatusCode::CONFLICT);
+    let archive = json!({"name":"Vacaciones","sort_order":4,"archived":true,"expected_revision":2});
+    let blocked = write_budget_resource(&pool, workspace, "PUT", &route, archive.clone()).await;
+    assert_eq!(blocked.0, StatusCode::CONFLICT);
+    assert_eq!(blocked.1["error"]["code"], "group_has_active_categories");
+    let move_back = write_budget_resource(&pool,workspace,"PUT",&category_route,json!({"name":"Transporte","sort_order":3,"archived":false,"group_id":transport,"expected_revision":2})).await;
+    assert_eq!(move_back.0, StatusCode::OK);
+    assert_eq!(
+        write_budget_resource(&pool, workspace, "PUT", &route, archive)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let bad_group = write_budget_resource(
+        &pool,
+        workspace,
+        "POST",
+        "/api/categories",
+        json!({"name":"Hidden","sort_order":1,"group_id":group_id}),
+    )
+    .await;
+    assert_eq!(bad_group.0, StatusCode::UNPROCESSABLE_ENTITY);
+    let unknown = Uuid::new_v4();
+    assert_eq!(
+        write_budget_resource(
+            &pool,
+            workspace,
+            "PUT",
+            &format!("/api/budget-groups/{unknown}"),
+            json!({"name":"Foreign","sort_order":1,"archived":false})
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        write_budget_resource(
+            &pool,
+            workspace,
+            "POST",
+            "/api/categories",
+            json!({"name":"Foreign","sort_order":1,"group_id":unknown})
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let wrong_workspace = Uuid::new_v4();
+    let scoped = json_response(
+        send_with_generation(
+            pool.clone(),
+            wrong_workspace,
+            Uuid::new_v4(),
+            "GET",
+            "/api/budget-groups",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(scoped.0, StatusCode::OK);
+    assert_eq!(scoped.1, json!([]));
+    let scoped_write = json_response(
+        send_with_generation(
+            pool.clone(),
+            wrong_workspace,
+            Uuid::new_v4(),
+            "PUT",
+            &route,
+            Some(Uuid::new_v4()),
+            Some(json!({"name":"Foreign write","sort_order":1,"archived":false}).to_string()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(scoped_write.0, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn unused_category_delete_is_revision_safe_idempotent_and_survives_bootstrap(pool: PgPool) {
+    use axum::http::StatusCode;
+    let workspace = bootstrap(&pool).await.unwrap();
+    let (_, categories) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    let category = &categories[0];
+    assert_eq!(category["can_delete"], true);
+    let id = category["id"].as_str().unwrap();
+    let route = format!("/api/categories/{id}");
+    let stale = write_budget_resource(
+        &pool,
+        workspace,
+        "DELETE",
+        &route,
+        json!({"expected_revision":2}),
+    )
+    .await;
+    assert_eq!(stale.0, StatusCode::CONFLICT);
+    let key = Uuid::new_v4();
+    let body = json!({"expected_revision":1}).to_string();
+    let deleted = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "DELETE",
+            &route,
+            Some(key),
+            Some(body.clone()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(deleted.0, StatusCode::OK);
+    let replay = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "DELETE",
+            &route,
+            Some(key),
+            Some(body),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(replay, deleted);
+    bootstrap(&pool).await.unwrap();
+    let (_, after) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(after.as_array().unwrap().len(), 14);
+    assert!(
+        !after
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|category| category["id"] == id || category["slug"] == categories[0]["slug"])
+    );
+}
+
+#[sqlx::test]
+async fn retained_assignment_and_close_history_guard_permanent_category_deletion(pool: PgPool) {
+    use axum::http::StatusCode;
+    let workspace = bootstrap(&pool).await.unwrap();
+    let period = current_period(&pool).await;
+    let (_, categories) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    let first: Uuid = categories[0]["id"].as_str().unwrap().parse().unwrap();
+    let second: Uuid = categories[1]["id"].as_str().unwrap().parse().unwrap();
+    sqlx::query("INSERT INTO budget_assignments(id,workspace_id,period_start,category_id,amount) VALUES($1,$2,$3,$4,0)")
+        .bind(Uuid::new_v4()).bind(workspace).bind(period).bind(first).execute(&pool).await.unwrap();
+    let snapshot = Uuid::new_v4();
+    sqlx::query("INSERT INTO budget_close_snapshots(id,workspace_id,period_start,revision,funding,ready_to_assign) VALUES($1,$2,$3,1,0,0)")
+        .bind(snapshot).bind(workspace).bind(period).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_close_category_snapshots(workspace_id,snapshot_id,category_id,assigned,activity,remaining,disposition,category_name,category_sort_order) VALUES($1,$2,$3,0,0,0,'carry','Historical label',2)")
+        .bind(workspace).bind(snapshot).bind(second).execute(&pool).await.unwrap();
+    let third: Uuid = categories[2]["id"].as_str().unwrap().parse().unwrap();
+    let fourth: Uuid = categories[3]["id"].as_str().unwrap().parse().unwrap();
+    let fifth: Uuid = categories[4]["id"].as_str().unwrap().parse().unwrap();
+    let transaction = Uuid::new_v4();
+    let correction = Uuid::new_v4();
+    sqlx::query("INSERT INTO financial_transactions(id,workspace_id,transaction_kind,business_date) VALUES($1,$2,'expense',$3)")
+        .bind(transaction).bind(workspace).bind(period).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO financial_corrections(id,workspace_id,record_kind,transaction_id,prior_revision,new_revision,reason,transaction_target_category_id) VALUES($1,$2,'transaction',$3,1,2,'Retained category decision',$4)")
+        .bind(correction).bind(workspace).bind(transaction).bind(third).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_activity_effects(id,workspace_id,period_start,correction_id,transaction_id,category_id,baseline_amount,target_amount,baseline_kind,baseline_currency,baseline_original_amount,baseline_business_date,target_kind,target_currency,target_original_amount,target_business_date) VALUES($1,$2,$3,$4,$5,$6,0,0,'expense','CLP',0,$3,'expense','CLP',0,$3)")
+        .bind(Uuid::new_v4()).bind(workspace).bind(period).bind(correction).bind(transaction).bind(fourth).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO budget_close_transaction_snapshots(workspace_id,snapshot_id,transaction_id,business_date,transaction_kind,category_id,currency,original_amount,funding_amount) VALUES($1,$2,$3,$4,'expense',$5,'CLP',0,0)")
+        .bind(workspace).bind(snapshot).bind(transaction).bind(period).bind(fifth).execute(&pool).await.unwrap();
+    for id in [first, second, third, fourth, fifth] {
+        let (status, error) = write_budget_resource(
+            &pool,
+            workspace,
+            "DELETE",
+            &format!("/api/categories/{id}"),
+            json!({"expected_revision":1}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(error["error"]["code"], "category_in_use");
+    }
+    let (_, categories) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    for id in [first, second, third, fourth, fifth] {
+        assert_eq!(
+            categories
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|c| c["id"] == id.to_string())
+                .unwrap()["can_delete"],
+            false
+        );
+    }
+}
+
+#[sqlx::test]
+async fn archived_category_negative_release_and_closed_labels_remain_authoritative(pool: PgPool) {
+    use axum::http::StatusCode;
+    let workspace = bootstrap(&pool).await.unwrap();
+    let current = current_period(&pool).await;
+    let prior = current.pred_opt().unwrap().with_day(1).unwrap();
+    let period_text = prior.format("%Y-%m").to_string();
+    let next_text = current.format("%Y-%m").to_string();
+    let wallet = create_account(&pool, workspace, prior).await;
+    let categories = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            "/api/categories",
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    let category = &categories[0];
+    let id = category["id"].as_str().unwrap();
+    let expense = write_budget_resource(&pool,workspace,"POST","/api/transactions",json!({"kind":"expense","business_date":prior.succ_opt().unwrap().format("%Y-%m-%d").to_string(),"wallet_id":wallet,"amount":"200","category_id":id})).await;
+    assert_eq!(expense.0, StatusCode::CREATED);
+    let budget = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{period_text}"),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    assert_eq!(write_budget_resource(&pool,workspace,"PUT",&format!("/api/budgets/{period_text}/assignments/{id}"),json!({"amount":"100","expected_period_revision":budget["revision"],"expected_revision":null})).await.0,StatusCode::OK);
+    assert_eq!(write_budget_resource(&pool,workspace,"PUT",&format!("/api/categories/{id}"),json!({"name":"Historical archived category","sort_order":1,"archived":true,"expected_revision":1})).await.0,StatusCode::OK);
+    let (status, preview) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{period_text}/close-preview"),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(preview["close"]["eligible"], true);
+    assert!(
+        !preview["categories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == id)
+    );
+    assert_eq!(
+        preview["archived_categories"][0]["remaining"]["amount"],
+        "-100"
+    );
+    let choices:Vec<Value> = preview["close"]["categories"].as_array().unwrap().iter().map(|row|json!({"category_id":row["category_id"],"disposition":if row["category_id"] == id {"release"} else {"carry"}})).collect();
+    assert!(choices.iter().any(|row| row["category_id"] == id));
+    let closed = write_budget_resource(
+        &pool,
+        workspace,
+        "POST",
+        &format!("/api/budgets/{period_text}/close"),
+        json!({"expected_period_revision":preview["revision"],"categories":choices}),
+    )
+    .await;
+    assert_eq!(closed.0, StatusCode::CREATED, "{closed:?}");
+    let next = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{next_text}"),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    assert_eq!(next["ready_to_assign"]["amount"], "99800");
+    assert_eq!(
+        next["available_to_budget_breakdown"]["category_releases"]["amount"],
+        "-100"
+    );
+    assert_eq!(
+        next["available_to_budget_breakdown"]["category_rollover"]["amount"],
+        "0"
+    );
+    assert_eq!(next["archived_categories"][0]["remaining"]["amount"], "0");
+    assert_eq!(write_budget_resource(&pool,workspace,"PUT",&format!("/api/categories/{id}"),json!({"name":"Renamed after close","sort_order":1,"archived":true,"expected_revision":2})).await.0,StatusCode::OK);
+    let closed = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{period_text}"),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await
+    .1;
+    let historical = closed["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == id)
+        .unwrap();
+    assert_eq!(historical["name"], "Historical archived category");
+    assert_eq!(historical["remaining"]["amount"], "-100");
+    assert_eq!(
+        write_budget_resource(
+            &pool,
+            workspace,
+            "DELETE",
+            &format!("/api/categories/{id}"),
+            json!({"expected_revision":3})
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+}
+
+#[sqlx::test]
+async fn unavailable_prior_funding_is_not_reported_as_zero_carry(pool: PgPool) {
+    let workspace = bootstrap(&pool).await.unwrap();
+    let current = current_period(&pool).await;
+    let prior = current.pred_opt().unwrap().with_day(1).unwrap();
+    let account = Uuid::new_v4();
+    let wallet = Uuid::new_v4();
+    sqlx::query("INSERT INTO financial_accounts(id,workspace_id,name,account_type,base_currency,budget_eligible) VALUES($1,$2,'Unvalued debt','card','USD',TRUE)")
+        .bind(account).bind(workspace).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO financial_wallets(id,workspace_id,account_id,currency) VALUES($1,$2,$3,'USD')",
+    )
+    .bind(wallet)
+    .bind(workspace)
+    .bind(account)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO financial_openings(id,workspace_id,wallet_id,amount,business_date) VALUES($1,$2,$3,-1,$4)")
+        .bind(Uuid::new_v4()).bind(workspace).bind(wallet).bind(prior).execute(&pool).await.unwrap();
+    let (status, budget) = json_response(
+        send(
+            pool.clone(),
+            workspace,
+            "GET",
+            &format!("/api/budgets/{}", current.format("%Y-%m")),
+            None,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert_eq!(budget["ready_to_assign"]["state"], "unavailable");
+    assert_eq!(
+        budget["available_to_budget_breakdown"]["prior_unassigned"]["state"],
+        "unavailable"
+    );
+    assert_eq!(
+        budget["available_to_budget_breakdown"]["prior_unassigned"]["reasons"][0],
+        "foreign_liability_basis_unavailable"
+    );
+    assert_eq!(
+        budget["available_to_budget_breakdown"]["funding_total"]["amount"],
+        "0"
+    );
+    assert_eq!(
+        budget["available_to_budget_breakdown"]["category_rollover"]["amount"],
+        "0"
+    );
 }

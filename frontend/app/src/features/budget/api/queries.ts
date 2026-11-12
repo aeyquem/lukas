@@ -2,7 +2,7 @@ import { useQuery, type QueryCache } from '@pinia/colada'
 import { ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { apiRequest } from '../../../shared/api/client'
 import { budgetRoute } from '../budget-model'
-import type { BudgetClosePreview, BudgetSnapshot, ExpenseCategory } from './contracts'
+import type { BudgetClosePreview, BudgetGroup, BudgetSnapshot, ExpenseCategory } from './contracts'
 
 export const budgetKeys = {
   all: ['budget'] as const,
@@ -11,6 +11,7 @@ export const budgetKeys = {
   closePreviews: ['budget', 'close-preview'] as const,
   closePreview: (period: string) => ['budget', 'close-preview', period] as const,
   categories: ['expense-categories'] as const,
+  groups: ['budget-groups'] as const,
 }
 
 export function budgetSnapshotQueryOptions(period: string) {
@@ -77,6 +78,32 @@ export function useExpenseCategoriesQuery() {
     const categories = await refetchFresh()
     enabled.value = true
     return categories
+  }
+  return { ...query, activate, refetchFresh }
+}
+
+export function useBudgetGroupsQuery() {
+  const enabled = ref(false)
+  const query = useQuery({
+    key: budgetKeys.groups,
+    query: () => apiRequest<BudgetGroup[]>('budget-groups'),
+    staleTime: 30_000,
+    gcTime: 300_000,
+    enabled,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+  async function refetchFresh(): Promise<BudgetGroup[]> {
+    const result = await query.refetch(true)
+    if (result.status === 'success') return result.data
+    if (result.status === 'error') throw result.error
+    throw new Error('No fue posible cargar los grupos.')
+  }
+  async function activate(): Promise<BudgetGroup[]> {
+    const groups = await refetchFresh()
+    enabled.value = true
+    return groups
   }
   return { ...query, activate, refetchFresh }
 }

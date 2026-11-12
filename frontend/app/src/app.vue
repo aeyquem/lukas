@@ -11,7 +11,7 @@ const dashboardPeriod = useDashboardPeriod()
     <a class="skip-link" href="#main-content">Ir al contenido</a>
     <header class="app-header island">
       <RouterLink class="brand" :to="{ name: 'home' }" aria-label="Lukas, inicio">
-        <span class="brand-mark" aria-hidden="true">L<span class="brand-leaf"></span></span>
+        <img class="brand-mark" :src="'/ignacio-carrera-pinto.svg'" alt="" />
         <span class="brand-name">lukas<span class="brand-dot">.</span></span>
       </RouterLink>
 
@@ -56,28 +56,11 @@ const dashboardPeriod = useDashboardPeriod()
   flex-shrink: 0;
 }
 .brand-mark {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  color: var(--on-accent);
-  background: var(--accent);
-  font-size: 27px;
-  font-weight: 600;
-  font-family: var(--font-display);
-  box-shadow: inset 0 1px 0 var(--edge-light);
-}
-.brand-leaf {
-  position: absolute;
-  width: 9px;
-  height: 13px;
-  border-radius: 9px 0 9px 0;
-  background: var(--accent-soft);
-  top: 8px;
-  right: 9px;
-  transform: rotate(18deg);
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 14%;
+  object-fit: cover;
 }
 .brand-name {
   font-size: 28px;
@@ -139,8 +122,8 @@ const dashboardPeriod = useDashboardPeriod()
     font-size: 25px;
   }
   .brand-mark {
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
   }
   .status-context {
     display: none;

@@ -34,6 +34,7 @@ try {
   await b.click('.category-new-form button')
   await b.waitFor(`fetch('/api/categories').then(r=>r.json()).then(categories=>categories.some(c=>c.name===${JSON.stringify(categoryName)}))`)
   const category = await b.evaluate(`fetch('/api/categories').then(r=>r.json()).then(categories=>categories.find(c=>c.name===${JSON.stringify(categoryName)}))`)
+  await b.click(`[data-category-id="${category.id}"] .assigned-value`)
   const assignment = `#assign-${category.id}`
   await b.waitFor(`Boolean(document.querySelector(${JSON.stringify(assignment)}))`)
   await b.set(assignment, '500')

@@ -8,7 +8,7 @@ export type FinanceWriteScope = 'account' | 'transaction' | 'budget'
 /** Invalidates the server snapshots affected by an accepted financial write. */
 export async function invalidateFinancialQueries(cache: QueryCache, scope: FinanceWriteScope): Promise<void> {
   const keys = scope === 'budget'
-    ? [budgetKeys.categories, budgetKeys.snapshots, budgetKeys.closePreviews]
+    ? [budgetKeys.categories, budgetKeys.groups, budgetKeys.snapshots, budgetKeys.closePreviews]
     : [
         accountKeys.all,
         ['account-activity'],
